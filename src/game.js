@@ -110,17 +110,21 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   // ---------- Round flow ----------
   function startMatra(m) {
     matra = m;
-    words = shuffle(m.words.slice());
     roundIndex = 0;
     perfectCount = 0;
     dom.hudName.textContent = m.name;
     show(dom.hud, true);
 
-    // TWO_PART: สร้างฟองครั้งเดียวตอนเริ่ม แล้วให้คงอยู่ข้ามรอบ
-    // FILL_FINAL: สร้างใหม่ทุกรอบใน startRound()
     if (m.mode === TWO_PART) {
-      bubbles = m.bubbles.map(makeBubble);
+      // เลือก sessionSize ตัวสุ่ม (ไม่ต้องลากครบ 44 ในรอบเดียว)
+      const allLetters = m.bubbles.slice();
+      const size = Math.min(m.sessionSize || allLetters.length, allLetters.length);
+      const sessionLetters = shuffle(allLetters).slice(0, size);
+      bubbles = sessionLetters.map(makeBubble);
+      words = sessionLetters.map((ch) => m.words.find((w) => w.lead === ch)).filter(Boolean);
       layoutBubbles();
+    } else {
+      words = shuffle(m.words.slice());
     }
 
     startRound();

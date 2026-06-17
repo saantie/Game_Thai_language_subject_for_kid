@@ -5,6 +5,7 @@ export const MATRA = [
     id: 'kaka',
     name: 'แม่ ก กา',
     mode: 'TWO_PART',
+    sessionSize: 8, // เล่นทีละ 8 ตัวสุ่ม — เปลี่ยนทุกรอบ, ไม่ต้องลากครบ 44
     sara: 'า',
     bubbles: [
       'ก','ข','ฃ','ค','ฅ','ฆ','ง',
@@ -163,7 +164,7 @@ export const MATRA = [
       { display:'หิว', lead:'หิ', final:'ว', spell:['หอ','อิ','วอ','หิว'], distractors:['ม','ก','ด'] },
       { display:'ขาว', lead:'ขา', final:'ว', spell:['ขอ','อา','วอ','ขาว'], distractors:['ย','บ','ง'] },
       { display:'กาว', lead:'กา', final:'ว', spell:['กอ','อา','วอ','กาว'], distractors:['น','ม','ก'] },
-      { display:'แดว', lead:'แด', final:'ว', spell:['ดอ','แอ','วอ','แดว'], distractors:['ย','ง','บ'] },
+      { display:'สาว', lead:'สา', final:'ว', spell:['สอ','อา','วอ','สาว'], distractors:['ย','ง','น'] },
     ],
   },
 ];
