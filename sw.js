@@ -1,6 +1,6 @@
-// sw.js — Service Worker: แคช app shell ให้เล่น offline ได้ (cache-first)
-// path ทั้งหมดเป็น relative กับตำแหน่ง sw.js (root scope) → ใช้ได้ทั้ง localhost และ subpath ของ GitHub Pages
-const CACHE = 'witch-cauldron-v1';
+// sw.js — Service Worker: cache-first + stale-while-revalidate + auto-reload on update
+// bump CACHE string ทุกครั้งที่ deploy ใหม่ → browser detect diff → install → reload client
+const CACHE = 'witch-cauldron-v3';
 
 const APP_SHELL = [
   './',
@@ -29,32 +29,46 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches
-      .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
+    caches.keys().then((keys) => {
+      const oldKeys = keys.filter((k) => k !== CACHE);
+      return Promise.all(oldKeys.map((k) => caches.delete(k)))
+        .then(() => self.clients.claim())
+        .then(() => {
+          if (oldKeys.length === 0) return; // first install — ไม่ต้อง reload
+          // SW version ใหม่ replace เก่า → แจ้ง tab ที่เปิดอยู่ให้ reload รับ code ล่าสุด
+          return self.clients
+            .matchAll({ type: 'window' })
+            .then((clients) => clients.forEach((c) => c.postMessage({ type: 'SW_UPDATED' })));
+        });
+    })
   );
 });
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  const isSameOrigin = new URL(req.url).origin === self.location.origin;
+
   e.respondWith(
-    caches.match(req).then((hit) => {
-      if (hit) return hit;
-      return fetch(req)
-        .then((res) => {
-          // แคชเฉพาะ same-origin ที่สำเร็จ (ฟอนต์ข้าม origin ปล่อยให้เบราว์เซอร์จัดการ)
-          if (res.ok && new URL(req.url).origin === self.location.origin) {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy));
-          }
-          return res;
-        })
-        .catch(() => {
-          // offline + ไม่มีในแคช → ถ้าเป็น navigation ให้ fallback index.html
-          if (req.mode === 'navigate') return caches.match('./index.html');
-        });
-    })
+    caches.open(CACHE).then((cache) =>
+      cache.match(req).then((cached) => {
+        // revalidate ใน background ทุกครั้ง (stale-while-revalidate)
+        const networkFetch = fetch(req)
+          .then((res) => {
+            if (res.ok && isSameOrigin) cache.put(req, res.clone());
+            return res;
+          })
+          .catch(() => null);
+
+        if (cached) {
+          e.waitUntil(networkFetch); // update cache แต่ไม่รอ — return ทันที
+          return cached;
+        }
+        // ไม่มีใน cache → รอ network; ถ้า offline + navigate → fallback index.html
+        return networkFetch.then(
+          (res) => res || (req.mode === 'navigate' ? cache.match('./index.html') : null)
+        );
+      })
+    )
   );
 });

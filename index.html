@@ -89,6 +89,10 @@
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW:', e));
         });
+        // SW version ใหม่ activate → reload อัตโนมัติ รับ code ล่าสุดทันที
+        navigator.serviceWorker.addEventListener('message', (e) => {
+          if (e.data?.type === 'SW_UPDATED') location.reload();
+        });
       }
     </script>
   </body>
