@@ -1,0 +1,12 @@
+{
+  "name": "witch-ar-spelling",
+  "version": "0.2.0",
+  "description": "Witch's Cauldron — เกมฝึกอ่านสะกดคำภาษาไทยตามมาตราตัวสะกด สำหรับเด็ก",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs"
+  },
+  "keywords": ["thai", "education", "kids", "spelling", "game"],
+  "license": "MIT"
+}

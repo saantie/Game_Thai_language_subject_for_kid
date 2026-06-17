@@ -1,0 +1,103 @@
+// main.js — bootstrap: เลือกมาตรา, สลับ input layer, เชื่อมทุกระบบ
+
+import { audio } from './audio.js';
+import { initScene } from './scene.js';
+import { createPointerInput } from './input/pointer.js';
+import { createGame } from './game.js';
+import { buildLevelSelect } from './ui/levelSelect.js';
+import { openAdultGate } from './ui/adultPage.js';
+import { MATRA } from './data/matra.js';
+
+const MATRA_BY_ID = Object.fromEntries(MATRA.map((m) => [m.id, m]));
+
+// ---- app state กลาง (ต้นแบบเก็บใน memory; production ใช้ IndexedDB/Firebase) ----
+const app = {
+  progress: {}, // { matraId: stars }
+  settings: { showSpellHint: false, bgm: false },
+};
+
+const $ = (sel) => document.querySelector(sel);
+
+const startScreen = $('#startScreen');
+const levelScreen = $('#levelScreen');
+const adultScreen = $('#adultScreen');
+const sceneRoot = $('#sceneRoot');
+
+const dom = {
+  hud: $('#hud'),
+  hudName: $('#hudName'),
+  hudProgress: $('#hudProgress'),
+  voicebar: $('#voicebar'),
+  wordBig: $('#wordBig'),
+  micBtn: $('#micBtn'),
+  micState: $('#micState'),
+  okBtn: $('#okBtn'),
+  retryBtn: $('#retryBtn'),
+  hint: $('#hint'),
+  toast: $('#toast'),
+};
+
+const scene = initScene(sceneRoot);
+
+const game = createGame({
+  scene,
+  audio,
+  app,
+  dom,
+  onExit: () => {
+    // จบมาตรา → กลับหน้าเลือก (รีเฟรชดาว/ปลดล็อก)
+    showScreen('level');
+  },
+});
+
+// input layer: pointer (ต้นแบบ) — สลับเป็น handpinch ภายหลังได้โดยไม่แตะ game
+createPointerInput(scene.fxCanvas, {
+  onPick: game.onPick,
+  onMove: game.onMove,
+  onRelease: game.onRelease,
+});
+
+scene.onResize(() => game.relayout());
+
+// ---- screen switching ----
+function showScreen(which) {
+  startScreen.classList.toggle('hidden', which !== 'start');
+  levelScreen.classList.toggle('hidden', which !== 'level');
+  dom.hud.classList.toggle('hidden', which !== 'game');
+  dom.voicebar.classList.add('hidden');
+  if (which === 'level') {
+    buildLevelSelect($('#levelGrid'), app, (id) => startMatraById(id));
+  }
+}
+
+function startMatraById(id) {
+  const matra = MATRA_BY_ID[id];
+  showScreen('game');
+  game.startMatra(matra);
+}
+
+// ---- wiring buttons ----
+$('#startBtn').addEventListener('click', () => {
+  audio.unlock();
+  if (app.settings.bgm) audio.setBgmEnabled(true);
+  audio.voice('greet', { onText: witchSay });
+  showScreen('level');
+});
+
+$('#startAdultBtn').addEventListener('click', () => openAdultGate(app, adultScreen));
+$('#levelAdultBtn').addEventListener('click', () => openAdultGate(app, adultScreen));
+
+$('#backBtn').addEventListener('click', () => {
+  game.stop();
+  showScreen('level');
+});
+
+function witchSay(text) {
+  dom.toast.textContent = text;
+  dom.toast.classList.add('show');
+  clearTimeout(witchSay._t);
+  witchSay._t = setTimeout(() => dom.toast.classList.remove('show'), 3500);
+}
+
+// เริ่มที่หน้า start
+showScreen('start');

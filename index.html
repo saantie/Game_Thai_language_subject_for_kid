@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>หม้อแม่มดผสมคำ — ฝึกอ่านสะกดคำ</title>
+    <meta name="theme-color" content="#1b1140" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="หม้อแม่มด" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="src/styles.css" />
+  </head>
+  <body>
+    <!-- [0]+[3] ฉาก + เอฟเฟกต์ + แม่มด -->
+    <div id="sceneRoot">
+      <canvas id="bgCanvas"></canvas>
+      <!-- [1] #camVideo (เปิดเฉพาะโหมดกล้อง AR — ยังไม่ใช้ในต้นแบบ) -->
+      <canvas id="fxCanvas"></canvas>
+      <div class="witch idle" aria-hidden="true">🧙‍♀️</div>
+      <div id="toast" class="toast"></div>
+    </div>
+
+    <!-- [4] UI overlay -->
+    <header id="hud" class="hud hidden">
+      <button id="backBtn" class="btn-icon" title="กลับ">⬅</button>
+      <div class="hud-info">
+        <span id="hudName" class="hud-name"></span>
+        <span id="hudProgress" class="hud-progress"></span>
+      </div>
+    </header>
+
+    <!-- voicebar: ด่านอ่านออกเสียง -->
+    <div id="voicebar" class="voicebar hidden">
+      <div class="vb-prompt">อ่านคำนี้ให้แม่มดฟัง</div>
+      <div id="wordBig" class="vb-word">—</div>
+      <div id="hint" class="vb-hint"></div>
+      <button id="micBtn" class="btn-mic">🎤 พูดคำนี้</button>
+      <div id="micState" class="vb-state"></div>
+      <div class="vb-fallback">
+        <button id="okBtn" class="btn-ok">✅ อ่านถูก</button>
+        <button id="retryBtn" class="btn-retry">🔁 ลองใหม่</button>
+      </div>
+    </div>
+
+    <!-- หน้าเริ่ม -->
+    <div id="startScreen" class="screen start">
+      <div class="start-card">
+        <div class="start-emoji">🧙‍♀️🪄</div>
+        <h1>หม้อแม่มดผสมคำ</h1>
+        <p>ฝึกอ่านสะกดคำภาษาไทยตามมาตราตัวสะกด</p>
+        <button id="startBtn" class="btn-primary big">▶ เริ่มเล่น</button>
+        <button id="startAdultBtn" class="btn-link">สำหรับผู้ปกครอง</button>
+      </div>
+    </div>
+
+    <!-- หน้าเลือกมาตรา -->
+    <div id="levelScreen" class="screen level hidden">
+      <h2>เลือกมาตราตัวสะกด</h2>
+      <div id="levelGrid" class="level-grid"></div>
+      <button id="levelAdultBtn" class="btn-link">สำหรับผู้ปกครอง</button>
+    </div>
+
+    <!-- หน้าผู้ปกครอง -->
+    <div id="adultScreen" class="screen adult"></div>
+
+    <script type="module" src="src/main.js"></script>
+    <script>
+      // ลงทะเบียน Service Worker — เฉพาะ secure context (https/localhost), ไม่ทำงานบน file://
+      if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW:', e));
+        });
+      }
+    </script>
+  </body>
+</html>
