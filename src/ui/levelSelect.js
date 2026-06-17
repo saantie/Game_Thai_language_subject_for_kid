@@ -22,7 +22,7 @@ export function buildLevelSelect(container, app, onPick) {
     card.className = 'level-card' + (unlocked ? '' : ' locked');
     card.disabled = !unlocked;
     card.innerHTML = `
-      <span class="lv-icon">${unlocked ? '🪄' : '🔒'}</span>
+      <span class="lv-icon">${unlocked ? '&#x2728;' : '&#x26BF;'}</span>
       <span class="lv-name">${m.name}</span>
       <span class="lv-stars">${starString(stars)}</span>`;
     card.onclick = () => unlocked && onPick(m.id);
