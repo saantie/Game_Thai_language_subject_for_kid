@@ -48,14 +48,29 @@
 
     <!-- voicebar: ด่านอ่านออกเสียง -->
     <div id="voicebar" class="voicebar hidden">
-      <div class="vb-prompt">อ่านคำนี้ให้แม่มดฟัง</div>
-      <div id="wordBig" class="vb-word">—</div>
+      <div class="vb-prompt">&#x2728; อ่านคำนี้ให้แม่มดฟัง</div>
+      <!-- word + orbiting stars -->
+      <div class="vb-word-wrap">
+        <div class="vb-stars-orbit" aria-hidden="true">
+          <span class="vs s1">&#x2726;</span>
+          <span class="vs s2">&#x2605;</span>
+          <span class="vs s3">&#x2727;</span>
+          <span class="vs s4">&#x2726;</span>
+          <span class="vs s5">&#x2605;</span>
+          <span class="vs s6">&#x2727;</span>
+        </div>
+        <div id="wordBig" class="vb-word">—</div>
+      </div>
       <div id="hint" class="vb-hint"></div>
-      <button id="micBtn" class="btn-mic">🎤 พูดคำนี้</button>
+      <!-- mic: วงกลมแก้วใสสไตล์เวทมนตร์ -->
+      <button id="micBtn" class="btn-mic">
+        <span class="mic-emoji">&#x1F3A4;</span>
+        <span class="mic-label">พูดคำนี้</span>
+      </button>
       <div id="micState" class="vb-state"></div>
       <div class="vb-fallback">
-        <button id="okBtn" class="btn-ok">✅ อ่านถูก</button>
-        <button id="retryBtn" class="btn-retry">🔁 ลองใหม่</button>
+        <button id="okBtn" class="btn-ok">&#x2705; อ่านถูก</button>
+        <button id="retryBtn" class="btn-retry">&#x1F501; ลองใหม่</button>
       </div>
     </div>
 

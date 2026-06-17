@@ -110,29 +110,100 @@ html, body {
 }
 
 /* ---- voicebar (ด่านอ่าน) ---- */
+@keyframes conjure {
+  0%   { opacity:0; transform:translateX(-50%) scale(0.72) translateY(28px); filter:blur(12px); }
+  65%  { opacity:1; transform:translateX(-50%) scale(1.03) translateY(-4px); filter:blur(0); }
+  100% { opacity:1; transform:translateX(-50%) scale(1)    translateY(0);     filter:blur(0); }
+}
+@keyframes cardGlow {
+  0%,100% { box-shadow: 0 0 0 1px rgba(190,140,255,.28), 0 0 32px rgba(150,70,255,.38), 0 18px 50px rgba(18,4,48,.75), inset 0 1px 0 rgba(255,255,255,.12); }
+  50%     { box-shadow: 0 0 0 1px rgba(230,190,255,.55), 0 0 52px rgba(190,90,255,.60), 0 18px 50px rgba(18,4,48,.75), inset 0 1px 0 rgba(255,255,255,.18); }
+}
 .voicebar {
   position: fixed; left: 50%; top: 14%;
   transform: translateX(-50%);
   z-index: 4; width: min(92vw, 460px);
-  background: var(--panel);
-  border: 2px solid rgba(122, 255, 192, 0.3);
-  border-radius: 22px;
-  padding: 16px 18px;
+  background: linear-gradient(155deg, rgba(105,55,190,.90) 0%, rgba(46,26,92,.96) 55%, rgba(85,35,155,.88) 100%);
+  border: 1.5px solid rgba(215,175,255,.52);
+  border-radius: 28px;
+  padding: 18px 20px 16px;
   text-align: center;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  overflow: visible;
 }
-.vb-prompt { font-size: 15px; opacity: 0.85; }
+.voicebar:not(.hidden) {
+  animation: conjure .55s cubic-bezier(.34,1.26,.64,1) both,
+             cardGlow 2.8s ease-in-out .55s infinite;
+}
+.vb-prompt {
+  font-size: clamp(13px,2.2vw,17px); font-weight: 600;
+  opacity: .9; letter-spacing: .3px;
+  text-shadow: 0 0 14px rgba(210,160,255,.6);
+  margin-bottom: 4px;
+}
+
+/* word + orbit container */
+.vb-word-wrap {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  min-height: clamp(70px,16vw,110px);
+  margin: 4px 0 6px;
+}
+.vb-stars-orbit {
+  position: absolute; left: 50%; top: 50%;
+  width: 0; height: 0; pointer-events: none; z-index: 0;
+}
+.vs {
+  position: absolute; display: block;
+  transform-origin: 0 0;
+  --a: 0deg; --r: 115px;
+  color: #ffd700;
+  text-shadow: 0 0 8px rgba(255,215,0,1), 0 0 18px rgba(255,160,0,.8);
+  font-size: 13px;
+  animation: starOrbit linear infinite;
+  will-change: transform;
+}
+@keyframes starOrbit {
+  from { transform: rotate(var(--a)) translateX(var(--r)); }
+  to   { transform: rotate(calc(var(--a) + 360deg)) translateX(var(--r)); }
+}
+.vs.s1 { --a:0deg;   --r:118px; animation-duration:5.2s;  font-size:14px; }
+.vs.s2 { --a:60deg;  --r:100px; animation-duration:6.8s;  font-size:11px; }
+.vs.s3 { --a:120deg; --r:112px; animation-duration:4.9s;  font-size:13px; }
+.vs.s4 { --a:180deg; --r:108px; animation-duration:5.9s;  font-size:12px; }
+.vs.s5 { --a:240deg; --r:104px; animation-duration:5.5s;  font-size:14px; }
+.vs.s6 { --a:300deg; --r: 96px; animation-duration:4.6s;  font-size:10px; }
+@media (max-width:480px) {
+  .vs.s1 { --r:82px; } .vs.s2 { --r:68px; } .vs.s3 { --r:78px; }
+  .vs.s4 { --r:74px; } .vs.s5 { --r:70px; } .vs.s6 { --r:64px; }
+}
+
+/* word: สีทองเรืองแสง + reveal animation */
+@keyframes wordReveal {
+  0%   { opacity:0; transform:scale(.48) rotate(-4deg); filter:blur(16px); }
+  58%  { opacity:1; transform:scale(1.16) rotate(1.5deg); filter:blur(0); }
+  100% { opacity:1; transform:scale(1)    rotate(0); }
+}
 .vb-word {
-  font-size: clamp(48px, 12vw, 84px);
+  position: relative; z-index: 1;
+  font-size: clamp(52px,13vw,92px);
   font-weight: 800;
-  color: var(--accent);
-  text-shadow: 0 0 20px rgba(122, 255, 192, 0.5);
-  line-height: 1.1;
-  margin: 4px 0;
+  color: #ffd04d;
+  text-shadow:
+    0 0 22px rgba(255,200,50,.95),
+    0 0 44px rgba(255,160,0,.65),
+    0 0 80px rgba(255,120,0,.32),
+    0 5px 0 rgba(0,0,0,.38);
+  line-height: 1.05;
 }
-.vb-hint { font-size: clamp(16px, 3vw, 22px); color: #ffe08a; margin-bottom: 6px; display: none; }
-.vb-state { font-size: 14px; min-height: 18px; opacity: 0.9; margin-top: 8px; }
+.vb-word.reveal { animation: wordReveal .68s cubic-bezier(.34,1.4,.64,1) both; }
+
+.vb-hint { font-size: clamp(15px,2.8vw,21px); color: #ffe08a; margin-bottom: 4px; display: none; }
+.vb-state { font-size: 14px; min-height: 18px; opacity: .9; margin-top: 6px; }
 .vb-fallback { display: flex; gap: 10px; justify-content: center; margin-top: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .vs, .voicebar:not(.hidden), .vb-word.reveal { animation: none !important; }
+}
 
 /* ---- buttons ---- */
 button { font-family: inherit; cursor: pointer; border: none; }
@@ -149,15 +220,53 @@ button { font-family: inherit; cursor: pointer; border: none; }
   background: rgba(255, 255, 255, 0.15); color: #fff; width: 44px; height: 44px;
   border-radius: 12px; font-size: 20px;
 }
+/* mic: วงกลมแก้วใสสไตล์เวทมนตร์ */
 .btn-mic {
-  background: linear-gradient(135deg, var(--accent-2), #8a5cff);
-  color: #fff; font-weight: 800; border-radius: 16px;
-  padding: 14px 24px; font-size: 20px; margin-top: 6px;
-  box-shadow: 0 5px 0 #5b32c4;
+  width: clamp(76px,19vw,98px); height: clamp(76px,19vw,98px);
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 30%,
+    rgba(230,190,255,.40) 0%,
+    rgba(140,80,250,.28) 45%,
+    rgba(60,20,130,.18) 100%);
+  border: 2px solid rgba(215,175,255,.65);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 0 0 5px rgba(160,80,255,.16),
+    0 0 24px rgba(160,80,255,.50),
+    inset 0 2px 0 rgba(255,255,255,.28),
+    inset 0 -1px 0 rgba(0,0,0,.18);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 1px; padding: 0; margin-top: 10px; color: #fff;
+  cursor: pointer;
+  transition: transform .12s, box-shadow .18s;
 }
-.btn-mic:disabled { opacity: 0.5; box-shadow: none; }
-.btn-mic.listening { animation: pulse 0.8s ease-in-out infinite; }
-@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); box-shadow: 0 5px 0 #5b32c4, 0 0 30px rgba(179, 136, 255, 0.7); } }
+.btn-mic:hover:not(:disabled) {
+  transform: scale(1.07);
+  box-shadow: 0 0 0 7px rgba(160,80,255,.22), 0 0 34px rgba(160,80,255,.72),
+              inset 0 2px 0 rgba(255,255,255,.28);
+}
+.btn-mic:active:not(:disabled) { transform: scale(.92); }
+.btn-mic:disabled { opacity: .36; box-shadow: none; cursor: default; }
+.mic-emoji { font-size: clamp(26px,6.5vw,34px); line-height: 1; }
+.mic-label { font-size: clamp(9px,2vw,12px); font-weight: 800; letter-spacing: .4px; opacity: .92; }
+
+@keyframes micGlow {
+  0%,100% {
+    box-shadow: 0 0 0 5px rgba(255,70,100,.22), 0 0 26px rgba(255,70,100,.58),
+                inset 0 2px 0 rgba(255,255,255,.28);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(255,70,100,.10), 0 0 48px rgba(255,70,100,.85),
+                inset 0 2px 0 rgba(255,255,255,.28);
+    transform: scale(1.08);
+  }
+}
+.btn-mic.listening {
+  animation: micGlow .88s ease-in-out infinite;
+  border-color: rgba(255,100,130,.82);
+}
 .btn-ok, .btn-retry {
   border-radius: 12px; padding: 10px 16px; font-size: 16px; font-weight: 700; color: #fff;
 }

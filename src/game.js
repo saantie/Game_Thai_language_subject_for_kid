@@ -222,6 +222,10 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     setState('READING');
     blend = null;
     dom.wordBig.textContent = currentWord.display;
+    // trigger reveal animation ทุกรอบ (reflow บังคับ restart)
+    dom.wordBig.classList.remove('reveal');
+    void dom.wordBig.offsetWidth;
+    dom.wordBig.classList.add('reveal');
     renderSpellHint();
     showVoicebar();
     dom.micBtn.disabled = !recog.supported;
