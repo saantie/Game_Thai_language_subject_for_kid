@@ -35,6 +35,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     return {
       letter,
       x: 0, y: 0, homeX: 0, homeY: 0,
+      vx: 0, vy: 0, bouncing: false,
       r: 0, phase: Math.random() * Math.PI * 2,
       dead: false, held: false, pop: 0,
     };
@@ -161,6 +162,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     if (matra.mode !== TWO_PART) {
       if (bubble.letter !== currentWord.final) {
         bubble.pop = 1;
+        bubble.bouncing = true; // เปิด spring physics — เด้งกลับอย่างนุ่มนวล
         setState('IDLE');
         audio.sfx('wrong_soft');
         audio.voice('wrong', { onText: witchSay });
@@ -300,6 +302,9 @@ export function createGame({ scene, audio, app, dom, onExit }) {
         held = b;
         b.held = true;
         b.pop = 0.6;
+        b.bouncing = false;
+        b.vx = 0;
+        b.vy = 0;
         setState('DRAGGING');
         audio.sfx('pick');
         return;
@@ -337,8 +342,22 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       if (b.dead) return;
       if (!b.held) {
         const bob = Math.sin(now * 0.002 + b.phase) * Math.max(4, b.r * 0.22);
-        b.x += (b.homeX - b.x) * 0.08;
-        b.y += (b.homeY + bob - b.y) * 0.08;
+        if (b.bouncing) {
+          // spring physics: เด้งกลับหลังตกผิดช่อง
+          b.vx = (b.vx + (b.homeX - b.x) * 0.12) * 0.76;
+          b.vy = (b.vy + (b.homeY + bob - b.y) * 0.12) * 0.76;
+          b.x += b.vx;
+          b.y += b.vy;
+          if (Math.abs(b.vx) < 0.4 && Math.abs(b.vy) < 0.4) {
+            b.bouncing = false;
+            b.vx = 0;
+            b.vy = 0;
+          }
+        } else {
+          // lerp ปกติ (float เบา ๆ)
+          b.x += (b.homeX - b.x) * 0.08;
+          b.y += (b.homeY + bob - b.y) * 0.08;
+        }
       }
       if (b.pop > 0) b.pop = Math.max(0, b.pop - 0.05);
     });
