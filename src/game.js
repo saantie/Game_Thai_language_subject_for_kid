@@ -2,7 +2,7 @@
 //
 // State machine (สเปก 3.1):
 //   SELECT → IDLE → DRAGGING → DROPPED
-//     TWO_PART  : หย่อนในหม้อ = ผสมได้เลย → READING
+//     TWO_PART  : ฟองคงอยู่ข้ามรอบ, ฟองที่อ่านถูกแล้วหายไป
 //     FILL_FINAL: ตรวจตัวสะกด → ตรง=blend→READING | ผิด=เด้งกลับ
 //   READING → LISTENING → EVALUATING → REWARD | RETRY | REVEAL
 
@@ -18,7 +18,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   let words = [];
   let roundIndex = 0;
   let currentWord = null;
-  let perfectCount = 0; // อ่านถูกตั้งแต่ครั้งแรก (ใช้คิดดาว)
+  let perfectCount = 0;
   let readAttempts = 0;
 
   let state = 'IDLE';
@@ -26,7 +26,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   let held = null;
   let particles = [];
   const particlePool = [];
-  let blend = null; // {text, t0}
+  let blend = null;       // { text, t0 }
   let running = false;
   let rafId = 0;
 
@@ -40,23 +40,42 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     };
   }
 
+  // grid layout สำหรับ n มาก (44 ตัว) / spread layout สำหรับ n น้อย (FILL_FINAL)
   function layoutBubbles() {
     const W = scene.W, H = scene.H;
-    const r = Math.max(30, Math.min(W, H) * 0.07);
     const n = bubbles.length;
-    const margin = r * 1.4;
-    const usableW = W - margin * 2;
-    bubbles.forEach((b, i) => {
-      b.r = r;
-      // จัดเป็นแถวบน ๆ กระจายเท่า ๆ กัน
-      const t = n === 1 ? 0.5 : i / (n - 1);
-      b.homeX = margin + usableW * t;
-      b.homeY = H * (0.2 + 0.12 * Math.sin(i * 1.7));
-      if (b.x === 0 && b.y === 0) {
-        b.x = b.homeX;
-        b.y = b.homeY;
-      }
-    });
+    if (n === 0) return;
+
+    if (n <= 8) {
+      // spread layout: เรียงแถวเดียวกระจายแนวนอน
+      const r = Math.max(28, Math.min(W, H) * 0.07);
+      const margin = r * 1.4;
+      const usableW = W - margin * 2;
+      bubbles.forEach((b, i) => {
+        b.r = r;
+        const t = n === 1 ? 0.5 : i / (n - 1);
+        b.homeX = margin + usableW * t;
+        b.homeY = H * (0.2 + 0.12 * Math.sin(i * 1.7));
+        if (b.x === 0 && b.y === 0) { b.x = b.homeX; b.y = b.homeY; }
+      });
+    } else {
+      // grid layout: หาขนาดเหมาะสมอัตโนมัติ
+      const areaH = H * 0.60;
+      const cols = Math.round(Math.sqrt(n * (W / areaH)));
+      const rows = Math.ceil(n / cols);
+      const cellW = W / cols;
+      const cellH = areaH / rows;
+      const r = Math.max(14, Math.min(Math.min(cellW, cellH) * 0.40, 36));
+
+      bubbles.forEach((b, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        b.r = r;
+        b.homeX = cellW * (col + 0.5);
+        b.homeY = cellH * (row + 0.5) + H * 0.04;
+        if (b.x === 0 && b.y === 0) { b.x = b.homeX; b.y = b.homeY; }
+      });
+    }
   }
 
   // ---------- Particles (object pool) ----------
@@ -66,25 +85,23 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       const a = Math.random() * Math.PI * 2;
       const sp = 2 + Math.random() * 6;
       p.x = cx; p.y = cy;
-      p.vx = Math.cos(a) * sp;
-      p.vy = Math.sin(a) * sp - 2;
-      p.life = 1;
-      p.r = 3 + Math.random() * 5;
-      p.hue = 120 + Math.random() * 80;
+      p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp - 2;
+      p.life = 1; p.r = 3 + Math.random() * 5;
+      p.hue = 120 + Math.random() * 80; p.star = false;
       particles.push(p);
     }
   }
+
   function spawnStars(cx, cy) {
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < 32; i++) {
       const p = particlePool.pop() || {};
       const a = Math.random() * Math.PI * 2;
-      const sp = 1 + Math.random() * 5;
+      const sp = 1.5 + Math.random() * 7;
       p.x = cx; p.y = cy;
-      p.vx = Math.cos(a) * sp;
-      p.vy = Math.sin(a) * sp - 3;
+      p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp - 4;
       p.life = 1;
-      p.r = 4 + Math.random() * 6;
-      p.hue = 45 + Math.random() * 15;
+      p.r = 10 + Math.random() * 14; // ⭐ ใหญ่ขึ้นเห็นชัด
+      p.hue = 42 + Math.random() * 18;
       p.star = true;
       particles.push(p);
     }
@@ -93,21 +110,21 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   // ---------- Round flow ----------
   function startMatra(m) {
     matra = m;
-    words = m.words.slice();
-    // สุ่มลำดับคำ
-    for (let i = words.length - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0;
-      [words[i], words[j]] = [words[j], words[i]];
-    }
+    words = shuffle(m.words.slice());
     roundIndex = 0;
     perfectCount = 0;
     dom.hudName.textContent = m.name;
     show(dom.hud, true);
-    startRound();
-    if (!running) {
-      running = true;
-      loop();
+
+    // TWO_PART: สร้างฟองครั้งเดียวตอนเริ่ม แล้วให้คงอยู่ข้ามรอบ
+    // FILL_FINAL: สร้างใหม่ทุกรอบใน startRound()
+    if (m.mode === TWO_PART) {
+      bubbles = m.bubbles.map(makeBubble);
+      layoutBubbles();
     }
+
+    startRound();
+    if (!running) { running = true; loop(); }
   }
 
   function startRound() {
@@ -116,33 +133,29 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     readAttempts = 0;
     blend = null;
     held = null;
-    spawnBubbles();
+
+    // FILL_FINAL: สร้างฟองใหม่ทุกรอบ (target + distractors)
+    if (matra.mode !== TWO_PART) {
+      bubbles = shuffle([currentWord.final, ...currentWord.distractors]).map(makeBubble);
+      layoutBubbles();
+    }
+    // TWO_PART: ไม่ต้อง spawn ใหม่ — ฟองคงอยู่ ตัวที่อ่านถูกแล้ว dead=true
+
     setState('IDLE');
     updateHud();
     hideVoicebar();
     scene.witch.play('idle');
   }
 
-  function spawnBubbles() {
-    let letters;
-    if (matra.mode === TWO_PART) {
-      letters = matra.bubbles.slice();
-    } else {
-      letters = shuffle([currentWord.final, ...currentWord.distractors]);
-    }
-    bubbles = letters.map(makeBubble);
-    layoutBubbles();
-  }
-
   function updateHud() {
-    dom.hudProgress.textContent = `คำที่ ${roundIndex + 1} / ${words.length}`;
+    const done = matra.mode === TWO_PART ? roundIndex : roundIndex;
+    dom.hudProgress.textContent = `คำที่ ${done + 1} / ${words.length}`;
   }
 
   // ---------- Drop logic (สเปก 3.2) ----------
   function dropInCauldron(bubble) {
     if (matra.mode !== TWO_PART) {
       if (bubble.letter !== currentWord.final) {
-        // ผิด → เด้งกลับนุ่มนวล ไม่เข้าสู่รอบอ่าน
         bubble.pop = 1;
         setState('IDLE');
         audio.sfx('wrong_soft');
@@ -150,7 +163,6 @@ export function createGame({ scene, audio, app, dom, onExit }) {
         return;
       }
     } else {
-      // TWO_PART: ฟอง = พยัญชนะต้น → คำ = พยัญชนะ + สระ
       currentWord = matra.words.find((w) => w.lead === bubble.letter) || currentWord;
     }
     bubble.dead = true;
@@ -171,9 +183,15 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     renderSpellHint();
     showVoicebar();
     dom.micBtn.disabled = !recog.supported;
-    dom.micBtn.textContent = recog.supported ? '🎤 พูดคำนี้' : '🎤 (อุปกรณ์ไม่รองรับ)';
-    dom.micState.textContent = '';
-    audio.voice('read', { onText: witchSay });
+    dom.micState.textContent = recog.supported ? 'รอฟังเสียงสักครู่...' : 'กดปุ่มด้านล่างเพื่อยืนยัน';
+
+    // เปิดไมค์อัตโนมัติหลังแม่มดพูดจบ
+    audio.voice('read', {
+      onText: witchSay,
+      onEnd: () => {
+        if (state === 'READING' && recog.supported) listen();
+      },
+    });
   }
 
   function listen() {
@@ -214,6 +232,10 @@ export function createGame({ scene, audio, app, dom, onExit }) {
         setState('READING');
         audio.voice('retry', { onText: witchSay });
         dom.micState.textContent += ' — ลองอ่านอีกครั้งนะจ๊ะ';
+        // เปิดไมค์อัตโนมัติรอบ retry
+        setTimeout(() => {
+          if (state === 'READING' && recog.supported) listen();
+        }, 1800);
       }
     }
   }
@@ -223,18 +245,17 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     if (readAttempts === 0) perfectCount++;
     scene.witch.play('cheer');
     audio.sfx('star');
-    spawnStars(scene.W * 0.5, scene.H * 0.4);
+    spawnStars(scene.W * 0.5, scene.H * 0.38);
     audio.voice('correct', { onText: witchSay });
-    setTimeout(nextRound, 1500);
+    setTimeout(nextRound, 1600);
   }
 
   function revealSpelling() {
     setState('REVEAL');
+    scene.witch.play('idle');
     audio.voice('reveal', { onText: witchSay });
     setTimeout(() => {
-      audio.playSpellReveal(currentWord, () => {
-        setTimeout(nextRound, 700);
-      });
+      audio.playSpellReveal(currentWord, () => setTimeout(nextRound, 700));
     }, 1400);
   }
 
@@ -247,17 +268,27 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     const total = words.length;
     const ratio = perfectCount / total;
     const stars = ratio >= 1 ? 3 : ratio >= 0.5 ? 2 : 1;
-    const prev = app.progress[matra.id] || 0;
-    app.progress[matra.id] = Math.max(prev, stars);
+    app.progress[matra.id] = Math.max(app.progress[matra.id] || 0, stars);
+
     running = false;
     cancelAnimationFrame(rafId);
-    onExit && onExit({ matraId: matra.id, stars });
+    hideVoicebar();
+
+    // แสดง result screen พร้อมดาว
+    const starStr = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
+    const msg = stars === 3 ? 'ยอดเยี่ยม! ครบทุกตัว!' : stars === 2 ? 'เก่งมากจ้า!' : 'ดีนะ ฝึกอีกครั้งนะ!';
+    dom.resultStars.textContent = starStr;
+    dom.resultMsg.textContent = msg;
+    show(dom.resultScreen, true);
+    dom.resultBtn.onclick = () => {
+      show(dom.resultScreen, false);
+      onExit && onExit({ matraId: matra.id, stars });
+    };
   }
 
-  // ---------- Input handlers (จาก pointer.js) ----------
+  // ---------- Input handlers ----------
   function onPick(x, y) {
     if (state !== 'IDLE' && state !== 'DRAGGING') return;
-    // หาฟองบนสุดที่โดน
     for (let i = bubbles.length - 1; i >= 0; i--) {
       const b = bubbles[i];
       if (b.dead) continue;
@@ -272,18 +303,14 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     }
   }
   function onMove(x, y) {
-    if (held) {
-      held.x = x;
-      held.y = y;
-    }
+    if (held) { held.x = x; held.y = y; }
   }
   function onRelease(x, y) {
     if (!held) return;
     const b = held;
     b.held = false;
     const c = scene.cauldron;
-    const overMouth =
-      Math.hypot(x - c.cx, (y - (c.cy - c.ry * 0.2)) / 0.6) <= c.rx;
+    const overMouth = Math.hypot(x - c.cx, (y - (c.cy - c.ry * 0.2)) / 0.6) <= c.rx;
     if (overMouth) {
       dropInCauldron(b);
     } else {
@@ -305,8 +332,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     bubbles.forEach((b) => {
       if (b.dead) return;
       if (!b.held) {
-        // ลอยกลับเข้า home + bob
-        const bob = Math.sin(now * 0.002 + b.phase) * 8;
+        const bob = Math.sin(now * 0.002 + b.phase) * Math.max(4, b.r * 0.22);
         b.x += (b.homeX - b.x) * 0.08;
         b.y += (b.homeY + bob - b.y) * 0.08;
       }
@@ -314,23 +340,16 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     });
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.22;
-      p.life -= 0.02;
-      if (p.life <= 0) {
-        particles.splice(i, 1);
-        particlePool.push(p);
-      }
+      p.x += p.vx; p.y += p.vy; p.vy += 0.22;
+      p.life -= 0.018;
+      if (p.life <= 0) { particles.splice(i, 1); particlePool.push(p); }
     }
   }
 
   function render() {
     scene.clearFx();
     const promptWord = matra && matra.mode !== TWO_PART ? currentWord : null;
-    // ระหว่าง blend/reading ไม่ต้องโชว์ prompt
     scene.drawCauldron(state === 'IDLE' || state === 'DRAGGING' ? promptWord : null);
-
     bubbles.forEach((b) => !b.dead && drawBubble(b));
     particles.forEach(drawParticle);
     if (blend) drawBlend();
@@ -340,7 +359,6 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     const scale = 1 + b.pop * 0.25;
     const r = b.r * scale;
     fx.save();
-    // ฟองวาว
     const g = fx.createRadialGradient(b.x - r * 0.3, b.y - r * 0.3, r * 0.1, b.x, b.y, r);
     g.addColorStop(0, 'rgba(255,255,255,0.95)');
     g.addColorStop(0.4, 'rgba(150,220,255,0.55)');
@@ -352,12 +370,12 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     fx.strokeStyle = 'rgba(255,255,255,0.7)';
     fx.lineWidth = 2;
     fx.stroke();
-    // ตัวอักษร
+    const fontSize = Math.max(12, r * 0.95);
     fx.fillStyle = '#15233a';
-    fx.font = `700 ${r}px 'Sarabun','Segoe UI',sans-serif`;
+    fx.font = `700 ${fontSize}px 'Sarabun','Segoe UI',sans-serif`;
     fx.textAlign = 'center';
     fx.textBaseline = 'middle';
-    fx.fillText(b.letter, b.x, b.y + r * 0.04);
+    fx.fillText(b.letter, b.x, b.y + fontSize * 0.05);
     fx.restore();
   }
 
@@ -366,7 +384,10 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     fx.globalAlpha = Math.max(0, p.life);
     fx.fillStyle = `hsl(${p.hue},90%,60%)`;
     if (p.star) {
-      drawStar(fx, p.x, p.y, p.r, p.r * 0.5, 5);
+      // ขอบเรืองให้เห็นชัด
+      fx.shadowColor = `hsl(${p.hue},100%,70%)`;
+      fx.shadowBlur = p.r * 0.8;
+      drawStar(fx, p.x, p.y, p.r, p.r * 0.45, 5);
     } else {
       fx.beginPath();
       fx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
@@ -404,16 +425,9 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     clearTimeout(witchSay._t);
     witchSay._t = setTimeout(() => dom.toast.classList.remove('show'), 3500);
   }
-  function showVoicebar() {
-    show(dom.voicebar, true);
-  }
-  function hideVoicebar() {
-    show(dom.voicebar, false);
-  }
-
-  function setState(s) {
-    state = s;
-  }
+  function showVoicebar() { show(dom.voicebar, true); }
+  function hideVoicebar() { show(dom.voicebar, false); }
+  function setState(s) { state = s; }
 
   // ---------- wire UI buttons ----------
   dom.micBtn.onclick = listen;
@@ -435,9 +449,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     onPick,
     onMove,
     onRelease,
-    relayout() {
-      layoutBubbles();
-    },
+    relayout() { layoutBubbles(); },
     stop() {
       running = false;
       cancelAnimationFrame(rafId);
@@ -456,9 +468,7 @@ function shuffle(arr) {
   }
   return a;
 }
-function show(el, on) {
-  el.classList.toggle('hidden', !on);
-}
+function show(el, on) { el.classList.toggle('hidden', !on); }
 function drawStar(ctx, cx, cy, outer, inner, points) {
   ctx.beginPath();
   for (let i = 0; i < points * 2; i++) {

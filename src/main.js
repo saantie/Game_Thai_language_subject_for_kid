@@ -35,6 +35,10 @@ const dom = {
   retryBtn: $('#retryBtn'),
   hint: $('#hint'),
   toast: $('#toast'),
+  resultScreen: $('#resultScreen'),
+  resultStars: $('#resultStars'),
+  resultMsg: $('#resultMsg'),
+  resultBtn: $('#resultBtn'),
 };
 
 const scene = initScene(sceneRoot);
@@ -65,6 +69,7 @@ function showScreen(which) {
   levelScreen.classList.toggle('hidden', which !== 'level');
   dom.hud.classList.toggle('hidden', which !== 'game');
   dom.voicebar.classList.add('hidden');
+  dom.resultScreen.classList.add('hidden');
   if (which === 'level') {
     buildLevelSelect($('#levelGrid'), app, (id) => startMatraById(id));
   }

@@ -72,6 +72,16 @@
     <!-- หน้าผู้ปกครอง -->
     <div id="adultScreen" class="screen adult"></div>
 
+    <!-- ผลคะแนนหลังจบมาตรา -->
+    <div id="resultScreen" class="screen result hidden">
+      <div class="result-card">
+        <div class="result-emoji">&#x1F9D9;&#x200D;&#x2640;&#xFE0F;</div>
+        <div id="resultStars" class="result-stars"></div>
+        <div id="resultMsg" class="result-msg"></div>
+        <button id="resultBtn" class="btn-primary big">&#x1F3E0; กลับเลือกมาตรา</button>
+      </div>
+    </div>
+
     <script type="module" src="src/main.js"></script>
     <script>
       // ลงทะเบียน Service Worker — เฉพาะ secure context (https/localhost), ไม่ทำงานบน file://

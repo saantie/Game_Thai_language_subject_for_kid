@@ -1,9 +1,4 @@
 // data/matra.js — ข้อมูลมาตราตัวสะกด + คำ + spell + distractor
-// แก้ไข/เพิ่มคำได้ที่นี่โดยไม่ต้องแตะโค้ดเกม
-//
-// mode:
-//   'TWO_PART'   = พยัญชนะต้น + สระ (หยิบฟองไหนก็ได้ ทุกคู่เป็นคำจริง)
-//   'FILL_FINAL' = ล็อกโจทย์ + เติมตัวสะกด (ต้องเลือกตัวสะกดให้ถูก)
 
 export const MATRA = [
   {
@@ -11,14 +6,60 @@ export const MATRA = [
     name: 'แม่ ก กา',
     mode: 'TWO_PART',
     sara: 'า',
-    bubbles: ['ก', 'ม', 'ต', 'ข', 'ป', 'ย'],
+    bubbles: [
+      'ก','ข','ฃ','ค','ฅ','ฆ','ง',
+      'จ','ฉ','ช','ซ','ฌ','ญ',
+      'ฎ','ฏ','ฐ','ฑ','ฒ','ณ',
+      'ด','ต','ถ','ท','ธ','น',
+      'บ','ป','ผ','ฝ','พ','ฟ','ภ','ม',
+      'ย','ร','ล','ว',
+      'ศ','ษ','ส','ห','ฬ','อ','ฮ',
+    ],
     words: [
-      { display: 'กา', lead: 'ก', sara: 'า', spell: ['กอ', 'อา', 'กา'] },
-      { display: 'มา', lead: 'ม', sara: 'า', spell: ['มอ', 'อา', 'มา'] },
-      { display: 'ตา', lead: 'ต', sara: 'า', spell: ['ตอ', 'อา', 'ตา'] },
-      { display: 'ขา', lead: 'ข', sara: 'า', spell: ['ขอ', 'อา', 'ขา'] },
-      { display: 'ปา', lead: 'ป', sara: 'า', spell: ['ปอ', 'อา', 'ปา'] },
-      { display: 'ยา', lead: 'ย', sara: 'า', spell: ['ยอ', 'อา', 'ยา'] },
+      { display:'กา',  lead:'ก',  sara:'า', spell:['กอ','อา','กา']  },
+      { display:'ขา',  lead:'ข',  sara:'า', spell:['ขอ','อา','ขา']  },
+      { display:'ฃา',  lead:'ฃ',  sara:'า', spell:['ฃอ','อา','ฃา']  },
+      { display:'คา',  lead:'ค',  sara:'า', spell:['คอ','อา','คา']  },
+      { display:'ฅา',  lead:'ฅ',  sara:'า', spell:['ฅอ','อา','ฅา']  },
+      { display:'ฆา',  lead:'ฆ',  sara:'า', spell:['ฆอ','อา','ฆา']  },
+      { display:'งา',  lead:'ง',  sara:'า', spell:['งอ','อา','งา']  },
+      { display:'จา',  lead:'จ',  sara:'า', spell:['จอ','อา','จา']  },
+      { display:'ฉา',  lead:'ฉ',  sara:'า', spell:['ฉอ','อา','ฉา']  },
+      { display:'ชา',  lead:'ช',  sara:'า', spell:['ชอ','อา','ชา']  },
+      { display:'ซา',  lead:'ซ',  sara:'า', spell:['ซอ','อา','ซา']  },
+      { display:'ฌา',  lead:'ฌ',  sara:'า', spell:['ฌอ','อา','ฌา']  },
+      { display:'ญา',  lead:'ญ',  sara:'า', spell:['ญอ','อา','ญา']  },
+      { display:'ฎา',  lead:'ฎ',  sara:'า', spell:['ฎอ','อา','ฎา']  },
+      { display:'ฏา',  lead:'ฏ',  sara:'า', spell:['ฏอ','อา','ฏา']  },
+      { display:'ฐา',  lead:'ฐ',  sara:'า', spell:['ฐอ','อา','ฐา']  },
+      { display:'ฑา',  lead:'ฑ',  sara:'า', spell:['ฑอ','อา','ฑา']  },
+      { display:'ฒา',  lead:'ฒ',  sara:'า', spell:['ฒอ','อา','ฒา']  },
+      { display:'ณา',  lead:'ณ',  sara:'า', spell:['ณอ','อา','ณา']  },
+      { display:'ดา',  lead:'ด',  sara:'า', spell:['ดอ','อา','ดา']  },
+      { display:'ตา',  lead:'ต',  sara:'า', spell:['ตอ','อา','ตา']  },
+      { display:'ถา',  lead:'ถ',  sara:'า', spell:['ถอ','อา','ถา']  },
+      { display:'ทา',  lead:'ท',  sara:'า', spell:['ทอ','อา','ทา']  },
+      { display:'ธา',  lead:'ธ',  sara:'า', spell:['ธอ','อา','ธา']  },
+      { display:'นา',  lead:'น',  sara:'า', spell:['นอ','อา','นา']  },
+      { display:'บา',  lead:'บ',  sara:'า', spell:['บอ','อา','บา']  },
+      { display:'ปา',  lead:'ป',  sara:'า', spell:['ปอ','อา','ปา']  },
+      { display:'ผา',  lead:'ผ',  sara:'า', spell:['ผอ','อา','ผา']  },
+      { display:'ฝา',  lead:'ฝ',  sara:'า', spell:['ฝอ','อา','ฝา']  },
+      { display:'พา',  lead:'พ',  sara:'า', spell:['พอ','อา','พา']  },
+      { display:'ฟา',  lead:'ฟ',  sara:'า', spell:['ฟอ','อา','ฟา']  },
+      { display:'ภา',  lead:'ภ',  sara:'า', spell:['ภอ','อา','ภา']  },
+      { display:'มา',  lead:'ม',  sara:'า', spell:['มอ','อา','มา']  },
+      { display:'ยา',  lead:'ย',  sara:'า', spell:['ยอ','อา','ยา']  },
+      { display:'รา',  lead:'ร',  sara:'า', spell:['รอ','อา','รา']  },
+      { display:'ลา',  lead:'ล',  sara:'า', spell:['ลอ','อา','ลา']  },
+      { display:'วา',  lead:'ว',  sara:'า', spell:['วอ','อา','วา']  },
+      { display:'ศา',  lead:'ศ',  sara:'า', spell:['ศอ','อา','ศา']  },
+      { display:'ษา',  lead:'ษ',  sara:'า', spell:['ษอ','อา','ษา']  },
+      { display:'สา',  lead:'ส',  sara:'า', spell:['สอ','อา','สา']  },
+      { display:'หา',  lead:'ห',  sara:'า', spell:['หอ','อา','หา']  },
+      { display:'ฬา',  lead:'ฬ',  sara:'า', spell:['ฬอ','อา','ฬา']  },
+      { display:'อา',  lead:'อ',  sara:'า', spell:['ออ','อา','อา']  },
+      { display:'ฮา',  lead:'ฮ',  sara:'า', spell:['ฮอ','อา','ฮา']  },
     ],
   },
   {
@@ -27,10 +68,11 @@ export const MATRA = [
     mode: 'FILL_FINAL',
     finalSound: 'ง',
     words: [
-      { display: 'ลิง', lead: 'ลิ', final: 'ง', spell: ['ลอ', 'อิ', 'งอ', 'ลิง'], distractors: ['ม', 'น', 'ก'] },
-      { display: 'นาง', lead: 'นา', final: 'ง', spell: ['นอ', 'อา', 'งอ', 'นาง'], distractors: ['ด', 'บ', 'ย'] },
-      { display: 'ทาง', lead: 'ทา', final: 'ง', spell: ['ทอ', 'อา', 'งอ', 'ทาง'], distractors: ['น', 'ก', 'ม'] },
-      { display: 'ฟอง', lead: 'ฟอ', final: 'ง', spell: ['ฟอ', 'ออ', 'งอ', 'ฟอง'], distractors: ['บ', 'ด', 'ว'] },
+      { display:'ลิง', lead:'ลิ', final:'ง', spell:['ลอ','อิ','งอ','ลิง'], distractors:['ม','น','ก'] },
+      { display:'นาง', lead:'นา', final:'ง', spell:['นอ','อา','งอ','นาง'], distractors:['ด','บ','ย'] },
+      { display:'ทาง', lead:'ทา', final:'ง', spell:['ทอ','อา','งอ','ทาง'], distractors:['น','ก','ม'] },
+      { display:'ฟอง', lead:'ฟอ', final:'ง', spell:['ฟอ','ออ','งอ','ฟอง'], distractors:['บ','ด','ว'] },
+      { display:'วิ่ง', lead:'วิ', final:'ง', spell:['วอ','อิ','งอ','วิ่ง'], distractors:['น','ม','ด'] },
     ],
   },
   {
@@ -39,11 +81,12 @@ export const MATRA = [
     mode: 'FILL_FINAL',
     finalSound: 'น',
     words: [
-      { display: 'จาน', lead: 'จา', final: 'น', spell: ['จอ', 'อา', 'นอ', 'จาน'], distractors: ['ง', 'ม', 'ด'] },
-      { display: 'กิน', lead: 'กิ', final: 'น', spell: ['กอ', 'อิ', 'นอ', 'กิน'], distractors: ['ง', 'บ', 'ก'] },
-      { display: 'นอน', lead: 'นอ', final: 'น', spell: ['นอ', 'ออ', 'นอ', 'นอน'], distractors: ['ย', 'ว', 'ง'] },
-      { display: 'มือ', lead: 'มื', final: 'อ', spell: ['มอ', 'อือ', 'มือ'], distractors: ['น', 'ง', 'ก'], skip: true },
-    ].filter((w) => !w.skip),
+      { display:'จาน', lead:'จา', final:'น', spell:['จอ','อา','นอ','จาน'], distractors:['ง','ม','ด'] },
+      { display:'กิน', lead:'กิ', final:'น', spell:['กอ','อิ','นอ','กิน'], distractors:['ง','บ','ก'] },
+      { display:'นอน', lead:'นอ', final:'น', spell:['นอ','ออ','นอ','นอน'], distractors:['ย','ว','ง'] },
+      { display:'ดิน', lead:'ดิ', final:'น', spell:['ดอ','อิ','นอ','ดิน'], distractors:['ม','ก','บ'] },
+      { display:'คน',  lead:'ค',  final:'น', spell:['คอ','นอ','คน'],       distractors:['ม','ง','ด'] },
+    ],
   },
   {
     id: 'kom',
@@ -51,10 +94,11 @@ export const MATRA = [
     mode: 'FILL_FINAL',
     finalSound: 'ม',
     words: [
-      { display: 'ลม', lead: 'ล', final: 'ม', spell: ['ลอ', 'มอ', 'ลม'], distractors: ['ง', 'น', 'ด'] },
-      { display: 'ริม', lead: 'ริ', final: 'ม', spell: ['รอ', 'อิ', 'มอ', 'ริม'], distractors: ['ง', 'บ', 'ก'] },
-      { display: 'ถาม', lead: 'ถา', final: 'ม', spell: ['ถอ', 'อา', 'มอ', 'ถาม'], distractors: ['น', 'ย', 'ว'] },
-      { display: 'ชิม', lead: 'ชิ', final: 'ม', spell: ['ชอ', 'อิ', 'มอ', 'ชิม'], distractors: ['ด', 'ก', 'ง'] },
+      { display:'ลม',  lead:'ล',  final:'ม', spell:['ลอ','มอ','ลม'],       distractors:['ง','น','ด'] },
+      { display:'ริม', lead:'ริ', final:'ม', spell:['รอ','อิ','มอ','ริม'], distractors:['ง','บ','ก'] },
+      { display:'ถาม', lead:'ถา', final:'ม', spell:['ถอ','อา','มอ','ถาม'], distractors:['น','ย','ว'] },
+      { display:'ชิม', lead:'ชิ', final:'ม', spell:['ชอ','อิ','มอ','ชิม'], distractors:['ด','ก','ง'] },
+      { display:'ยิ้ม', lead:'ยิ', final:'ม', spell:['ยอ','อิ','มอ','ยิ้ม'], distractors:['น','ว','ก'] },
     ],
   },
   {
@@ -63,10 +107,11 @@ export const MATRA = [
     mode: 'FILL_FINAL',
     finalSound: 'ก',
     words: [
-      { display: 'นก', lead: 'น', final: 'ก', spell: ['นอ', 'กอ', 'นก'], distractors: ['ง', 'ด', 'บ'] },
-      { display: 'ปาก', lead: 'ปา', final: 'ก', spell: ['ปอ', 'อา', 'กอ', 'ปาก'], distractors: ['น', 'ม', 'ย'] },
-      { display: 'มาก', lead: 'มา', final: 'ก', spell: ['มอ', 'อา', 'กอ', 'มาก'], distractors: ['ง', 'ด', 'ว'] },
-      { display: 'ลูก', lead: 'ลู', final: 'ก', spell: ['ลอ', 'อู', 'กอ', 'ลูก'], distractors: ['น', 'บ', 'ง'] },
+      { display:'นก',  lead:'น',  final:'ก', spell:['นอ','กอ','นก'],       distractors:['ง','ด','บ'] },
+      { display:'ปาก', lead:'ปา', final:'ก', spell:['ปอ','อา','กอ','ปาก'], distractors:['น','ม','ย'] },
+      { display:'มาก', lead:'มา', final:'ก', spell:['มอ','อา','กอ','มาก'], distractors:['ง','ด','ว'] },
+      { display:'ลูก', lead:'ลู', final:'ก', spell:['ลอ','อู','กอ','ลูก'], distractors:['น','บ','ง'] },
+      { display:'รัก', lead:'รั', final:'ก', spell:['รอ','อะ','กอ','รัก'], distractors:['ด','ม','ว'] },
     ],
   },
   {
@@ -75,10 +120,11 @@ export const MATRA = [
     mode: 'FILL_FINAL',
     finalSound: 'ด',
     words: [
-      { display: 'มด', lead: 'ม', final: 'ด', spell: ['มอ', 'ดอ', 'มด'], distractors: ['ง', 'น', 'ก'] },
-      { display: 'ปิด', lead: 'ปิ', final: 'ด', spell: ['ปอ', 'อิ', 'ดอ', 'ปิด'], distractors: ['บ', 'ม', 'ย'] },
-      { display: 'กอด', lead: 'กอ', final: 'ด', spell: ['กอ', 'ออ', 'ดอ', 'กอด'], distractors: ['ง', 'ว', 'น'] },
-      { display: 'ขูด', lead: 'ขู', final: 'ด', spell: ['ขอ', 'อู', 'ดอ', 'ขูด'], distractors: ['ก', 'บ', 'ง'] },
+      { display:'มด',  lead:'ม',  final:'ด', spell:['มอ','ดอ','มด'],       distractors:['ง','น','ก'] },
+      { display:'ปิด', lead:'ปิ', final:'ด', spell:['ปอ','อิ','ดอ','ปิด'], distractors:['บ','ม','ย'] },
+      { display:'กอด', lead:'กอ', final:'ด', spell:['กอ','ออ','ดอ','กอด'], distractors:['ง','ว','น'] },
+      { display:'ขูด', lead:'ขู', final:'ด', spell:['ขอ','อู','ดอ','ขูด'], distractors:['ก','บ','ง'] },
+      { display:'วัด', lead:'วั', final:'ด', spell:['วอ','อะ','ดอ','วัด'], distractors:['บ','ง','น'] },
     ],
   },
   {
@@ -87,10 +133,11 @@ export const MATRA = [
     mode: 'FILL_FINAL',
     finalSound: 'บ',
     words: [
-      { display: 'กบ', lead: 'ก', final: 'บ', spell: ['กอ', 'บอ', 'กบ'], distractors: ['ด', 'ง', 'น'] },
-      { display: 'ลูบ', lead: 'ลู', final: 'บ', spell: ['ลอ', 'อู', 'บอ', 'ลูบ'], distractors: ['ก', 'ม', 'ย'] },
-      { display: 'ดิบ', lead: 'ดิ', final: 'บ', spell: ['ดอ', 'อิ', 'บอ', 'ดิบ'], distractors: ['ด', 'ง', 'ว'] },
-      { display: 'ตอบ', lead: 'ตอ', final: 'บ', spell: ['ตอ', 'ออ', 'บอ', 'ตอบ'], distractors: ['น', 'ก', 'ง'] },
+      { display:'กบ',  lead:'ก',  final:'บ', spell:['กอ','บอ','กบ'],       distractors:['ด','ง','น'] },
+      { display:'ลูบ', lead:'ลู', final:'บ', spell:['ลอ','อู','บอ','ลูบ'], distractors:['ก','ม','ย'] },
+      { display:'ดิบ', lead:'ดิ', final:'บ', spell:['ดอ','อิ','บอ','ดิบ'], distractors:['ด','ง','ว'] },
+      { display:'ตอบ', lead:'ตอ', final:'บ', spell:['ตอ','ออ','บอ','ตอบ'], distractors:['น','ก','ง'] },
+      { display:'ครับ', lead:'ครั', final:'บ', spell:['คอ','รอ','อะ','บอ','ครับ'], distractors:['ด','ม','ง'] },
     ],
   },
   {
@@ -99,10 +146,11 @@ export const MATRA = [
     mode: 'FILL_FINAL',
     finalSound: 'ย',
     words: [
-      { display: 'ยาย', lead: 'ยา', final: 'ย', spell: ['ยอ', 'อา', 'ยอ', 'ยาย'], distractors: ['ง', 'น', 'ว'] },
-      { display: 'ลอย', lead: 'ลอ', final: 'ย', spell: ['ลอ', 'ออ', 'ยอ', 'ลอย'], distractors: ['ม', 'ก', 'ด'] },
-      { display: 'ตาย', lead: 'ตา', final: 'ย', spell: ['ตอ', 'อา', 'ยอ', 'ตาย'], distractors: ['น', 'บ', 'ง'] },
-      { display: 'ดอย', lead: 'ดอ', final: 'ย', spell: ['ดอ', 'ออ', 'ยอ', 'ดอย'], distractors: ['ว', 'ม', 'ก'] },
+      { display:'ยาย', lead:'ยา', final:'ย', spell:['ยอ','อา','ยอ','ยาย'], distractors:['ง','น','ว'] },
+      { display:'ลอย', lead:'ลอ', final:'ย', spell:['ลอ','ออ','ยอ','ลอย'], distractors:['ม','ก','ด'] },
+      { display:'ตาย', lead:'ตา', final:'ย', spell:['ตอ','อา','ยอ','ตาย'], distractors:['น','บ','ง'] },
+      { display:'ดอย', lead:'ดอ', final:'ย', spell:['ดอ','ออ','ยอ','ดอย'], distractors:['ว','ม','ก'] },
+      { display:'ขาย', lead:'ขา', final:'ย', spell:['ขอ','อา','ยอ','ขาย'], distractors:['ง','ด','บ'] },
     ],
   },
   {
@@ -111,15 +159,15 @@ export const MATRA = [
     mode: 'FILL_FINAL',
     finalSound: 'ว',
     words: [
-      { display: 'ดาว', lead: 'ดา', final: 'ว', spell: ['ดอ', 'อา', 'วอ', 'ดาว'], distractors: ['ย', 'ง', 'น'] },
-      { display: 'หิว', lead: 'หิ', final: 'ว', spell: ['หอ', 'อิ', 'วอ', 'หิว'], distractors: ['ม', 'ก', 'ด'] },
-      { display: 'ขาว', lead: 'ขา', final: 'ว', spell: ['ขอ', 'อา', 'วอ', 'ขาว'], distractors: ['ย', 'บ', 'ง'] },
-      { display: 'กาว', lead: 'กา', final: 'ว', spell: ['กอ', 'อา', 'วอ', 'กาว'], distractors: ['น', 'ม', 'ก'] },
+      { display:'ดาว', lead:'ดา', final:'ว', spell:['ดอ','อา','วอ','ดาว'], distractors:['ย','ง','น'] },
+      { display:'หิว', lead:'หิ', final:'ว', spell:['หอ','อิ','วอ','หิว'], distractors:['ม','ก','ด'] },
+      { display:'ขาว', lead:'ขา', final:'ว', spell:['ขอ','อา','วอ','ขาว'], distractors:['ย','บ','ง'] },
+      { display:'กาว', lead:'กา', final:'ว', spell:['กอ','อา','วอ','กาว'], distractors:['น','ม','ก'] },
+      { display:'แดว', lead:'แด', final:'ว', spell:['ดอ','แอ','วอ','แดว'], distractors:['ย','ง','บ'] },
     ],
   },
 ];
 
-// helper: หา matra จาก id
 export function getMatra(id) {
   return MATRA.find((m) => m.id === id);
 }
