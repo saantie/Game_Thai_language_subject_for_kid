@@ -20,6 +20,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   let currentWord = null;
   let perfectCount = 0;
   let readAttempts = 0;
+  let score = 0;
 
   let state = 'IDLE';
   let bubbles = [];
@@ -113,6 +114,8 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     matra = m;
     roundIndex = 0;
     perfectCount = 0;
+    score = 0;
+    updateScore();
     dom.hudName.textContent = m.name;
     show(dom.hud, true);
 
@@ -148,13 +151,45 @@ export function createGame({ scene, audio, app, dom, onExit }) {
 
     setState('IDLE');
     updateHud();
+    updateWordPill();
     hideVoicebar();
     scene.witch.play('idle');
   }
 
   function updateHud() {
-    const done = matra.mode === TWO_PART ? roundIndex : roundIndex;
-    dom.hudProgress.textContent = `คำที่ ${done + 1} / ${words.length}`;
+    dom.hudProgress.textContent = `คำที่ ${roundIndex + 1} / ${words.length}`;
+  }
+
+  function updateScore(gained) {
+    dom.hudScore.textContent = score;
+    if (gained && dom.hudScore.parentElement) {
+      const pill = dom.hudScore.parentElement;
+      pill.classList.remove('bump');
+      void pill.offsetWidth; // restart animation
+      pill.classList.add('bump');
+    }
+  }
+
+  // WORD pill: แสดงการประกอบคำตาม mockup (เช่น "ก + า = กา")
+  function updateWordPill() {
+    if (!matra || !currentWord) { dom.hudWord.textContent = '—'; return; }
+    const solved =
+      state === 'DROPPED' || state === 'READING' || state === 'LISTENING' ||
+      state === 'EVALUATING' || state === 'REWARD' || state === 'REVEAL';
+    if (matra.mode === TWO_PART) {
+      const sara = matra.sara || 'า';
+      if (solved) {
+        dom.hudWord.textContent = `${currentWord.lead} + ${sara} = ${currentWord.display}`;
+      } else if (held) {
+        dom.hudWord.textContent = `${held.letter} + ${sara} = ${held.letter}${sara}`;
+      } else {
+        dom.hudWord.textContent = `? + ${sara}`;
+      }
+    } else {
+      const finalCh = solved ? currentWord.final : '▢';
+      const display = solved ? currentWord.display : `${currentWord.lead}▢`;
+      dom.hudWord.textContent = `${currentWord.lead} + ${finalCh} = ${display}`;
+    }
   }
 
   // ---------- Drop logic (สเปก 3.2) ----------
@@ -174,6 +209,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     bubble.dead = true;
     held = null;
     setState('DROPPED');
+    updateWordPill();
     audio.sfx('boom');
     spawnExplosion(scene.cauldron.cx, scene.cauldron.cy - scene.cauldron.ry * 0.2);
     blend = { text: currentWord.display, t0: performance.now() };
@@ -249,6 +285,8 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   function reward() {
     setState('REWARD');
     if (readAttempts === 0) perfectCount++;
+    score += readAttempts === 0 ? 100 : 50; // อ่านถูกครั้งแรก = เต็ม, มี retry = ครึ่ง
+    updateScore(true);
     scene.witch.play('cheer');
     audio.sfx('star');
     spawnStars(scene.W * 0.5, scene.H * 0.38);
@@ -306,6 +344,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
         b.vx = 0;
         b.vy = 0;
         setState('DRAGGING');
+        updateWordPill();
         audio.sfx('pick');
         return;
       }
@@ -326,6 +365,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       setState('IDLE');
     }
     if (held === b) held = null;
+    if (!overMouth) updateWordPill(); // ปล่อยนอกหม้อ → คืน pill เป็นโจทย์ตั้งต้น
   }
 
   // ---------- Loop / render ----------

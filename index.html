@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>หม้อแม่มดผสมคำ — ฝึกอ่านสะกดคำ</title>
-    <meta name="theme-color" content="#1b1140" />
+    <meta name="theme-color" content="#5a3aa8" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -32,9 +32,17 @@
     <!-- [4] UI overlay -->
     <header id="hud" class="hud hidden">
       <button id="backBtn" class="btn-icon" title="กลับ">⬅</button>
-      <div class="hud-info">
+      <div class="hud-pill score-pill">
+        <span class="pill-label">คะแนน</span>
+        <span id="hudScore" class="pill-value">0</span>
+      </div>
+      <div class="hud-center">
         <span id="hudName" class="hud-name"></span>
         <span id="hudProgress" class="hud-progress"></span>
+      </div>
+      <div class="hud-pill word-pill">
+        <span class="pill-label">คำ</span>
+        <span id="hudWord" class="pill-value">—</span>
       </div>
     </header>
 

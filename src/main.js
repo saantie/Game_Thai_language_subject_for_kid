@@ -27,6 +27,8 @@ const dom = {
   hud: $('#hud'),
   hudName: $('#hudName'),
   hudProgress: $('#hudProgress'),
+  hudScore: $('#hudScore'),
+  hudWord: $('#hudWord'),
   voicebar: $('#voicebar'),
   wordBig: $('#wordBig'),
   micBtn: $('#micBtn'),

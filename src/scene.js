@@ -40,78 +40,88 @@ export function initScene(root) {
     scene.cauldron.rim = scene.cauldron.ry * 0.45;
   }
 
-  function drawForest() {
+  function drawScene() {
     const W = scene.W,
       H = scene.H;
-    // ท้องฟ้ากลางคืน
+    // ท้องฟ้าเวทมนตร์ม่วง-ลาเวนเดอร์ (สดใสตาม mockup)
     const sky = bg.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#1b1140');
-    sky.addColorStop(0.55, '#2a1a55');
-    sky.addColorStop(1, '#0f1a2e');
+    sky.addColorStop(0, '#b39ae0');
+    sky.addColorStop(0.4, '#8d6fd1');
+    sky.addColorStop(0.75, '#6347b0');
+    sky.addColorStop(1, '#3d2470');
     bg.fillStyle = sky;
     bg.fillRect(0, 0, W, H);
 
-    // พระจันทร์
+    // แสงออร่าฟุ้งกลางฉาก
+    const aura = bg.createRadialGradient(
+      W * 0.5, H * 0.42, Math.min(W, H) * 0.05,
+      W * 0.5, H * 0.42, Math.min(W, H) * 0.7
+    );
+    aura.addColorStop(0, 'rgba(200,170,255,0.35)');
+    aura.addColorStop(1, 'rgba(200,170,255,0)');
+    bg.fillStyle = aura;
+    bg.fillRect(0, 0, W, H);
+
+    // พระจันทร์เรืองแสง
     bg.save();
-    bg.globalAlpha = 0.9;
-    bg.fillStyle = '#f7e9b0';
+    bg.globalAlpha = 0.5;
+    bg.fillStyle = '#fff6d8';
     bg.beginPath();
-    bg.arc(W * 0.8, H * 0.18, Math.min(W, H) * 0.07, 0, Math.PI * 2);
+    bg.arc(W * 0.82, H * 0.16, Math.min(W, H) * 0.11, 0, Math.PI * 2);
     bg.fill();
-    bg.globalAlpha = 0.18;
+    bg.globalAlpha = 0.95;
+    bg.fillStyle = '#fdeeb8';
     bg.beginPath();
-    bg.arc(W * 0.8, H * 0.18, Math.min(W, H) * 0.1, 0, Math.PI * 2);
+    bg.arc(W * 0.82, H * 0.16, Math.min(W, H) * 0.07, 0, Math.PI * 2);
     bg.fill();
     bg.restore();
 
-    // ดาวเล็ก ๆ
-    bg.fillStyle = 'rgba(255,255,255,0.7)';
-    for (let i = 0; i < 40; i++) {
-      const x = (Math.sin(i * 12.9898) * 43758.5453) % 1;
-      const y = (Math.sin(i * 78.233) * 12543.123) % 1;
-      const px = Math.abs(x) * W;
-      const py = Math.abs(y) * H * 0.5;
-      bg.globalAlpha = 0.3 + Math.abs(Math.sin(i)) * 0.5;
-      bg.fillRect(px, py, 2, 2);
+    // ประกายดาว (ดาว 4 แฉก + จุดเล็ก) กระจายครึ่งบน
+    for (let i = 0; i < 46; i++) {
+      const rx = Math.abs((Math.sin(i * 12.9898) * 43758.5453) % 1);
+      const ry = Math.abs((Math.sin(i * 78.233) * 12543.123) % 1);
+      const px = rx * W;
+      const py = ry * H * 0.62;
+      const tw = 0.4 + Math.abs(Math.sin(i * 2.3)) * 0.6;
+      bg.globalAlpha = tw;
+      bg.fillStyle = '#fff';
+      if (i % 3 === 0) {
+        const s = 3 + (i % 4);
+        drawSparkle(bg, px, py, s);
+      } else {
+        bg.fillRect(px, py, 2, 2);
+      }
     }
     bg.globalAlpha = 1;
 
-    // ต้นไม้ silhouette
-    drawTrees(W, H);
+    // หมอกม่วงด้านล่าง (ให้หม้ออยู่บนพื้นนุ่ม ๆ)
+    const mist = bg.createLinearGradient(0, H * 0.7, 0, H);
+    mist.addColorStop(0, 'rgba(60,30,110,0)');
+    mist.addColorStop(1, 'rgba(40,18,80,0.55)');
+    bg.fillStyle = mist;
+    bg.fillRect(0, H * 0.7, W, H * 0.3);
 
-    // พื้นป่า
-    const ground = bg.createLinearGradient(0, H * 0.72, 0, H);
-    ground.addColorStop(0, '#13251a');
-    ground.addColorStop(1, '#0a160f');
-    bg.fillStyle = ground;
-    bg.fillRect(0, H * 0.72, W, H * 0.28);
-
-    // หรี่โซน gameplay กันลายป่ารบกวนตัวอักษร
-    bg.fillStyle = 'rgba(20,8,40,0.28)';
-    bg.fillRect(0, H * 0.45, W, H * 0.55);
+    // vignette ขอบมืดเล็กน้อย โฟกัสกลางจอ
+    const vig = bg.createRadialGradient(
+      W * 0.5, H * 0.5, Math.min(W, H) * 0.35,
+      W * 0.5, H * 0.5, Math.max(W, H) * 0.75
+    );
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(20,8,45,0.45)');
+    bg.fillStyle = vig;
+    bg.fillRect(0, 0, W, H);
   }
 
-  function drawTrees(W, H) {
-    bg.fillStyle = '#0d1f17';
-    const positions = [0.08, 0.22, 0.92, 0.78, 0.5];
-    positions.forEach((p, i) => {
-      const x = W * p;
-      const w = Math.min(W, H) * (0.05 + (i % 2) * 0.02);
-      const top = H * (0.2 + (i % 3) * 0.05);
-      // ลำต้น
-      bg.fillRect(x - w * 0.12, top, w * 0.24, H - top);
-      // พุ่มไม้สามเหลี่ยมซ้อน
-      for (let k = 0; k < 3; k++) {
-        const yy = top + k * H * 0.06;
-        const ww = w * (1.4 - k * 0.25);
-        bg.beginPath();
-        bg.moveTo(x, yy - H * 0.06);
-        bg.lineTo(x - ww, yy + H * 0.05);
-        bg.lineTo(x + ww, yy + H * 0.05);
-        bg.closePath();
-        bg.fill();
-      }
-    });
+  // ดาว 4 แฉกเล็ก ๆ (ประกายเวทมนตร์)
+  function drawSparkle(ctx, cx, cy, r) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r);
+    ctx.quadraticCurveTo(cx, cy, cx + r, cy);
+    ctx.quadraticCurveTo(cx, cy, cx, cy + r);
+    ctx.quadraticCurveTo(cx, cy, cx - r, cy);
+    ctx.quadraticCurveTo(cx, cy, cx, cy - r);
+    ctx.closePath();
+    ctx.fill();
   }
 
   // วาดหม้อบน fxCanvas (เรียกทุกเฟรมจาก game) — รับ ctx เพื่อวาด glow ตามจังหวะ
@@ -238,7 +248,7 @@ export function initScene(root) {
     scene.H = b.H;
     scene.dpr = b.dpr;
     layoutCauldron();
-    drawForest();
+    drawScene();
     scene._resizeCbs.forEach((cb) => cb(scene.W, scene.H));
   }
 

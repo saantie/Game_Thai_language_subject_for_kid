@@ -1,8 +1,10 @@
 :root {
   --accent: #7affc0;
   --accent-2: #b388ff;
+  --purple: #8a5cff;
+  --purple-deep: #5a3aa8;
   --ink: #15233a;
-  --panel: rgba(18, 12, 38, 0.92);
+  --panel: rgba(46, 26, 92, 0.92);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -11,7 +13,7 @@ html, body {
   height: 100%;
   overflow: hidden;
   font-family: 'Sarabun', 'Segoe UI', sans-serif;
-  background: #0f1a2e;
+  background: #3d2470;
   color: #fff;
   user-select: none;
   touch-action: none;
@@ -68,13 +70,44 @@ html, body {
 /* ---- HUD ---- */
 .hud {
   position: fixed; top: 0; left: 0; right: 0; z-index: 4;
-  display: flex; align-items: center; gap: 14px;
-  padding: 12px 16px;
-  background: linear-gradient(180deg, rgba(10, 6, 24, 0.7), transparent);
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, rgba(30, 14, 70, 0.55), transparent);
 }
-.hud-info { display: flex; flex-direction: column; line-height: 1.15; }
-.hud-name { font-weight: 800; font-size: clamp(18px, 3vw, 26px); }
-.hud-progress { font-size: clamp(12px, 2vw, 16px); opacity: 0.85; }
+.hud-center {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  line-height: 1.15; min-width: 0;
+}
+.hud-name { font-weight: 800; font-size: clamp(15px, 2.6vw, 22px); text-shadow: 0 2px 6px rgba(0,0,0,0.5); }
+.hud-progress { font-size: clamp(11px, 1.8vw, 15px); opacity: 0.85; }
+
+/* SCORE / WORD pills แบบ mockup */
+.hud-pill {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 6px 16px; border-radius: 999px;
+  background: linear-gradient(135deg, var(--purple), var(--purple-deep));
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 4px 14px rgba(40, 16, 90, 0.5), inset 0 1px 0 rgba(255,255,255,0.25);
+  max-width: 42vw;
+}
+.pill-label {
+  font-size: clamp(9px, 1.6vw, 12px); font-weight: 700;
+  letter-spacing: 1px; opacity: 0.85; text-transform: uppercase;
+}
+.pill-value {
+  font-weight: 800; font-size: clamp(16px, 3.2vw, 26px); line-height: 1.1;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.35);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 38vw;
+}
+.word-pill { background: linear-gradient(135deg, #ffb84d, #ff8a3d); }
+.word-pill .pill-value { color: #fff; }
+.score-pill .pill-value { color: var(--accent); }
+.hud-pill.bump { animation: pillBump 0.35s ease; }
+@keyframes pillBump { 0% { transform: scale(1); } 45% { transform: scale(1.18); } 100% { transform: scale(1); } }
+
+@media (max-width: 560px) {
+  .hud-center { display: none; } /* จอแคบ: เก็บชื่อมาตราไว้ ให้ pill เด่น */
+}
 
 /* ---- voicebar (ด่านอ่าน) ---- */
 .voicebar {
@@ -136,7 +169,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
   position: fixed; inset: 0; z-index: 6;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 24px; text-align: center;
-  background: radial-gradient(circle at 50% 30%, rgba(40, 20, 80, 0.7), rgba(8, 6, 20, 0.92));
+  background: radial-gradient(circle at 50% 28%, rgba(150, 110, 230, 0.85), rgba(60, 36, 112, 0.95));
   backdrop-filter: blur(2px);
 }
 .start-card .start-emoji { font-size: 64px; }
@@ -163,7 +196,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
 .lv-stars { font-size: 18px; letter-spacing: 2px; }
 
 /* ---- result screen ---- */
-.result { background: radial-gradient(circle at 50% 40%, rgba(60, 20, 100, 0.85), rgba(8, 6, 20, 0.96)); }
+.result { background: radial-gradient(circle at 50% 40%, rgba(140, 90, 230, 0.9), rgba(60, 30, 112, 0.97)); }
 .result-card {
   display: flex; flex-direction: column; align-items: center; gap: 18px;
   background: rgba(255, 255, 255, 0.07);
