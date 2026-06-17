@@ -5,62 +5,31 @@ export const MATRA = [
     id: 'kaka',
     name: 'แม่ ก กา',
     mode: 'TWO_PART',
-    sessionSize: 8, // เล่นทีละ 8 ตัวสุ่ม — เปลี่ยนทุกรอบ, ไม่ต้องลากครบ 44
+    sessionSize: 8, // เล่นทีละ 8 ตัวสุ่ม — เปลี่ยนทุกรอบ
     sara: 'า',
-    bubbles: [
-      'ก','ข','ฃ','ค','ฅ','ฆ','ง',
-      'จ','ฉ','ช','ซ','ฌ','ญ',
-      'ฎ','ฏ','ฐ','ฑ','ฒ','ณ',
-      'ด','ต','ถ','ท','ธ','น',
-      'บ','ป','ผ','ฝ','พ','ฟ','ภ','ม',
-      'ย','ร','ล','ว',
-      'ศ','ษ','ส','ห','ฬ','อ','ฮ',
-    ],
+    // เฉพาะพยัญชนะที่ + า แล้วเป็น "คำจริงที่มีความหมาย" และ STT (th-TH) รู้จัก
+    // ตัดพยัญชนะที่รวม า แล้วไม่ใช่คำ (เช่น ณา ฒา ฑา ฎา ฉา ฬา ...) ออก —
+    // เพราะ Speech Recognition ไม่มีในคลังคำ จะตีว่าผิดเสมอแม้ออกเสียงถูก
+    bubbles: ['ก','ข','ค','ง','ช','ต','ท','น','ป','ผ','ฝ','พ','ม','ย','ร','ล','ห','อ'],
     words: [
-      { display:'กา',  lead:'ก',  sara:'า', spell:['กอ','อา','กา']  },
-      { display:'ขา',  lead:'ข',  sara:'า', spell:['ขอ','อา','ขา']  },
-      { display:'ฃา',  lead:'ฃ',  sara:'า', spell:['ฃอ','อา','ฃา']  },
-      { display:'คา',  lead:'ค',  sara:'า', spell:['คอ','อา','คา']  },
-      { display:'ฅา',  lead:'ฅ',  sara:'า', spell:['ฅอ','อา','ฅา']  },
-      { display:'ฆา',  lead:'ฆ',  sara:'า', spell:['ฆอ','อา','ฆา']  },
-      { display:'งา',  lead:'ง',  sara:'า', spell:['งอ','อา','งา']  },
-      { display:'จา',  lead:'จ',  sara:'า', spell:['จอ','อา','จา']  },
-      { display:'ฉา',  lead:'ฉ',  sara:'า', spell:['ฉอ','อา','ฉา']  },
-      { display:'ชา',  lead:'ช',  sara:'า', spell:['ชอ','อา','ชา']  },
-      { display:'ซา',  lead:'ซ',  sara:'า', spell:['ซอ','อา','ซา']  },
-      { display:'ฌา',  lead:'ฌ',  sara:'า', spell:['ฌอ','อา','ฌา']  },
-      { display:'ญา',  lead:'ญ',  sara:'า', spell:['ญอ','อา','ญา']  },
-      { display:'ฎา',  lead:'ฎ',  sara:'า', spell:['ฎอ','อา','ฎา']  },
-      { display:'ฏา',  lead:'ฏ',  sara:'า', spell:['ฏอ','อา','ฏา']  },
-      { display:'ฐา',  lead:'ฐ',  sara:'า', spell:['ฐอ','อา','ฐา']  },
-      { display:'ฑา',  lead:'ฑ',  sara:'า', spell:['ฑอ','อา','ฑา']  },
-      { display:'ฒา',  lead:'ฒ',  sara:'า', spell:['ฒอ','อา','ฒา']  },
-      { display:'ณา',  lead:'ณ',  sara:'า', spell:['ณอ','อา','ณา']  },
-      { display:'ดา',  lead:'ด',  sara:'า', spell:['ดอ','อา','ดา']  },
-      { display:'ตา',  lead:'ต',  sara:'า', spell:['ตอ','อา','ตา']  },
-      { display:'ถา',  lead:'ถ',  sara:'า', spell:['ถอ','อา','ถา']  },
-      { display:'ทา',  lead:'ท',  sara:'า', spell:['ทอ','อา','ทา']  },
-      { display:'ธา',  lead:'ธ',  sara:'า', spell:['ธอ','อา','ธา']  },
-      { display:'นา',  lead:'น',  sara:'า', spell:['นอ','อา','นา']  },
-      { display:'บา',  lead:'บ',  sara:'า', spell:['บอ','อา','บา']  },
-      { display:'ปา',  lead:'ป',  sara:'า', spell:['ปอ','อา','ปา']  },
-      { display:'ผา',  lead:'ผ',  sara:'า', spell:['ผอ','อา','ผา']  },
-      { display:'ฝา',  lead:'ฝ',  sara:'า', spell:['ฝอ','อา','ฝา']  },
-      { display:'พา',  lead:'พ',  sara:'า', spell:['พอ','อา','พา']  },
-      { display:'ฟา',  lead:'ฟ',  sara:'า', spell:['ฟอ','อา','ฟา']  },
-      { display:'ภา',  lead:'ภ',  sara:'า', spell:['ภอ','อา','ภา']  },
-      { display:'มา',  lead:'ม',  sara:'า', spell:['มอ','อา','มา']  },
-      { display:'ยา',  lead:'ย',  sara:'า', spell:['ยอ','อา','ยา']  },
-      { display:'รา',  lead:'ร',  sara:'า', spell:['รอ','อา','รา']  },
-      { display:'ลา',  lead:'ล',  sara:'า', spell:['ลอ','อา','ลา']  },
-      { display:'วา',  lead:'ว',  sara:'า', spell:['วอ','อา','วา']  },
-      { display:'ศา',  lead:'ศ',  sara:'า', spell:['ศอ','อา','ศา']  },
-      { display:'ษา',  lead:'ษ',  sara:'า', spell:['ษอ','อา','ษา']  },
-      { display:'สา',  lead:'ส',  sara:'า', spell:['สอ','อา','สา']  },
-      { display:'หา',  lead:'ห',  sara:'า', spell:['หอ','อา','หา']  },
-      { display:'ฬา',  lead:'ฬ',  sara:'า', spell:['ฬอ','อา','ฬา']  },
-      { display:'อา',  lead:'อ',  sara:'า', spell:['ออ','อา','อา']  },
-      { display:'ฮา',  lead:'ฮ',  sara:'า', spell:['ฮอ','อา','ฮา']  },
+      { display:'กา', lead:'ก', sara:'า', spell:['กอ','อา','กา'] }, // อีกา
+      { display:'ขา', lead:'ข', sara:'า', spell:['ขอ','อา','ขา'] }, // ขา
+      { display:'คา', lead:'ค', sara:'า', spell:['คอ','อา','คา'] }, // ติดคา
+      { display:'งา', lead:'ง', sara:'า', spell:['งอ','อา','งา'] }, // เมล็ดงา
+      { display:'ชา', lead:'ช', sara:'า', spell:['ชอ','อา','ชา'] }, // น้ำชา
+      { display:'ตา', lead:'ต', sara:'า', spell:['ตอ','อา','ตา'] }, // ดวงตา
+      { display:'ทา', lead:'ท', sara:'า', spell:['ทอ','อา','ทา'] }, // ทาสี
+      { display:'นา', lead:'น', sara:'า', spell:['นอ','อา','นา'] }, // ท้องนา
+      { display:'ปา', lead:'ป', sara:'า', spell:['ปอ','อา','ปา'] }, // ปาลูกบอล
+      { display:'ผา', lead:'ผ', sara:'า', spell:['ผอ','อา','ผา'] }, // หน้าผา
+      { display:'ฝา', lead:'ฝ', sara:'า', spell:['ฝอ','อา','ฝา'] }, // ฝาหม้อ
+      { display:'พา', lead:'พ', sara:'า', spell:['พอ','อา','พา'] }, // พาไป
+      { display:'มา', lead:'ม', sara:'า', spell:['มอ','อา','มา'] }, // มา
+      { display:'ยา', lead:'ย', sara:'า', spell:['ยอ','อา','ยา'] }, // ยา
+      { display:'รา', lead:'ร', sara:'า', spell:['รอ','อา','รา'] }, // เชื้อรา
+      { display:'ลา', lead:'ล', sara:'า', spell:['ลอ','อา','ลา'] }, // ลา (สัตว์)
+      { display:'หา', lead:'ห', sara:'า', spell:['หอ','อา','หา'] }, // ค้นหา
+      { display:'อา', lead:'อ', sara:'า', spell:['ออ','อา','อา'] }, // อา (ญาติ)
     ],
   },
   {
@@ -95,7 +64,7 @@ export const MATRA = [
     mode: 'FILL_FINAL',
     finalSound: 'ม',
     words: [
-      { display:'ลม',  lead:'ล',  final:'ม', spell:['ลอ','มอ','ลม'],       distractors:['ง','น','ด'] },
+      { display:'ลม',  lead:'ล',  final:'ม', spell:['ลอ','มอ','ลม'], distractors:['ง','น','ด'] },
       { display:'ริม', lead:'ริ', final:'ม', spell:['รอ','อิ','มอ','ริม'], distractors:['ง','บ','ก'] },
       { display:'ถาม', lead:'ถา', final:'ม', spell:['ถอ','อา','มอ','ถาม'], distractors:['น','ย','ว'] },
       { display:'ชิม', lead:'ชิ', final:'ม', spell:['ชอ','อิ','มอ','ชิม'], distractors:['ด','ก','ง'] },
