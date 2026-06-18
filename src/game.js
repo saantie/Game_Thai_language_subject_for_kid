@@ -440,8 +440,32 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       }
     }
   }
+  let _trailFrame = 0;
+  function spawnDragTrail(x, y) {
+    _trailFrame++;
+    if (_trailFrame % 2 !== 0) return;
+    for (let i = 0; i < 3; i++) {
+      const p = particlePool.pop() || {};
+      const a = Math.random() * Math.PI * 2;
+      const sp = 0.4 + Math.random() * 2.2;
+      p.x = x + (Math.random() - 0.5) * 22;
+      p.y = y + (Math.random() - 0.5) * 22;
+      p.vx = Math.cos(a) * sp;
+      p.vy = Math.sin(a) * sp - 1.8;
+      p.life = 0.65 + Math.random() * 0.35;
+      p.r = 4 + Math.random() * 8;
+      p.hue = 38 + Math.random() * 22;
+      p.star = true;
+      p.decay = 0.048;
+      particles.push(p);
+    }
+  }
+
   function onMove(x, y) {
-    if (held) { held.x = x; held.y = y; }
+    if (held) {
+      held.x = x; held.y = y;
+      spawnDragTrail(x, y);
+    }
   }
   function onRelease(x, y) {
     if (!held) return;
@@ -496,7 +520,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
       p.x += p.vx; p.y += p.vy; p.vy += 0.22;
-      p.life -= 0.018;
+      p.life -= p.decay || 0.018;
       if (p.life <= 0) { particles.splice(i, 1); particlePool.push(p); }
     }
   }
@@ -530,18 +554,25 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     }
     fx.restore();
 
-    // ตัวอักษรตั้งตรง (ไม่หมุนตามภาพ) — วาดแยกหลัง restore
+    // ตัวอักษรทองกลางฟอง — วาดแยก 2 layer หลัง restore (ไม่หมุนตามภาพ)
     const fontSize = Math.max(16, b.r * 0.92);
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.003 + b.phase);
     fx.save();
-    fx.shadowColor = 'rgba(0,0,0,0.70)';
-    fx.shadowBlur = 7;
-    fx.shadowOffsetX = 1;
-    fx.shadowOffsetY = 2;
-    fx.fillStyle = '#ffffff';
     fx.font = `800 ${fontSize}px 'Sarabun','Segoe UI',sans-serif`;
     fx.textAlign = 'center';
     fx.textBaseline = 'middle';
-    fx.fillText(b.letter, b.x, b.y + fontSize * 0.06);
+    fx.shadowOffsetX = 0;
+    fx.shadowOffsetY = 0;
+    // Layer 1 — amber glow กว้าง (shimmer ตาม pulse)
+    fx.shadowColor = `rgba(255,160,0,${0.55 + pulse * 0.30})`;
+    fx.shadowBlur = 14 + pulse * 10;
+    fx.fillStyle = '#FFD700';
+    fx.fillText(b.letter, b.x, b.y);
+    // Layer 2 — bright gold บน (blur แน่น)
+    fx.shadowColor = 'rgba(255,248,160,0.95)';
+    fx.shadowBlur = 4;
+    fx.fillStyle = '#FFF4A0';
+    fx.fillText(b.letter, b.x, b.y);
     fx.restore();
   }
 
