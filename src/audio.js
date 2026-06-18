@@ -10,8 +10,9 @@
 let ctx = null;
 let master = null;
 let bgmGain = null;
-let bgmNodes = [];
-let bgmTarget = 0.0; // ค่าเริ่ม: ปิด BGM (เปิดได้จากหน้าผู้ปกครอง)
+let bgmEl = null;           // HTML Audio element สำหรับ MP3 BGM
+let bgmSourceConnected = false;
+let bgmTarget = 0.0;        // ค่าเริ่ม: ปิด (เปิดตอน unlock ถ้า settings.bgm=true)
 let ducked = false;
 
 // ---- เสียงพากย์แม่มด (สุ่มกันจำเจ) ----
@@ -67,13 +68,21 @@ export const audio = {
       } catch (e) {}
     }
     // iOS/iPadOS Safari: SpeechRecognition ต้องการ mic permission
-    // getUserMedia จาก user gesture นี้จะโชว์ popup ขอ permission ทันที
-    // หลังจากนั้น recog.start() จาก async callback จะทำงานได้โดยไม่ต้อง gesture ซ้ำ
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       navigator.mediaDevices.getUserMedia({ audio: true })
         .then((stream) => stream.getTracks().forEach((t) => t.stop()))
-        .catch(() => {}); // ผู้ใช้ปฏิเสธ → ใช้ fallback ปุ่มผู้ปกครองแทน
+        .catch(() => {});
     }
+    // เชื่อม bgmEl เข้า Web Audio graph (ต้องทำใน user gesture)
+    if (ctx && bgmEl && !bgmSourceConnected) {
+      try {
+        const src = ctx.createMediaElementSource(bgmEl);
+        src.connect(bgmGain);
+        bgmSourceConnected = true;
+      } catch (e) {}
+    }
+    // เริ่มเล่น BGM ถ้าเปิดไว้ก่อน unlock
+    if (bgmTarget > 0 && bgmEl) bgmEl.play().catch(() => {});
     this.ready = true;
   },
 
@@ -201,33 +210,37 @@ export const audio = {
     echo.connect(echoLp).connect(echoG); echo.start(t + 0.18);
   },
 
-  // ---------- BGM (pad เบา ๆ) ----------
+  // ---------- BGM (MP3 file) ----------
   startBgm() {
-    if (!ctx || bgmNodes.length) return;
-    const notes = [130.81, 196.0, 261.63]; // C3 G3 C4
-    notes.forEach((f) => {
-      const o = ctx.createOscillator();
-      o.type = 'sine';
-      o.frequency.value = f;
-      const g = ctx.createGain();
-      g.gain.value = 0.33;
-      o.connect(g).connect(bgmGain);
-      o.start();
-      bgmNodes.push(o);
-    });
+    if (!bgmEl) {
+      bgmEl = new Audio('public/music/Moonlit Broomhop.mp3');
+      bgmEl.loop = true;
+      bgmEl.preload = 'auto';
+    }
+    // เชื่อม Web Audio graph ถ้า ctx พร้อมแล้ว
+    if (ctx && !bgmSourceConnected) {
+      try {
+        const src = ctx.createMediaElementSource(bgmEl);
+        src.connect(bgmGain);
+        bgmSourceConnected = true;
+      } catch (e) {}
+    }
+    bgmEl.play().catch(() => {}); // autoplay block → จะ retry ใน unlock()
   },
   setBgmEnabled(on) {
-    bgmTarget = on ? 0.06 : 0.0;
+    bgmTarget = on ? 0.20 : 0.0; // 0.20 = เบาพอไม่รบกวนเสียงพูด
     if (on) this.startBgm();
-    if (bgmGain && ctx) bgmGain.gain.linearRampToValueAtTime(bgmTarget, ctx.currentTime + 0.4);
+    else if (bgmEl) bgmEl.pause();
+    if (bgmGain && ctx) bgmGain.gain.linearRampToValueAtTime(bgmTarget, ctx.currentTime + 0.8);
   },
   duck() {
     ducked = true;
-    if (bgmGain && ctx) bgmGain.gain.linearRampToValueAtTime(bgmTarget * 0.2, ctx.currentTime + 0.2);
+    // หรี่เหลือ 15% ตอนแม่มดพูด/ฟังไมค์ → ไม่รบกวน STT
+    if (bgmGain && ctx) bgmGain.gain.linearRampToValueAtTime(bgmTarget * 0.15, ctx.currentTime + 0.25);
   },
   unduck() {
     ducked = false;
-    if (bgmGain && ctx) bgmGain.gain.linearRampToValueAtTime(bgmTarget, ctx.currentTime + 0.4);
+    if (bgmGain && ctx) bgmGain.gain.linearRampToValueAtTime(bgmTarget, ctx.currentTime + 0.5);
   },
 
   // ---------- Voice (TTS) ----------

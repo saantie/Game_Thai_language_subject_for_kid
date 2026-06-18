@@ -13,7 +13,7 @@ const MATRA_BY_ID = Object.fromEntries(MATRA.map((m) => [m.id, m]));
 // ---- app state กลาง (ต้นแบบเก็บใน memory; production ใช้ IndexedDB/Firebase) ----
 const app = {
   progress: {}, // { matraId: stars }
-  settings: { showSpellHint: false, bgm: false },
+  settings: { showSpellHint: false, bgm: true },
 };
 
 const $ = (sel) => document.querySelector(sel);
