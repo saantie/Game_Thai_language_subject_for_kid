@@ -10,6 +10,13 @@ import { createRecognizer, matchWord } from './input/speech.js';
 
 const TWO_PART = 'TWO_PART';
 
+// preload ภาพฟองสบู่ 5 แบบ (module-level — โหลดครั้งเดียวตลอด session)
+const BUBBLE_IMGS = Array.from({ length: 5 }, (_, i) => {
+  const img = new Image();
+  img.src = `public/assets/images/Bubble${i + 1}.png`;
+  return img;
+});
+
 export function createGame({ scene, audio, app, dom, onExit }) {
   const fx = scene.fx;
   const recog = createRecognizer();
@@ -39,6 +46,9 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       vx: 0, vy: 0, bouncing: false,
       r: 0, phase: Math.random() * Math.PI * 2,
       dead: false, held: false, pop: 0,
+      imgIdx:   Math.floor(Math.random() * 5),       // สุ่มภาพฟอง 1-5
+      rot:      Math.random() * Math.PI * 2,          // มุมเริ่มต้นสุ่ม
+      rotSpeed: (Math.random() - 0.5) * 0.014,        // หมุนซ้าย/ขวาสุ่ม ~0.4°/frame
     };
   }
 
@@ -414,6 +424,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
           b.y += (b.homeY + bob - b.y) * 0.08;
         }
       }
+      b.rot += b.rotSpeed; // หมุนต่อเนื่องทุกเฟรม
       if (b.pop > 0) b.pop = Math.max(0, b.pop - 0.05);
     });
     for (let i = particles.length - 1; i >= 0; i--) {
@@ -436,24 +447,33 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   function drawBubble(b) {
     const scale = 1 + b.pop * 0.25;
     const r = b.r * scale;
+    const img = BUBBLE_IMGS[b.imgIdx];
+
+    // วาดภาพฟองพร้อมหมุน
     fx.save();
-    const g = fx.createRadialGradient(b.x - r * 0.3, b.y - r * 0.3, r * 0.1, b.x, b.y, r);
-    g.addColorStop(0, 'rgba(255,255,255,0.95)');
-    g.addColorStop(0.4, 'rgba(150,220,255,0.55)');
-    g.addColorStop(1, 'rgba(80,140,220,0.25)');
-    fx.fillStyle = g;
-    fx.beginPath();
-    fx.arc(b.x, b.y, r, 0, Math.PI * 2);
-    fx.fill();
-    fx.strokeStyle = 'rgba(255,255,255,0.7)';
-    fx.lineWidth = 2;
-    fx.stroke();
-    const fontSize = Math.max(12, r * 0.95);
-    fx.fillStyle = '#15233a';
-    fx.font = `700 ${fontSize}px 'Sarabun','Segoe UI',sans-serif`;
+    fx.translate(b.x, b.y);
+    fx.rotate(b.rot);
+    if (img.complete && img.naturalWidth > 0) {
+      fx.drawImage(img, -r, -r, r * 2, r * 2);
+    } else {
+      // fallback วงกลมขณะภาพยังโหลด
+      fx.beginPath();
+      fx.arc(0, 0, r, 0, Math.PI * 2);
+      fx.fillStyle = 'rgba(150,220,255,0.55)';
+      fx.fill();
+    }
+    fx.restore();
+
+    // ตัวอักษรตั้งตรง (ไม่หมุนตามภาพ) — วาดแยกหลัง restore
+    const fontSize = Math.max(12, b.r * 0.95);
+    fx.save();
+    fx.shadowColor = 'rgba(0,0,0,0.45)';
+    fx.shadowBlur = 4;
+    fx.fillStyle = '#1a2a4a';
+    fx.font = `800 ${fontSize}px 'Sarabun','Segoe UI',sans-serif`;
     fx.textAlign = 'center';
     fx.textBaseline = 'middle';
-    fx.fillText(b.letter, b.x, b.y + fontSize * 0.05);
+    fx.fillText(b.letter, b.x, b.y + fontSize * 0.06);
     fx.restore();
   }
 

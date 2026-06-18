@@ -1,6 +1,6 @@
 // sw.js — Service Worker: cache-first + stale-while-revalidate + auto-reload on update
 // bump CACHE string ทุกครั้งที่ deploy ใหม่ → browser detect diff → install → reload client
-const CACHE = 'witch-cauldron-v10';
+const CACHE = 'witch-cauldron-v11';
 
 const APP_SHELL = [
   './',
@@ -25,6 +25,11 @@ const APP_SHELL = [
   './public/assets/images/cauldron3.png',
   './public/assets/images/cauldron4.png',
   './public/assets/images/cauldron5.png',
+  './public/assets/images/Bubble1.png',
+  './public/assets/images/Bubble2.png',
+  './public/assets/images/Bubble3.png',
+  './public/assets/images/Bubble4.png',
+  './public/assets/images/Bubble5.png',
 ];
 
 self.addEventListener('install', (e) => {
