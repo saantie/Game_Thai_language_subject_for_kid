@@ -28,8 +28,11 @@ let thaiVoice = null;
 function pickThaiVoice() {
   if (!('speechSynthesis' in window)) return null;
   const voices = window.speechSynthesis.getVoices();
+  // prefer exact th-TH match, then any th-* (e.g. iOS "Kanya" is th-TH)
   thaiVoice =
-    voices.find((v) => v.lang && v.lang.toLowerCase().startsWith('th')) || null;
+    voices.find((v) => v.lang && v.lang.toLowerCase() === 'th-th') ||
+    voices.find((v) => v.lang && v.lang.toLowerCase().startsWith('th')) ||
+    null;
   return thaiVoice;
 }
 if ('speechSynthesis' in window) {
@@ -237,7 +240,7 @@ export const audio = {
 
   // พูดข้อความใด ๆ ด้วย TTS ภาษาไทย; onEnd เรียกเมื่อพูดจบ
   speak(text, opts = {}) {
-    const { rate = 0.92, pitch = 1.25, onEnd } = opts;
+    const { rate = 0.85, pitch = 1.0, onEnd } = opts;
     if (!('speechSynthesis' in window) || !text) {
       // ไม่มี TTS → หน่วงเวลาประมาณการแล้วเรียก onEnd
       setTimeout(() => onEnd && onEnd(), 600 + text.length * 45);
@@ -273,7 +276,7 @@ export const audio = {
     const next = () => {
       if (i >= parts.length) return done && done();
       const syll = parts[i++];
-      this.speak(syll, { rate: 0.8, pitch: 1.2, onEnd: () => setTimeout(next, 180) });
+      this.speak(syll, { rate: 0.75, pitch: 1.0, onEnd: () => setTimeout(next, 200) });
     };
     setTimeout(next, 350);
   },
