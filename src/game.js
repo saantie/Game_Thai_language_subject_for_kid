@@ -382,21 +382,60 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     }
   }
 
-  function rewardFlyAnim(cb) {
+  function spawnFlyStars(cx, cy) {
+    for (let i = 0; i < 3; i++) {
+      const p = particlePool.pop() || {};
+      const a = Math.random() * Math.PI * 2;
+      const sp = 0.5 + Math.random() * 2.5;
+      p.x = cx + (Math.random() - 0.5) * 18;
+      p.y = cy + (Math.random() - 0.5) * 18;
+      p.vx = Math.cos(a) * sp;
+      p.vy = Math.sin(a) * sp - 1.2;
+      p.life = 0.55 + Math.random() * 0.35;
+      p.r = 6 + Math.random() * 9;
+      p.hue = 40 + Math.random() * 22;
+      p.star = true;
+      p.decay = 0.038;
+      particles.push(p);
+    }
+  }
+
+  function rewardFlyAnim(cb, onArrive) {
     const vb = dom.voicebar;
     const starEl = dom.scoreIcon;
     const vbRect  = vb.getBoundingClientRect();
     const stRect  = starEl.getBoundingClientRect();
     const dx = (stRect.left + stRect.width  / 2) - (vbRect.left + vbRect.width  / 2);
     const dy = (stRect.top  + stRect.height / 2) - (vbRect.top  + vbRect.height / 2);
+
+    // พิกัดบน fxCanvas สำหรับ trail particles
+    const fxRect = scene.fxCanvas.getBoundingClientRect();
+    const startX = (vbRect.left + vbRect.width  / 2) - fxRect.left;
+    const startY = (vbRect.top  + vbRect.height / 2) - fxRect.top;
+    const endX   = (stRect.left + stRect.width  / 2) - fxRect.left;
+    const endY   = (stRect.top  + stRect.height / 2) - fxRect.top;
+
     vb.style.setProperty('--vb-fly-x', `${dx}px`);
     vb.style.setProperty('--vb-fly-y', `${dy}px`);
     vb.classList.add('fly-to-star');
+
+    // trail: ปล่อยดาวตามเส้นทางทุก 28ms ตลอด 680ms
+    const FLY_DUR = 680;
+    const t0 = performance.now();
+    const trailId = setInterval(() => {
+      const t = Math.min(1, (performance.now() - t0) / FLY_DUR);
+      const ease = t * t; // ease-in: เร่งเข้าหาป้าย
+      spawnFlyStars(startX + (endX - startX) * ease, startY + (endY - startY) * ease);
+      if (t >= 1) clearInterval(trailId);
+    }, 28);
+
     setTimeout(() => {
+      clearInterval(trailId);
       vb.classList.remove('fly-to-star');
       hideVoicebar();
+      onArrive && onArrive(); // ตัวเลขวิ่ง + ดาวบูม เมื่อการ์ดถึงป้ายคะแนน
       cb && cb();
-    }, 680);
+    }, FLY_DUR);
   }
 
   function reward() {
@@ -404,13 +443,16 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     if (readAttempts === 0) perfectCount++;
     const points = readAttempts === 0 ? 100 : 50;
     score += points;
-    updateScore(points);
+    // updateScore จะถูกเรียกตอนการ์ดถึงป้ายคะแนน (onArrive) ไม่ใช่ตอนนี้
     scene.setCauldronFrame(4, 'reward'); // ควันม่วง — ฉลองอ่านถูก
     scene.witch.play('cheer');
     audio.sfx('star');
     spawnStars(scene.W * 0.5, scene.H * 0.38);
     audio.voice('correct', { onText: witchSay });
-    setTimeout(() => rewardFlyAnim(() => setTimeout(nextRound, 250)), 750);
+    setTimeout(() => rewardFlyAnim(
+      () => setTimeout(nextRound, 250),
+      () => { audio.sfx('star'); updateScore(points); }
+    ), 750);
   }
 
   function revealSpelling() {
