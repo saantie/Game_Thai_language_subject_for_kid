@@ -66,9 +66,22 @@ createPointerInput(scene.fxCanvas, {
 scene.onResize(() => game.relayout());
 
 // ---- screen switching ----
+let _inPopstate  = false;
+let _historyInit = false;
+
 function showScreen(which) {
+  // History API — ทำให้ปุ่ม Back บนมือถือย้อนกลับระหว่างหน้าของแอปแทนที่จะออก
+  if (!_inPopstate) {
+    if (!_historyInit) {
+      history.replaceState({ screen: which }, ''); // แทนที่ entry เดิมของ browser
+      _historyInit = true;
+    } else {
+      history.pushState({ screen: which }, '');
+    }
+  }
   startScreen.classList.toggle('hidden', which !== 'start');
   levelScreen.classList.toggle('hidden', which !== 'level');
+  adultScreen.classList.add('hidden'); // ปิด adult overlay เสมอ
   dom.hud.classList.toggle('hidden', which !== 'game');
   dom.voicebar.classList.add('hidden');
   dom.resultScreen.classList.add('hidden');
@@ -76,6 +89,22 @@ function showScreen(which) {
     buildLevelSelect($('#levelGrid'), app, (id) => startMatraById(id));
   }
 }
+
+// Android back button / iOS swipe back
+window.addEventListener('popstate', (e) => {
+  const to = e.state?.screen;
+  if (!to) return; // entry ก่อนแอปโหลด — ปล่อยให้ browser จัดการ (ออกแอป)
+  _inPopstate = true;
+  game.stop();
+  if (to === 'game') {
+    // game state ไม่สามารถ resume — เปลี่ยน entry นี้เป็น level แทน
+    history.replaceState({ screen: 'level' }, '');
+    showScreen('level');
+  } else {
+    showScreen(to);
+  }
+  _inPopstate = false;
+});
 
 function startMatraById(id) {
   const matra = MATRA_BY_ID[id];
