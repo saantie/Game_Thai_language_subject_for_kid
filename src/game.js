@@ -48,6 +48,8 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     const n = bubbles.length;
     if (n === 0) return;
 
+    // กันฟองซ้อน HUD: ไม่ให้ homeY ต่ำกว่า 90px จาก top
+    const hudClear = Math.max(90, H * 0.13);
     if (n <= 8) {
       // spread layout: เรียงแถวเดียวกระจายแนวนอน
       const r = Math.max(28, Math.min(W, H) * 0.07);
@@ -57,12 +59,14 @@ export function createGame({ scene, audio, app, dom, onExit }) {
         b.r = r;
         const t = n === 1 ? 0.5 : i / (n - 1);
         b.homeX = margin + usableW * t;
-        b.homeY = H * (0.2 + 0.12 * Math.sin(i * 1.7));
+        // เลื่อนลงจาก H*0.2 → H*0.36 เพื่อกัน HUD และกระจายกลางจอ
+        b.homeY = H * (0.36 + 0.10 * Math.sin(i * 1.7));
+        b.homeY = Math.max(hudClear + r, b.homeY);
         if (b.x === 0 && b.y === 0) { b.x = b.homeX; b.y = b.homeY; }
       });
     } else {
       // grid layout: หาขนาดเหมาะสมอัตโนมัติ
-      const areaH = H * 0.60;
+      const areaH = H * 0.52;  // ลดความสูง area กัน overlap กับหม้อ
       const cols = Math.round(Math.sqrt(n * (W / areaH)));
       const rows = Math.ceil(n / cols);
       const cellW = W / cols;
@@ -74,7 +78,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
         const row = Math.floor(i / cols);
         b.r = r;
         b.homeX = cellW * (col + 0.5);
-        b.homeY = cellH * (row + 0.5) + H * 0.04;
+        b.homeY = cellH * (row + 0.5) + hudClear; // เริ่มต่ำกว่า HUD
         if (b.x === 0 && b.y === 0) { b.x = b.homeX; b.y = b.homeY; }
       });
     }
@@ -368,7 +372,8 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     const b = held;
     b.held = false;
     const c = scene.cauldron;
-    const overMouth = Math.hypot(x - c.cx, (y - (c.cy - c.ry * 0.2)) / 0.6) <= c.rx;
+    // zone กว้าง — ปล่อยฟองบริเวณหม้อทั้งตัวรับได้ ไม่ต้องเล็งปากหม้อพอดี
+    const overMouth = Math.hypot(x - c.cx, (y - c.cy) / 1.1) <= c.rx;
     if (overMouth) {
       dropInCauldron(b);
     } else {

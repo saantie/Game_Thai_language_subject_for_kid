@@ -28,7 +28,7 @@ html, body {
 
 /* [1.5] หม้อแม่มด — DOM img, frame switching via JS */
 .cauldron-img {
-  position: fixed;
+  position: absolute;   /* absolute ใน sceneRoot (fixed inset:0) = เดียวกับ viewport */
   bottom: 2%;
   left: 50%;
   transform: translateX(-50%);

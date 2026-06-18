@@ -33,34 +33,22 @@ export function initScene(root) {
 
   function layoutCauldron() {
     const W = scene.W, H = scene.H;
-    // fallback (ก่อนรูปโหลดเสร็จ)
-    scene.cauldron.cx  = W * 0.5;
-    scene.cauldron.cy  = H * 0.78;
-    scene.cauldron.rx  = Math.min(W * 0.22, 190);
-    scene.cauldron.ry  = scene.cauldron.rx * 0.62;
-    scene.cauldron.rim = scene.cauldron.ry * 0.45;
+    // คำนวณจาก CSS โดยตรง: clamp(160px, 48vw, 400px), bottom: 2%, max-height: 60vh
+    const imgW = Math.max(160, Math.min(W * 0.48, 400));
+    const naturalH = imgW * 1.15;               // สัดส่วนประมาณ frame 1 (หม้อ)
+    const cappedH  = Math.min(naturalH, H * 0.60);
+    const imgBottom = H * 0.98;
+    const imgTop    = imgBottom - cappedH;
 
-    // sync จาก rendered image — ปาก (mouth oval) อยู่ที่ ~38% จาก top
-    if (cauldronImgEl && cauldronImgEl.naturalWidth > 0) {
-      const rect = cauldronImgEl.getBoundingClientRect();
-      if (rect.width > 0) {
-        scene.cauldron.cx  = rect.left + rect.width * 0.5;
-        scene.cauldron.cy  = rect.top  + rect.height * 0.38;
-        scene.cauldron.rx  = rect.width  * 0.40;
-        scene.cauldron.ry  = rect.width  * 0.12;
-        scene.cauldron.rim = scene.cauldron.ry * 0.4;
-      }
-    }
+    scene.cauldron.cx  = W * 0.5;
+    scene.cauldron.cy  = imgTop + cappedH * 0.42; // ปากหม้ออยู่ ~42% จาก top ของรูป
+    scene.cauldron.rx  = imgW * 0.62;             // กว้าง ≈ ปากหม้อ + ข้างๆ
+    scene.cauldron.ry  = scene.cauldron.rx * 0.60; // สูง — รับฟองที่ปล่อยบนหม้อทั้งตัว
+    scene.cauldron.rim = scene.cauldron.ry * 0.35;
   }
 
   // preload frames 2-5 ล่วงหน้า กัน flicker ตอนสลับ (frame 1 โหลดจาก HTML แล้ว)
-  [2,3,4,5].forEach((n) => { const i = new Image(); i.src = `public/assets/images/cauldron${n}.png`; });
-  if (cauldronImgEl) {
-    const syncLayout = () => layoutCauldron();
-    cauldronImgEl.addEventListener('load', syncLayout);
-    // รูปอาจโหลดแล้วจาก cache ก่อน addEventListener
-    if (cauldronImgEl.complete && cauldronImgEl.naturalWidth > 0) syncLayout();
-  }
+  [2,3,4,5].forEach((n) => { const img = new Image(); img.src = `public/assets/images/cauldron${n}.png`; });
 
   function drawScene() {
     const W = scene.W,
