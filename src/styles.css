@@ -120,7 +120,9 @@ html, body {
   50%     { box-shadow: 0 0 0 1px rgba(230,190,255,.55), 0 0 52px rgba(190,90,255,.60), 0 18px 50px rgba(18,4,48,.75), inset 0 1px 0 rgba(255,255,255,.18); }
 }
 .voicebar {
-  position: fixed; left: 50%; top: 14%;
+  position: fixed; left: 50%;
+  /* ดันต่ำพอ (ไม่ทับ HUD) แต่ top ไม่ตายตัว — ใช้ max เพื่อรองรับทุก viewport */
+  top: max(60px, 14%);
   transform: translateX(-50%);
   z-index: 4; width: min(92vw, 460px);
   background: linear-gradient(155deg, rgba(105,55,190,.90) 0%, rgba(46,26,92,.96) 55%, rgba(85,35,155,.88) 100%);
@@ -128,7 +130,7 @@ html, body {
   border-radius: 28px;
   padding: 18px 20px 16px;
   text-align: center;
-  overflow: visible;
+  overflow: visible; /* ต้อง visible เพื่อให้ดาว orbit โผล่นอกการ์ดได้ */
 }
 .voicebar:not(.hidden) {
   animation: conjure .55s cubic-bezier(.34,1.26,.64,1) both,
@@ -201,10 +203,6 @@ html, body {
 .vb-state { font-size: 14px; min-height: 18px; opacity: .9; margin-top: 6px; }
 .vb-fallback { display: flex; gap: 10px; justify-content: center; margin-top: 12px; }
 
-@media (prefers-reduced-motion: reduce) {
-  .vs, .voicebar:not(.hidden), .vb-word.reveal { animation: none !important; }
-}
-
 /* ---- buttons ---- */
 button { font-family: inherit; cursor: pointer; border: none; }
 .btn-primary {
@@ -214,7 +212,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
   box-shadow: 0 6px 0 #2f9d72;
 }
 .btn-primary:active { transform: translateY(3px); box-shadow: 0 3px 0 #2f9d72; }
-.btn-primary.big { font-size: 26px; padding: 18px 44px; }
+.btn-primary.big { font-size: clamp(18px, 4.5vw, 26px); padding: clamp(12px, 3vh, 18px) clamp(24px, 7vw, 44px); }
 .btn-link { background: none; color: #cdbcff; text-decoration: underline; margin-top: 14px; font-size: 15px; }
 .btn-icon {
   background: rgba(255, 255, 255, 0.15); color: #fff; width: 44px; height: 44px;
@@ -285,10 +283,18 @@ button { font-family: inherit; cursor: pointer; border: none; }
 .start-card h1 { font-size: clamp(30px, 7vw, 52px); margin: 8px 0; }
 .start-card p { opacity: 0.85; margin: 0 0 24px; font-size: clamp(15px, 3vw, 20px); }
 
-.level h2 { font-size: clamp(24px, 5vw, 36px); margin-bottom: 18px; }
+.level {
+  /* level screen ต้องเลื่อนได้ เมื่อ 9 การ์ดสูงกว่าหน้าจอ */
+  justify-content: flex-start;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: max(20px, env(safe-area-inset-top, 20px));
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
+}
+.level h2 { font-size: clamp(20px, 4.5vw, 36px); margin: 0 0 14px; }
 .level-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 14px; width: min(92vw, 720px);
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(130px, 40vw), 1fr));
+  gap: 12px; width: min(94vw, 720px);
 }
 .level-card {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
@@ -307,11 +313,16 @@ button { font-family: inherit; cursor: pointer; border: none; }
 /* ---- result screen ---- */
 .result { background: radial-gradient(circle at 50% 40%, rgba(140, 90, 230, 0.9), rgba(60, 30, 112, 0.97)); }
 .result-card {
-  display: flex; flex-direction: column; align-items: center; gap: 18px;
+  display: flex; flex-direction: column; align-items: center;
+  gap: clamp(10px, 2.5vh, 18px);
   background: rgba(255, 255, 255, 0.07);
   border: 2px solid rgba(122, 255, 192, 0.35);
-  border-radius: 28px; padding: 40px 36px;
+  border-radius: 28px;
+  padding: clamp(20px, 5vh, 40px) clamp(18px, 5vw, 36px);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  max-height: calc(100vh - 48px);
+  max-height: calc(100svh - 48px);
+  overflow-y: auto;
 }
 .result-emoji { font-size: clamp(56px, 14vw, 100px); }
 .result-stars {
@@ -340,3 +351,78 @@ button { font-family: inherit; cursor: pointer; border: none; }
 .adult-card .setting { display: block; margin: 8px 0; font-size: 16px; }
 .adult-card .note { font-size: 14px; opacity: 0.8; }
 .adult-card .btn-primary { margin-top: 16px; }
+
+/* ================================================================
+   Responsive + no-overflow fixes — หน้าจอทุกขนาดไม่ล้น
+   ================================================================ */
+
+/* safe-area: notch + home indicator (iOS/Android) */
+.hud { padding-top: max(12px, env(safe-area-inset-top, 0px)); }
+.screen.level {
+  padding-left: max(20px, env(safe-area-inset-left, 20px));
+  padding-right: max(20px, env(safe-area-inset-right, 20px));
+}
+
+/* start-card: ป้องกันเนื้อหาล้นบนจอเตี้ย */
+.start-card {
+  display: flex; flex-direction: column; align-items: center;
+  max-height: calc(100vh - 48px);
+  max-height: calc(100svh - 48px);
+  overflow-y: auto; width: min(90vw, 440px);
+}
+.start-card .start-emoji { font-size: clamp(44px, 10vw, 64px); }
+.start-card h1 { margin: 4px 0; }
+.start-card p  { margin: 0 0 16px; }
+
+/* ---- landscape / short screens (height ≤ 560px) ---- */
+/* ลดขนาด voicebar content เพราะ overflow:visible ไม่ scroll ได้ */
+@media (max-height: 560px) {
+  /* voicebar card เล็กลง */
+  .voicebar { top: max(52px, 5%); padding: 8px 16px 10px; }
+  .vb-prompt { font-size: 12px; margin-bottom: 0; }
+  .vb-word-wrap { min-height: clamp(40px, 11vh, 72px); margin: 2px 0 4px; }
+  .vb-word { font-size: clamp(28px, 8vh, 52px) !important; }
+  .btn-mic {
+    width: clamp(52px, 13vh, 70px) !important;
+    height: clamp(52px, 13vh, 70px) !important;
+    margin-top: 4px;
+  }
+  .mic-emoji { font-size: clamp(20px, 5vh, 28px) !important; }
+  .mic-label { font-size: 9px !important; }
+  .vb-state { font-size: 12px; min-height: 14px; margin-top: 2px; }
+  .vb-fallback { margin-top: 6px; }
+  .btn-ok, .btn-retry { padding: 6px 11px; font-size: 13px; }
+  /* ดาว orbit รัศมีน้อยลงบน landscape */
+  .vs.s1 { --r:66px; } .vs.s2 { --r:54px; } .vs.s3 { --r:62px; }
+  .vs.s4 { --r:58px; } .vs.s5 { --r:56px; } .vs.s6 { --r:50px; }
+
+  /* แม่มดและ toast เล็กลงกันทับ voicebar */
+  .witch { font-size: clamp(36px, 9vh, 60px); bottom: 2%; }
+  .toast {
+    bottom: calc(2% + clamp(40px, 9vh, 64px));
+    font-size: clamp(12px, 1.8vh, 15px);
+    padding: 7px 12px;
+  }
+
+  /* result card เตี้ยลง */
+  .result-card { padding: 16px 20px; gap: 8px; }
+  .result-emoji { font-size: clamp(40px, 10vw, 60px) !important; }
+  .result-stars { font-size: clamp(34px, 9vw, 52px) !important; }
+}
+
+/* ---- very narrow screens (width ≤ 360px) ---- */
+@media (max-width: 360px) {
+  .hud-pill { padding: 4px 10px; }
+  .pill-value { font-size: clamp(14px, 4vw, 18px); }
+  .lv-name { font-size: 16px; }
+  .level-card { padding: 14px 8px; }
+  .level-grid { grid-template-columns: repeat(auto-fit, minmax(min(110px, 42vw), 1fr)); gap: 10px; }
+  .btn-ok, .btn-retry { font-size: 14px; padding: 8px 12px; }
+  .vb-word { font-size: clamp(40px, 11vw, 70px) !important; }
+}
+
+/* prefers-reduced-motion: ปิดทุก animation */
+@media (prefers-reduced-motion: reduce) {
+  .vs, .voicebar:not(.hidden), .vb-word.reveal,
+  .witch, .btn-mic.listening { animation: none !important; }
+}
