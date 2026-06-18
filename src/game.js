@@ -62,7 +62,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     const hudClear = Math.max(90, H * 0.13);
     if (n <= 8) {
       // spread layout: เรียงแถวเดียวกระจายแนวนอน
-      const r = Math.max(28, Math.min(W, H) * 0.07);
+      const r = Math.max(44, Math.min(W, H) * 0.115);
       const margin = r * 1.4;
       const usableW = W - margin * 2;
       bubbles.forEach((b, i) => {
@@ -81,7 +81,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       const rows = Math.ceil(n / cols);
       const cellW = W / cols;
       const cellH = areaH / rows;
-      const r = Math.max(14, Math.min(Math.min(cellW, cellH) * 0.40, 36));
+      const r = Math.max(24, Math.min(Math.min(cellW, cellH) * 0.44, 54));
 
       bubbles.forEach((b, i) => {
         const col = i % cols;
@@ -531,11 +531,13 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     fx.restore();
 
     // ตัวอักษรตั้งตรง (ไม่หมุนตามภาพ) — วาดแยกหลัง restore
-    const fontSize = Math.max(12, b.r * 0.95);
+    const fontSize = Math.max(16, b.r * 0.92);
     fx.save();
-    fx.shadowColor = 'rgba(0,0,0,0.45)';
-    fx.shadowBlur = 4;
-    fx.fillStyle = '#1a2a4a';
+    fx.shadowColor = 'rgba(0,0,0,0.70)';
+    fx.shadowBlur = 7;
+    fx.shadowOffsetX = 1;
+    fx.shadowOffsetY = 2;
+    fx.fillStyle = '#ffffff';
     fx.font = `800 ${fontSize}px 'Sarabun','Segoe UI',sans-serif`;
     fx.textAlign = 'center';
     fx.textBaseline = 'middle';
