@@ -116,31 +116,76 @@ export const audio = {
   },
 
   _boom(t) {
-    // ระเบิดฟอง: noise burst + sweep ลง
-    const dur = 0.5;
-    const buf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) {
-      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
-    }
-    const noise = ctx.createBufferSource();
-    noise.buffer = buf;
-    const ng = this._gain(t, 0.4, dur);
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(1200, t);
-    lp.frequency.exponentialRampToValueAtTime(200, t + dur);
-    noise.connect(lp).connect(ng);
-    noise.start(t);
+    const S = ctx.sampleRate;
 
-    const o = ctx.createOscillator();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(180, t);
-    o.frequency.exponentialRampToValueAtTime(60, t + 0.4);
-    const og = this._gain(t, 0.3, 0.4);
-    o.connect(og);
-    o.start(t);
-    o.stop(t + 0.42);
+    // ── Layer 1: Sub kick — ตีพื้นพลังงานต่ำ (impact ทันที)
+    const sub = ctx.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(90, t);
+    sub.frequency.exponentialRampToValueAtTime(28, t + 0.18);
+    const subG = this._gain(t, 0.75, 0.16);
+    sub.connect(subG); sub.start(t); sub.stop(t + 0.22);
+
+    // ── Layer 2: Crack — noise burst กรอบ ๆ (impact แหลม)
+    const crackBuf = ctx.createBuffer(1, Math.ceil(S * 0.07), S);
+    const cd = crackBuf.getChannelData(0);
+    for (let i = 0; i < cd.length; i++)
+      cd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / cd.length, 1.2);
+    const crack = ctx.createBufferSource();
+    crack.buffer = crackBuf;
+    const crackHp = ctx.createBiquadFilter();
+    crackHp.type = 'highpass'; crackHp.frequency.value = 1800;
+    const crackG = this._gain(t, 0.55, 0.07);
+    crack.connect(crackHp).connect(crackG); crack.start(t);
+
+    // ── Layer 3: Body rumble — noise ยาว LP sweep (ควันระเบิด)
+    const rumbleDur = 1.3;
+    const rBuf = ctx.createBuffer(1, Math.ceil(S * rumbleDur), S);
+    const rd = rBuf.getChannelData(0);
+    for (let i = 0; i < rd.length; i++)
+      rd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / rd.length, 3);
+    const rumble = ctx.createBufferSource();
+    rumble.buffer = rBuf;
+    const rLp = ctx.createBiquadFilter();
+    rLp.type = 'lowpass';
+    rLp.frequency.setValueAtTime(3500, t);
+    rLp.frequency.exponentialRampToValueAtTime(100, t + rumbleDur);
+    const rG = this._gain(t, 0.45, rumbleDur);
+    rumble.connect(rLp).connect(rG); rumble.start(t);
+
+    // ── Layer 4: Magical mid sweep — sawtooth พร้อม resonant filter
+    const mid = ctx.createOscillator();
+    mid.type = 'sawtooth';
+    mid.frequency.setValueAtTime(520, t);
+    mid.frequency.exponentialRampToValueAtTime(95, t + 0.55);
+    const midBp = ctx.createBiquadFilter();
+    midBp.type = 'bandpass'; midBp.frequency.value = 600; midBp.Q.value = 4;
+    const midG = this._gain(t, 0.28, 0.5);
+    mid.connect(midBp).connect(midG); mid.start(t); mid.stop(t + 0.6);
+
+    // ── Layer 5: Spell shimmer — ascending arpeggio หลัง impact เล็กน้อย
+    const sparkFreqs = [523, 784, 1047, 1319, 1760, 2093];
+    sparkFreqs.forEach((f, i) => {
+      const dt = t + 0.03 + i * 0.045;
+      const sp = ctx.createOscillator();
+      sp.type = 'triangle';
+      sp.frequency.setValueAtTime(f, dt);
+      sp.frequency.exponentialRampToValueAtTime(f * 1.5, dt + 0.25);
+      const spG = this._gain(dt, 0.14, 0.22);
+      sp.connect(spG); sp.start(dt); sp.stop(dt + 0.3);
+    });
+
+    // ── Layer 6: Echo tail — delay node ให้ความรู้สึกห้องกว้าง / เวทมนตร์ก้อง
+    const delayBuf = ctx.createBuffer(1, Math.ceil(S * 0.4), S);
+    const dd = delayBuf.getChannelData(0);
+    for (let i = 0; i < dd.length; i++)
+      dd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / dd.length, 4);
+    const echo = ctx.createBufferSource();
+    echo.buffer = delayBuf;
+    const echoLp = ctx.createBiquadFilter();
+    echoLp.type = 'lowpass'; echoLp.frequency.value = 600;
+    const echoG = this._gain(t + 0.18, 0.18, 0.38);
+    echo.connect(echoLp).connect(echoG); echo.start(t + 0.18);
   },
 
   // ---------- BGM (pad เบา ๆ) ----------
