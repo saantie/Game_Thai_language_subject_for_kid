@@ -42,7 +42,7 @@ export const MATRA = [
       { display:'นาง', lead:'นา', final:'ง', spell:['นอ','อา','งอ','นาง'], distractors:['ด','บ','ย'] },
       { display:'ทาง', lead:'ทา', final:'ง', spell:['ทอ','อา','งอ','ทาง'], distractors:['น','ก','ม'] },
       { display:'ฟอง', lead:'ฟอ', final:'ง', spell:['ฟอ','ออ','งอ','ฟอง'], distractors:['บ','ด','ว'] },
-      { display:'วิ่ง', lead:'วิ', final:'ง', spell:['วอ','อิ','งอ','วิ่ง'], distractors:['น','ม','ด'] },
+      { display:'ขิง', lead:'ขิ', final:'ง', spell:['ขอ','อิ','งอ','ขิง'], distractors:['น','ม','ด'] },
     ],
   },
   {
