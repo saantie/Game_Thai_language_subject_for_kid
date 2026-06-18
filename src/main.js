@@ -37,6 +37,7 @@ const dom = {
   retryBtn: $('#retryBtn'),
   hint: $('#hint'),
   toast: $('#toast'),
+  scoreIcon: $('#scoreIcon'),
   resultScreen: $('#resultScreen'),
   resultStars: $('#resultStars'),
   resultMsg: $('#resultMsg'),

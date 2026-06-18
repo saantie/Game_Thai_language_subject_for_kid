@@ -191,62 +191,57 @@ html, body {
   .hud-center { display: none; } /* จอแคบ: เก็บชื่อมาตราไว้ ให้ pill เด่น */
 }
 
-/* ---- voicebar (ด่านอ่าน) — hologram card ---- */
+/* ---- voicebar (ด่านอ่าน) — fog card ---- */
 @keyframes conjure {
-  0%   { opacity:0; transform:translateX(-50%) scale(0.72) translateY(28px); filter:blur(12px); }
-  65%  { opacity:1; transform:translateX(-50%) scale(1.03) translateY(-4px); filter:blur(0); }
-  100% { opacity:1; transform:translateX(-50%) scale(1)    translateY(0);     filter:blur(0); }
+  0%   { opacity:0; transform:translateX(-50%) scale(0.68) translateY(30px); }
+  65%  { opacity:1; transform:translateX(-50%) scale(1.04) translateY(-4px); }
+  100% { opacity:1; transform:translateX(-50%) scale(1)    translateY(0); }
 }
-@keyframes holoGlow {
-  0%,100% {
-    border-color: rgba(0,230,255,.50);
-    box-shadow: 0 0 0 1px rgba(0,200,220,.18), 0 0 28px rgba(0,180,255,.28),
-                0 0 60px rgba(80,0,200,.18), 0 18px 50px rgba(0,4,20,.85),
-                inset 0 1px 0 rgba(0,255,255,.10);
-  }
-  50% {
-    border-color: rgba(170,70,255,.55);
-    box-shadow: 0 0 0 1px rgba(140,50,255,.22), 0 0 40px rgba(150,60,255,.38),
-                0 0 80px rgba(0,100,220,.22), 0 18px 50px rgba(0,4,20,.85),
-                inset 0 1px 0 rgba(200,150,255,.12);
-  }
+@keyframes fogPulse {
+  0%,100% { border-radius: 56% 44% 50% 50% / 44% 50% 50% 56%; transform: scale(1); }
+  30%      { border-radius: 44% 56% 46% 54% / 54% 46% 56% 44%; transform: scale(1.04); }
+  65%      { border-radius: 52% 48% 56% 44% / 46% 56% 44% 54%; transform: scale(0.97); }
 }
-@keyframes holoShimmer {
-  0%   { transform: translateX(-130%) skewX(-18deg); }
-  100% { transform: translateX(130%)  skewX(-18deg); }
+@keyframes flyToStar {
+  0%  { transform: translateX(-50%) scale(1); opacity:1; }
+  28% { transform: translateX(-50%) scale(0.36); opacity:1; filter:brightness(2.5); }
+  100%{ transform: translateX(calc(-50% + var(--vb-fly-x))) translateY(var(--vb-fly-y)) scale(0.04); opacity:0; }
 }
 .voicebar {
   position: fixed; left: 50%;
   top: max(60px, 14%);
   transform: translateX(-50%);
   z-index: 4; width: min(92vw, 460px);
-  /* hologram: dark navy glass + scanlines */
-  background:
-    repeating-linear-gradient(0deg,
-      rgba(0,255,255,.022) 0px, rgba(0,255,255,.022) 1px,
-      transparent 1px, transparent 5px),
-    linear-gradient(155deg, rgba(6,16,48,.91) 0%, rgba(3,9,32,.96) 55%, rgba(6,14,48,.89) 100%);
-  border: 1px solid rgba(0,230,255,.50);
-  border-radius: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   padding: 18px 20px 16px;
   text-align: center;
-  backdrop-filter: blur(24px) saturate(170%);
+  backdrop-filter: none;
   overflow: visible;
 }
-/* shimmer sweep — แสงวิ่งข้ามการ์ดเหมือน hologram ถูกเปิด */
+/* fog blob — รูปทรงไม่แน่นอน ขอบเบลอ เหมือนหมอกสีดำ */
 .voicebar::before {
   content: ''; pointer-events: none;
-  position: absolute; inset: 0; border-radius: 28px;
-  clip-path: inset(0 round 28px); /* กัน shimmer โผล่นอกมุมโค้ง */
-  background: linear-gradient(105deg,
-    transparent 30%, rgba(160,255,240,.07) 45%,
-    rgba(255,255,255,.13) 50%,
-    rgba(160,255,240,.07) 55%, transparent 70%);
-  animation: holoShimmer 4.8s ease-in-out infinite;
+  position: absolute; inset: -32px -18px;
+  background: radial-gradient(ellipse 82% 74% at 49% 53%,
+    rgba(2,0,10,0.97) 0%,
+    rgba(5,1,18,0.93) 28%,
+    rgba(10,3,32,0.78) 48%,
+    rgba(20,6,50,0.44) 64%,
+    rgba(35,8,65,0.15) 80%,
+    transparent 100%);
+  border-radius: 56% 44% 50% 50% / 44% 50% 50% 56%;
+  filter: blur(22px);
+  z-index: -1;
+  animation: fogPulse 5.5s ease-in-out infinite;
 }
 .voicebar:not(.hidden) {
-  animation: conjure .55s cubic-bezier(.34,1.26,.64,1) both,
-             holoGlow 3.6s ease-in-out .55s infinite;
+  animation: conjure .55s cubic-bezier(.34,1.26,.64,1) both;
+}
+.voicebar.fly-to-star {
+  animation: flyToStar 0.65s cubic-bezier(.4,0,.6,1) forwards !important;
+  pointer-events: none;
 }
 .vb-prompt {
   font-size: clamp(13px,2.2vw,17px); font-weight: 600;

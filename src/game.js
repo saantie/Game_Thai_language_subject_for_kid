@@ -27,6 +27,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   let currentWord = null;
   let perfectCount = 0;
   let readAttempts = 0;
+  let afterReveal = false;
   let score = 0;
 
   let state = 'IDLE';
@@ -153,6 +154,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     if (roundIndex >= words.length) return finishMatra();
     currentWord = words[roundIndex];
     readAttempts = 0;
+    afterReveal = false;
     blend = null;
     held = null;
 
@@ -352,6 +354,16 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     setState('EVALUATING');
     dom.micBtn.classList.remove('listening');
     if (heard) dom.micState.textContent = `ได้ยิน: "${heard}"`;
+
+    if (afterReveal) {
+      // รอบ echo หลังเฉลย — ชมแต่ไม่ให้คะแนน
+      scene.witch.play('cheer');
+      audio.sfx('star');
+      audio.voice('echo_praise', { onText: witchSay });
+      setTimeout(() => rewardFlyAnim(() => setTimeout(nextRound, 250)), 750);
+      return;
+    }
+
     if (correct) {
       reward();
     } else {
@@ -370,6 +382,23 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     }
   }
 
+  function rewardFlyAnim(cb) {
+    const vb = dom.voicebar;
+    const starEl = dom.scoreIcon;
+    const vbRect  = vb.getBoundingClientRect();
+    const stRect  = starEl.getBoundingClientRect();
+    const dx = (stRect.left + stRect.width  / 2) - (vbRect.left + vbRect.width  / 2);
+    const dy = (stRect.top  + stRect.height / 2) - (vbRect.top  + vbRect.height / 2);
+    vb.style.setProperty('--vb-fly-x', `${dx}px`);
+    vb.style.setProperty('--vb-fly-y', `${dy}px`);
+    vb.classList.add('fly-to-star');
+    setTimeout(() => {
+      vb.classList.remove('fly-to-star');
+      hideVoicebar();
+      cb && cb();
+    }, 680);
+  }
+
   function reward() {
     setState('REWARD');
     if (readAttempts === 0) perfectCount++;
@@ -381,7 +410,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     audio.sfx('star');
     spawnStars(scene.W * 0.5, scene.H * 0.38);
     audio.voice('correct', { onText: witchSay });
-    setTimeout(nextRound, 1600);
+    setTimeout(() => rewardFlyAnim(() => setTimeout(nextRound, 250)), 750);
   }
 
   function revealSpelling() {
@@ -389,8 +418,23 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     scene.witch.play('idle');
     audio.voice('reveal', { onText: witchSay });
     setTimeout(() => {
-      audio.playSpellReveal(currentWord, () => setTimeout(nextRound, 700));
+      audio.playSpellReveal(currentWord, () => setTimeout(startEchoRound, 700));
     }, 1400);
+  }
+
+  function startEchoRound() {
+    afterReveal = true;
+    setState('READING');
+    dom.wordBig.textContent = currentWord.display;
+    dom.wordBig.classList.remove('reveal');
+    void dom.wordBig.offsetWidth;
+    dom.wordBig.classList.add('reveal');
+    renderSpellHint();
+    showVoicebar();
+    audio.voice('echo_prompt', {
+      onText: witchSay,
+      onEnd: () => { if (state === 'READING' && recog.supported) listen(); },
+    });
   }
 
   function nextRound() {
