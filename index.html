@@ -34,9 +34,14 @@
     <!-- [4] UI overlay -->
     <header id="hud" class="hud hidden">
       <button id="backBtn" class="btn-icon" title="กลับ">⬅</button>
-      <div class="hud-pill score-pill">
+      <div class="hud-pill score-pill" id="scorePill">
         <span class="pill-label">คะแนน</span>
-        <span id="hudScore" class="pill-value">0</span>
+        <div class="score-display">
+          <span class="score-icon" id="scoreIcon">⭐</span>
+          <div class="score-roller">
+            <span id="hudScore" class="pill-value">0</span>
+          </div>
+        </div>
       </div>
       <div class="hud-center">
         <span id="hudName" class="hud-name"></span>

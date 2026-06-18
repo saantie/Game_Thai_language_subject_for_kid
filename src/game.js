@@ -175,13 +175,78 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     dom.hudProgress.textContent = `คำที่ ${roundIndex + 1} / ${words.length}`;
   }
 
-  function updateScore(gained) {
-    dom.hudScore.textContent = score;
-    if (gained && dom.hudScore.parentElement) {
-      const pill = dom.hudScore.parentElement;
-      pill.classList.remove('bump');
-      void pill.offsetWidth; // restart animation
-      pill.classList.add('bump');
+  const scorePillEl  = document.getElementById('scorePill');
+  const scoreIconEl  = document.getElementById('scoreIcon');
+
+  function updateScore(points) {
+    if (points > 0) {
+      const from = score - points;
+      _rollScore(from, score);
+      _burstScoreIcon();
+      _spawnScoreSparks();
+      if (scorePillEl) {
+        scorePillEl.classList.remove('bump');
+        void scorePillEl.offsetWidth;
+        scorePillEl.classList.add('bump');
+      }
+    } else {
+      dom.hudScore.textContent = score;
+    }
+  }
+
+  function _rollScore(from, to) {
+    const dur = 520;
+    const start = performance.now();
+    const tick = () => {
+      const t = Math.min(1, (performance.now() - start) / dur);
+      const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      dom.hudScore.textContent = Math.round(from + (to - from) * ease);
+      if (t < 1) {
+        requestAnimationFrame(tick);
+      } else {
+        dom.hudScore.textContent = to;
+        // settle: slide ขึ้นมาเหมือน slot machine
+        dom.hudScore.classList.remove('settle');
+        void dom.hudScore.offsetWidth;
+        dom.hudScore.classList.add('settle');
+      }
+    };
+    requestAnimationFrame(tick);
+  }
+
+  function _burstScoreIcon() {
+    if (!scoreIconEl) return;
+    scoreIconEl.classList.remove('burst');
+    void scoreIconEl.offsetWidth;
+    scoreIconEl.classList.add('burst');
+    // กลับ animation ปกติหลัง burst จบ
+    scoreIconEl.addEventListener('animationend', () => {
+      scoreIconEl.classList.remove('burst');
+    }, { once: true });
+  }
+
+  function _spawnScoreSparks() {
+    if (!scorePillEl) return;
+    const rect = scorePillEl.getBoundingClientRect();
+    const cx = rect.left + rect.width  * 0.5;
+    const cy = rect.top  + rect.height * 0.5;
+    const icons = ['⭐','✨','🌟','💫','⚡'];
+    const count = 7;
+    for (let i = 0; i < count; i++) {
+      const el = document.createElement('span');
+      el.className = 'score-spark';
+      el.textContent = icons[Math.floor(Math.random() * icons.length)];
+      const angle = (Math.PI * 2 * i / count) - Math.PI / 2 + (Math.random() - 0.5) * 0.8;
+      const dist  = 45 + Math.random() * 35;
+      el.style.left = cx + 'px';
+      el.style.top  = cy + 'px';
+      el.style.setProperty('--dx',  (Math.cos(angle) * dist) + 'px');
+      el.style.setProperty('--dy',  (Math.sin(angle) * dist - 10) + 'px');
+      el.style.setProperty('--dr',  ((Math.random() - 0.5) * 120) + 'deg');
+      el.style.setProperty('--dur', (0.55 + Math.random() * 0.3) + 's');
+      el.style.animationDelay = (Math.random() * 0.12) + 's';
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 1100);
     }
   }
 
@@ -308,8 +373,9 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   function reward() {
     setState('REWARD');
     if (readAttempts === 0) perfectCount++;
-    score += readAttempts === 0 ? 100 : 50; // อ่านถูกครั้งแรก = เต็ม, มี retry = ครึ่ง
-    updateScore(true);
+    const points = readAttempts === 0 ? 100 : 50;
+    score += points;
+    updateScore(points);
     scene.setCauldronFrame(4, 'reward'); // ควันม่วง — ฉลองอ่านถูก
     scene.witch.play('cheer');
     audio.sfx('star');
