@@ -7,6 +7,15 @@
     "start": "node server.mjs",
     "dev": "node server.mjs"
   },
-  "keywords": ["thai", "education", "kids", "spelling", "game"],
-  "license": "MIT"
+  "keywords": [
+    "thai",
+    "education",
+    "kids",
+    "spelling",
+    "game"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.61.0"
+  }
 }
