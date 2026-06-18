@@ -32,10 +32,13 @@ html, body {
   left: 3%;
   bottom: 8%;
   z-index: 2;
-  font-size: clamp(64px, 13vw, 130px);
-  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.5));
+  width: clamp(90px, 18vw, 180px);
+  height: auto;
+  filter: drop-shadow(0 6px 16px rgba(80, 20, 160, 0.55));
   transform-origin: bottom center;
   will-change: transform;
+  pointer-events: none;
+  user-select: none;
 }
 @media (prefers-reduced-motion: no-preference) {
   .witch.idle  { animation: witchIdle 2.2s ease-in-out infinite; }
@@ -50,7 +53,7 @@ html, body {
 .toast {
   position: fixed;
   left: 12%;
-  bottom: calc(8% + clamp(70px, 14vw, 140px));
+  bottom: calc(8% + clamp(90px, 18vw, 180px));
   max-width: 60%;
   z-index: 5;
   background: #fff;
@@ -279,7 +282,8 @@ button { font-family: inherit; cursor: pointer; border: none; }
   background: radial-gradient(circle at 50% 28%, rgba(150, 110, 230, 0.85), rgba(60, 36, 112, 0.95));
   backdrop-filter: blur(2px);
 }
-.start-card .start-emoji { font-size: 64px; }
+.start-card .start-emoji { font-size: 36px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+.start-witch-img { width: clamp(80px, 20vw, 120px); height: auto; filter: drop-shadow(0 4px 12px rgba(80,20,160,.5)); }
 .start-card h1 { font-size: clamp(30px, 7vw, 52px); margin: 8px 0; }
 .start-card p { opacity: 0.85; margin: 0 0 24px; font-size: clamp(15px, 3vw, 20px); }
 
@@ -324,7 +328,8 @@ button { font-family: inherit; cursor: pointer; border: none; }
   max-height: calc(100svh - 48px);
   overflow-y: auto;
 }
-.result-emoji { font-size: clamp(56px, 14vw, 100px); }
+.result-emoji { line-height: 1; }
+.result-witch-img { width: clamp(80px, 20vw, 130px); height: auto; filter: drop-shadow(0 4px 14px rgba(80,20,160,.5)); }
 .result-stars {
   font-size: clamp(44px, 11vw, 72px);
   letter-spacing: 6px;
@@ -397,9 +402,9 @@ button { font-family: inherit; cursor: pointer; border: none; }
   .vs.s4 { --r:58px; } .vs.s5 { --r:56px; } .vs.s6 { --r:50px; }
 
   /* แม่มดและ toast เล็กลงกันทับ voicebar */
-  .witch { font-size: clamp(36px, 9vh, 60px); bottom: 2%; }
+  .witch { width: clamp(60px, 14vh, 100px); bottom: 2%; }
   .toast {
-    bottom: calc(2% + clamp(40px, 9vh, 64px));
+    bottom: calc(2% + clamp(62px, 14vh, 102px));
     font-size: clamp(12px, 1.8vh, 15px);
     padding: 7px 12px;
   }

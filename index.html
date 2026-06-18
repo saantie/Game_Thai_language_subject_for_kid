@@ -25,7 +25,7 @@
       <canvas id="bgCanvas"></canvas>
       <!-- [1] #camVideo (เปิดเฉพาะโหมดกล้อง AR — ยังไม่ใช้ในต้นแบบ) -->
       <canvas id="fxCanvas"></canvas>
-      <div class="witch idle" aria-hidden="true">🧙‍♀️</div>
+      <img src="public/assets/images/witch.png" class="witch idle" alt="แม่มด" aria-hidden="true" />
       <div id="toast" class="toast"></div>
     </div>
 
@@ -77,7 +77,7 @@
     <!-- หน้าเริ่ม -->
     <div id="startScreen" class="screen start">
       <div class="start-card">
-        <div class="start-emoji">&#x1F9D9;&#x200D;&#x2640;&#xFE0F; &#x2728;</div>
+        <div class="start-emoji"><img src="public/assets/images/witch.png" alt="แม่มด" class="start-witch-img" />&#x2728;</div>
         <h1>หม้อแม่มดผสมคำ</h1>
         <p>ฝึกอ่านสะกดคำภาษาไทยตามมาตราตัวสะกด</p>
         <button id="startBtn" class="btn-primary big">▶ เริ่มเล่น</button>
@@ -98,7 +98,7 @@
     <!-- ผลคะแนนหลังจบมาตรา -->
     <div id="resultScreen" class="screen result hidden">
       <div class="result-card">
-        <div class="result-emoji">&#x1F9D9;&#x200D;&#x2640;&#xFE0F;</div>
+        <div class="result-emoji"><img src="public/assets/images/witch.png" alt="แม่มด" class="result-witch-img" /></div>
         <div id="resultStars" class="result-stars"></div>
         <div id="resultMsg" class="result-msg"></div>
         <button id="resultBtn" class="btn-primary big">&#x1F3E0; กลับเลือกมาตรา</button>
