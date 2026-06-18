@@ -61,6 +61,14 @@ export const audio = {
         window.speechSynthesis.speak(u);
       } catch (e) {}
     }
+    // iOS/iPadOS Safari: SpeechRecognition ต้องการ mic permission
+    // getUserMedia จาก user gesture นี้จะโชว์ popup ขอ permission ทันที
+    // หลังจากนั้น recog.start() จาก async callback จะทำงานได้โดยไม่ต้อง gesture ซ้ำ
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then((stream) => stream.getTracks().forEach((t) => t.stop()))
+        .catch(() => {}); // ผู้ใช้ปฏิเสธ → ใช้ fallback ปุ่มผู้ปกครองแทน
+    }
     this.ready = true;
   },
 
