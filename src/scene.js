@@ -4,7 +4,8 @@
 export function initScene(root) {
   const bgCanvas = root.querySelector('#bgCanvas');
   const fxCanvas = root.querySelector('#fxCanvas');
-  const witchEl = root.querySelector('.witch');
+  const witchEl  = root.querySelector('.witch');
+  const cauldronImgEl = document.getElementById('cauldronImg');
   const bg = bgCanvas.getContext('2d');
   const fx = fxCanvas.getContext('2d');
 
@@ -31,13 +32,34 @@ export function initScene(root) {
   }
 
   function layoutCauldron() {
-    const W = scene.W,
-      H = scene.H;
-    scene.cauldron.cx = W * 0.5;
-    scene.cauldron.cy = H * 0.78;
-    scene.cauldron.rx = Math.min(W * 0.22, 190);
-    scene.cauldron.ry = scene.cauldron.rx * 0.62;
+    const W = scene.W, H = scene.H;
+    // fallback (ก่อนรูปโหลดเสร็จ)
+    scene.cauldron.cx  = W * 0.5;
+    scene.cauldron.cy  = H * 0.78;
+    scene.cauldron.rx  = Math.min(W * 0.22, 190);
+    scene.cauldron.ry  = scene.cauldron.rx * 0.62;
     scene.cauldron.rim = scene.cauldron.ry * 0.45;
+
+    // sync จาก rendered image — ปาก (mouth oval) อยู่ที่ ~38% จาก top
+    if (cauldronImgEl && cauldronImgEl.naturalWidth > 0) {
+      const rect = cauldronImgEl.getBoundingClientRect();
+      if (rect.width > 0) {
+        scene.cauldron.cx  = rect.left + rect.width * 0.5;
+        scene.cauldron.cy  = rect.top  + rect.height * 0.38;
+        scene.cauldron.rx  = rect.width  * 0.40;
+        scene.cauldron.ry  = rect.width  * 0.12;
+        scene.cauldron.rim = scene.cauldron.ry * 0.4;
+      }
+    }
+  }
+
+  // preload frames 2-5 ล่วงหน้า กัน flicker ตอนสลับ (frame 1 โหลดจาก HTML แล้ว)
+  [2,3,4,5].forEach((n) => { const i = new Image(); i.src = `public/assets/images/cauldron${n}.png`; });
+  if (cauldronImgEl) {
+    const syncLayout = () => layoutCauldron();
+    cauldronImgEl.addEventListener('load', syncLayout);
+    // รูปอาจโหลดแล้วจาก cache ก่อน addEventListener
+    if (cauldronImgEl.complete && cauldronImgEl.naturalWidth > 0) syncLayout();
   }
 
   function drawScene() {
@@ -124,61 +146,24 @@ export function initScene(root) {
     ctx.fill();
   }
 
-  // วาดหม้อบน fxCanvas (เรียกทุกเฟรมจาก game) — รับ ctx เพื่อวาด glow ตามจังหวะ
+  // drawCauldron: ตัวหม้อใช้ DOM img แล้ว — วาดเฉพาะโจทย์ FILL_FINAL บน fxCanvas
   scene.drawCauldron = function (promptWord) {
-    const c = scene.cauldron;
-    const ctx = fx;
-    ctx.save();
-    // เงาใต้หม้อ
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath();
-    ctx.ellipse(c.cx, c.cy + c.ry * 0.9, c.rx * 1.05, c.ry * 0.35, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // ตัวหม้อ
-    const body = ctx.createLinearGradient(c.cx - c.rx, c.cy, c.cx + c.rx, c.cy);
-    body.addColorStop(0, '#1b1b22');
-    body.addColorStop(0.5, '#3a3a48');
-    body.addColorStop(1, '#15151b');
-    ctx.fillStyle = body;
-    ctx.beginPath();
-    ctx.moveTo(c.cx - c.rx, c.cy - c.ry * 0.2);
-    ctx.quadraticCurveTo(c.cx - c.rx * 1.1, c.cy + c.ry * 1.3, c.cx, c.cy + c.ry * 1.5);
-    ctx.quadraticCurveTo(c.cx + c.rx * 1.1, c.cy + c.ry * 1.3, c.cx + c.rx, c.cy - c.ry * 0.2);
-    ctx.closePath();
-    ctx.fill();
-
-    // ปากหม้อ
-    ctx.fillStyle = '#0c0c12';
-    ctx.beginPath();
-    ctx.ellipse(c.cx, c.cy - c.ry * 0.2, c.rx, c.ry * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // ของเหลวเรืองแสง
-    const glow = 0.55 + 0.45 * Math.sin(performance.now() * 0.004);
-    const liq = ctx.createRadialGradient(
-      c.cx, c.cy - c.ry * 0.2, 2,
-      c.cx, c.cy - c.ry * 0.2, c.rx
-    );
-    liq.addColorStop(0, `rgba(120,255,180,${0.55 + glow * 0.3})`);
-    liq.addColorStop(0.6, 'rgba(60,200,140,0.5)');
-    liq.addColorStop(1, 'rgba(20,80,60,0.2)');
-    ctx.fillStyle = liq;
-    ctx.beginPath();
-    ctx.ellipse(c.cx, c.cy - c.ry * 0.2, c.rx * 0.86, c.ry * 0.42, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // ขอบหม้อ
-    ctx.strokeStyle = '#5a5a6e';
-    ctx.lineWidth = Math.max(3, c.rx * 0.04);
-    ctx.beginPath();
-    ctx.ellipse(c.cx, c.cy - c.ry * 0.2, c.rx, c.ry * 0.5, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-
-    // โจทย์ในหม้อ (โหมด FILL_FINAL): lead + ช่องว่างเรืองแสง
     if (promptWord && promptWord.final) {
       drawPrompt(promptWord);
+    }
+  };
+
+  // สลับ frame ตาม game state  (1=IDLE 2=BREW 3=READING 4=REWARD 5=BOOM)
+  scene.setCauldronFrame = function (n, animate) {
+    if (!cauldronImgEl) return;
+    cauldronImgEl.src = `public/assets/images/cauldron${n}.png`;
+    cauldronImgEl.classList.remove('flash', 'reward');
+    if (animate === 'flash') {
+      void cauldronImgEl.offsetWidth; // reflow
+      cauldronImgEl.classList.add('flash');
+    } else if (animate === 'reward') {
+      void cauldronImgEl.offsetWidth;
+      cauldronImgEl.classList.add('reward');
     }
   };
 

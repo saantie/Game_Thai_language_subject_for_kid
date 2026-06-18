@@ -26,6 +26,45 @@ html, body {
 #bgCanvas { position: absolute; inset: 0; z-index: 0; }   /* [0] ฉากป่า static */
 #fxCanvas { position: absolute; inset: 0; z-index: 3; }   /* [3] ฟอง/particle dynamic */
 
+/* [1.5] หม้อแม่มด — DOM img, frame switching via JS */
+.cauldron-img {
+  position: fixed;
+  bottom: 2%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: clamp(160px, 48vw, 400px);
+  max-height: 60vh;
+  height: auto;
+  object-fit: contain;
+  z-index: 1;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 8px 28px rgba(80, 30, 200, 0.55));
+  transform-origin: bottom center;
+  will-change: transform, filter;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .cauldron-img.flash {
+    animation: cauldronFlash 0.40s ease-out forwards;
+  }
+  .cauldron-img.reward {
+    animation: cauldronReward 0.6s ease-out forwards;
+  }
+}
+@keyframes cauldronFlash {
+  0%   { transform: translateX(-50%) scale(1);    filter: drop-shadow(0 8px 28px rgba(80,30,200,.55)) brightness(1); }
+  35%  { transform: translateX(-50%) scale(1.09); filter: drop-shadow(0 0 48px rgba(80,220,255,.95)) brightness(1.5); }
+  100% { transform: translateX(-50%) scale(1);    filter: drop-shadow(0 8px 28px rgba(80,30,200,.55)) brightness(1); }
+}
+@keyframes cauldronReward {
+  0%   { transform: translateX(-50%) scale(1);    filter: drop-shadow(0 8px 28px rgba(180,80,255,.55)) brightness(1); }
+  40%  { transform: translateX(-50%) scale(1.07); filter: drop-shadow(0 0 52px rgba(200,100,255,.9)) brightness(1.4); }
+  100% { transform: translateX(-50%) scale(1);    filter: drop-shadow(0 8px 28px rgba(80,30,200,.55)) brightness(1); }
+}
+@media (max-height: 560px) {
+  .cauldron-img { max-height: 48vh; bottom: 0; }
+}
+
 /* [2] แม่มด — DOM + CSS animation */
 .witch {
   position: fixed;

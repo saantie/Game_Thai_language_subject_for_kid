@@ -154,6 +154,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     updateWordPill();
     hideVoicebar();
     scene.witch.play('idle');
+    scene.setCauldronFrame(1); // IDLE: หม้อน้ำฟ้า ฟองสงบ
   }
 
   function updateHud() {
@@ -214,6 +215,9 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     spawnExplosion(scene.cauldron.cx, scene.cauldron.cy - scene.cauldron.ry * 0.2);
     blend = { text: currentWord.display, t0: performance.now() };
     scene.witch.play('cast');
+    // animation: BOOM flash → brew → reading
+    scene.setCauldronFrame(5, 'flash'); // ลำแสงฟ้า — ปฏิกิริยาเวทมนตร์
+    setTimeout(() => scene.setCauldronFrame(2), 380);  // น้ำเขียว รูน
     setTimeout(() => startReadingRound(), 950);
   }
 
@@ -221,6 +225,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   function startReadingRound() {
     setState('READING');
     blend = null;
+    scene.setCauldronFrame(3); // ควันเขียว + ดาว — คำผสมเสร็จ รอฟัง
     dom.wordBig.textContent = currentWord.display;
     // trigger reveal animation ทุกรอบ (reflow บังคับ restart)
     dom.wordBig.classList.remove('reveal');
@@ -291,6 +296,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     if (readAttempts === 0) perfectCount++;
     score += readAttempts === 0 ? 100 : 50; // อ่านถูกครั้งแรก = เต็ม, มี retry = ครึ่ง
     updateScore(true);
+    scene.setCauldronFrame(4, 'reward'); // ควันม่วง — ฉลองอ่านถูก
     scene.witch.play('cheer');
     audio.sfx('star');
     spawnStars(scene.W * 0.5, scene.H * 0.38);

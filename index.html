@@ -24,6 +24,8 @@
     <div id="sceneRoot">
       <canvas id="bgCanvas"></canvas>
       <!-- [1] #camVideo (เปิดเฉพาะโหมดกล้อง AR — ยังไม่ใช้ในต้นแบบ) -->
+      <!-- [1.5] หม้อแม่มด — DOM img สลับ frame ตาม game state -->
+      <img id="cauldronImg" class="cauldron-img" src="public/assets/images/cauldron1.png" alt="" aria-hidden="true" />
       <canvas id="fxCanvas"></canvas>
       <img src="public/assets/images/witch.png" class="witch idle" alt="แม่มด" aria-hidden="true" />
       <div id="toast" class="toast"></div>
