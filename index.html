@@ -70,9 +70,13 @@
       </div>
       <div id="hint" class="vb-hint"></div>
       <!-- mic: วงกลมแก้วใสสไตล์เวทมนตร์ -->
-      <button id="micBtn" class="btn-mic">
-        <span class="mic-emoji">&#x1F3A4;</span>
-        <span class="mic-label">พูดคำนี้</span>
+      <button id="micBtn" class="btn-mic" title="พูดคำนี้">
+        <svg class="mic-svg" viewBox="0 0 24 38" fill="none" aria-hidden="true">
+          <rect x="6" y="1" width="12" height="20" rx="6" fill="currentColor"/>
+          <path d="M3 19c0 5.52 4.48 9 9 9s9-3.48 9-9" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/>
+          <line x1="12" y1="28" x2="12" y2="35" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/>
+          <line x1="7"  y1="35" x2="17" y2="35" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/>
+        </svg>
       </button>
       <div id="micState" class="vb-state"></div>
       <div class="vb-fallback">

@@ -191,32 +191,62 @@ html, body {
   .hud-center { display: none; } /* จอแคบ: เก็บชื่อมาตราไว้ ให้ pill เด่น */
 }
 
-/* ---- voicebar (ด่านอ่าน) ---- */
+/* ---- voicebar (ด่านอ่าน) — hologram card ---- */
 @keyframes conjure {
   0%   { opacity:0; transform:translateX(-50%) scale(0.72) translateY(28px); filter:blur(12px); }
   65%  { opacity:1; transform:translateX(-50%) scale(1.03) translateY(-4px); filter:blur(0); }
   100% { opacity:1; transform:translateX(-50%) scale(1)    translateY(0);     filter:blur(0); }
 }
-@keyframes cardGlow {
-  0%,100% { box-shadow: 0 0 0 1px rgba(190,140,255,.28), 0 0 32px rgba(150,70,255,.38), 0 18px 50px rgba(18,4,48,.75), inset 0 1px 0 rgba(255,255,255,.12); }
-  50%     { box-shadow: 0 0 0 1px rgba(230,190,255,.55), 0 0 52px rgba(190,90,255,.60), 0 18px 50px rgba(18,4,48,.75), inset 0 1px 0 rgba(255,255,255,.18); }
+@keyframes holoGlow {
+  0%,100% {
+    border-color: rgba(0,230,255,.50);
+    box-shadow: 0 0 0 1px rgba(0,200,220,.18), 0 0 28px rgba(0,180,255,.28),
+                0 0 60px rgba(80,0,200,.18), 0 18px 50px rgba(0,4,20,.85),
+                inset 0 1px 0 rgba(0,255,255,.10);
+  }
+  50% {
+    border-color: rgba(170,70,255,.55);
+    box-shadow: 0 0 0 1px rgba(140,50,255,.22), 0 0 40px rgba(150,60,255,.38),
+                0 0 80px rgba(0,100,220,.22), 0 18px 50px rgba(0,4,20,.85),
+                inset 0 1px 0 rgba(200,150,255,.12);
+  }
+}
+@keyframes holoShimmer {
+  0%   { transform: translateX(-130%) skewX(-18deg); }
+  100% { transform: translateX(130%)  skewX(-18deg); }
 }
 .voicebar {
   position: fixed; left: 50%;
-  /* ดันต่ำพอ (ไม่ทับ HUD) แต่ top ไม่ตายตัว — ใช้ max เพื่อรองรับทุก viewport */
   top: max(60px, 14%);
   transform: translateX(-50%);
   z-index: 4; width: min(92vw, 460px);
-  background: linear-gradient(155deg, rgba(105,55,190,.90) 0%, rgba(46,26,92,.96) 55%, rgba(85,35,155,.88) 100%);
-  border: 1.5px solid rgba(215,175,255,.52);
+  /* hologram: dark navy glass + scanlines */
+  background:
+    repeating-linear-gradient(0deg,
+      rgba(0,255,255,.022) 0px, rgba(0,255,255,.022) 1px,
+      transparent 1px, transparent 5px),
+    linear-gradient(155deg, rgba(6,16,48,.91) 0%, rgba(3,9,32,.96) 55%, rgba(6,14,48,.89) 100%);
+  border: 1px solid rgba(0,230,255,.50);
   border-radius: 28px;
   padding: 18px 20px 16px;
   text-align: center;
-  overflow: visible; /* ต้อง visible เพื่อให้ดาว orbit โผล่นอกการ์ดได้ */
+  backdrop-filter: blur(24px) saturate(170%);
+  overflow: visible;
+}
+/* shimmer sweep — แสงวิ่งข้ามการ์ดเหมือน hologram ถูกเปิด */
+.voicebar::before {
+  content: ''; pointer-events: none;
+  position: absolute; inset: 0; border-radius: 28px;
+  clip-path: inset(0 round 28px); /* กัน shimmer โผล่นอกมุมโค้ง */
+  background: linear-gradient(105deg,
+    transparent 30%, rgba(160,255,240,.07) 45%,
+    rgba(255,255,255,.13) 50%,
+    rgba(160,255,240,.07) 55%, transparent 70%);
+  animation: holoShimmer 4.8s ease-in-out infinite;
 }
 .voicebar:not(.hidden) {
   animation: conjure .55s cubic-bezier(.34,1.26,.64,1) both,
-             cardGlow 2.8s ease-in-out .55s infinite;
+             holoGlow 3.6s ease-in-out .55s infinite;
 }
 .vb-prompt {
   font-size: clamp(13px,2.2vw,17px); font-weight: 600;
@@ -300,53 +330,77 @@ button { font-family: inherit; cursor: pointer; border: none; }
   background: rgba(255, 255, 255, 0.15); color: #fff; width: 44px; height: 44px;
   border-radius: 12px; font-size: 20px;
 }
-/* mic: วงกลมแก้วใสสไตล์เวทมนตร์ */
+/* mic: วงกลม hologram glass */
 .btn-mic {
-  width: clamp(76px,19vw,98px); height: clamp(76px,19vw,98px);
+  position: relative; /* สำหรับ ripple rings */
+  width: clamp(80px,20vw,104px); height: clamp(80px,20vw,104px);
   border-radius: 50%;
   background: radial-gradient(circle at 36% 30%,
-    rgba(230,190,255,.40) 0%,
-    rgba(140,80,250,.28) 45%,
-    rgba(60,20,130,.18) 100%);
-  border: 2px solid rgba(215,175,255,.65);
-  backdrop-filter: blur(10px);
+    rgba(0,220,255,.22) 0%,
+    rgba(0,120,200,.14) 45%,
+    rgba(0,20,80,.10) 100%);
+  border: 1.5px solid rgba(0,220,255,.50);
+  backdrop-filter: blur(14px);
   box-shadow:
-    0 0 0 5px rgba(160,80,255,.16),
-    0 0 24px rgba(160,80,255,.50),
-    inset 0 2px 0 rgba(255,255,255,.28),
-    inset 0 -1px 0 rgba(0,0,0,.18);
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 1px; padding: 0; margin-top: 10px; color: #fff;
+    0 0 0 4px rgba(0,180,255,.12),
+    0 0 22px rgba(0,160,255,.40),
+    inset 0 2px 0 rgba(255,255,255,.20),
+    inset 0 -1px 0 rgba(0,0,0,.12);
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; margin-top: 12px;
+  color: rgba(200,240,255,.92);
   cursor: pointer;
-  transition: transform .12s, box-shadow .18s;
+  transition: transform .12s, box-shadow .18s, color .2s;
 }
 .btn-mic:hover:not(:disabled) {
   transform: scale(1.07);
-  box-shadow: 0 0 0 7px rgba(160,80,255,.22), 0 0 34px rgba(160,80,255,.72),
-              inset 0 2px 0 rgba(255,255,255,.28);
+  box-shadow: 0 0 0 7px rgba(0,200,255,.18), 0 0 36px rgba(0,180,255,.65),
+              inset 0 2px 0 rgba(255,255,255,.22);
 }
 .btn-mic:active:not(:disabled) { transform: scale(.92); }
-.btn-mic:disabled { opacity: .36; box-shadow: none; cursor: default; }
-.mic-emoji { font-size: clamp(26px,6.5vw,34px); line-height: 1; }
-.mic-label { font-size: clamp(9px,2vw,12px); font-weight: 800; letter-spacing: .4px; opacity: .92; }
+.btn-mic:disabled { opacity: .35; box-shadow: none; cursor: default; }
 
-@keyframes micGlow {
+/* SVG mic icon */
+.mic-svg {
+  width: clamp(28px,6vw,36px); height: auto;
+  color: inherit; display: block;
+  filter: drop-shadow(0 0 4px rgba(0,210,255,.55));
+}
+
+/* ---- Golden pulse + ripple ตอนฟังเสียง ---- */
+@keyframes micGoldPulse {
   0%,100% {
-    box-shadow: 0 0 0 5px rgba(255,70,100,.22), 0 0 26px rgba(255,70,100,.58),
-                inset 0 2px 0 rgba(255,255,255,.28);
+    color: rgba(255,200,55,.90);
+    box-shadow: 0 0 0 4px rgba(255,170,0,.18), 0 0 22px rgba(255,150,0,.40),
+                inset 0 2px 0 rgba(255,255,255,.20);
     transform: scale(1);
   }
   50% {
-    box-shadow: 0 0 0 12px rgba(255,70,100,.10), 0 0 48px rgba(255,70,100,.85),
-                inset 0 2px 0 rgba(255,255,255,.28);
-    transform: scale(1.08);
+    color: #fff;
+    box-shadow: 0 0 0 10px rgba(255,150,0,.08), 0 0 52px rgba(255,140,0,.80),
+                inset 0 2px 0 rgba(255,255,255,.22);
+    transform: scale(1.07);
   }
 }
-.btn-mic.listening {
-  animation: micGlow .88s ease-in-out infinite;
-  border-color: rgba(255,100,130,.82);
+@keyframes micRipple {
+  0%   { transform: scale(1);   opacity: .65; }
+  100% { transform: scale(2.4); opacity: 0;   }
 }
+.btn-mic.listening {
+  color: #ffd84d;
+  border-color: rgba(255,185,0,.75);
+  animation: micGoldPulse 1.1s ease-in-out infinite;
+}
+/* 2 วงขยายออก — สลับ delay */
+.btn-mic.listening::before,
+.btn-mic.listening::after {
+  content: '';
+  position: absolute; inset: 0; border-radius: 50%;
+  border: 2px solid rgba(255,165,0,.55);
+  animation: micRipple 1.5s ease-out infinite;
+  pointer-events: none;
+}
+.btn-mic.listening::after { animation-delay: .75s; }
 .btn-ok, .btn-retry {
   border-radius: 12px; padding: 10px 16px; font-size: 16px; font-weight: 700; color: #fff;
 }
@@ -471,8 +525,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
     height: clamp(52px, 13vh, 70px) !important;
     margin-top: 4px;
   }
-  .mic-emoji { font-size: clamp(20px, 5vh, 28px) !important; }
-  .mic-label { font-size: 9px !important; }
+  .mic-svg { width: clamp(22px, 5vh, 30px) !important; }
   .vb-state { font-size: 12px; min-height: 14px; margin-top: 2px; }
   .vb-fallback { margin-top: 6px; }
   .btn-ok, .btn-retry { padding: 6px 11px; font-size: 13px; }
