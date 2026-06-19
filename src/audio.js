@@ -233,6 +233,19 @@ export const audio = {
     else if (bgmEl) bgmEl.pause();
     if (bgmGain && ctx) bgmGain.gain.linearRampToValueAtTime(bgmTarget, ctx.currentTime + 0.8);
   },
+  // เรียกครั้งเดียวตอน init — หยุด/เล่น BGM เมื่อ tab ถูกซ่อน/แสดง
+  initVisibility() {
+    document.addEventListener('visibilitychange', () => {
+      if (!bgmEl || bgmTarget === 0) return;
+      if (document.hidden) {
+        bgmEl.pause();
+      } else {
+        bgmEl.play().catch(() => {});
+        // ถ้า ctx suspend (iOS) ให้ resume ด้วย
+        if (ctx && ctx.state === 'suspended') ctx.resume();
+      }
+    });
+  },
   duck() {
     ducked = true;
     // หรี่เหลือ 15% ตอนแม่มดพูด/ฟังไมค์ → ไม่รบกวน STT

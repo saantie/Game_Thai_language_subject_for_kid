@@ -114,6 +114,9 @@ function startMatraById(id) {
 }
 
 // ---- wiring buttons ----
+// register once ก่อน gesture แรก — ไม่ต้องการ user gesture สำหรับ visibilitychange
+audio.initVisibility();
+
 $('#startBtn').addEventListener('click', () => {
   audio.unlock();
   if (app.settings.bgm) audio.setBgmEnabled(true);
