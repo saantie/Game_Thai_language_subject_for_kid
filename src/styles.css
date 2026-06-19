@@ -440,7 +440,14 @@ button { font-family: inherit; cursor: pointer; border: none; }
 }
 .level-card:not(.locked):active { transform: scale(0.96); }
 .level-card:not(.locked):hover { filter: brightness(1.18); }
-.level-card.locked { filter: grayscale(0.7) opacity(0.45); border-color: rgba(255,255,255,0.15); cursor: not-allowed; }
+.level-card.locked {
+  background:
+    linear-gradient(rgba(10,4,30,0.52), rgba(10,4,30,0.52)),
+    url('../public/assets/images/book2.png') center / cover no-repeat;
+  filter: opacity(0.72);
+  border-color: rgba(255,255,255,0.15);
+  cursor: not-allowed;
+}
 .lv-icon { font-size: 32px; }
 .lv-name { font-weight: 800; font-size: 19px; }
 .lv-stars { font-size: 18px; letter-spacing: 2px; }
