@@ -514,6 +514,8 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     };
   }
 
+  let _cauldronHintTs = 0; // cooldown กัน spam
+
   // ---------- Input handlers ----------
   function onPick(x, y) {
     if (state !== 'IDLE' && state !== 'DRAGGING') return;
@@ -531,6 +533,18 @@ export function createGame({ scene, audio, app, dom, onExit }) {
         updateWordPill();
         audio.sfx('pick');
         return;
+      }
+    }
+    // ไม่ได้จับฟอง — เช็คว่าแตะหม้อหรือเปล่า
+    const c = scene.cauldron;
+    const dx = (x - c.cx) / (c.rx * 1.2);
+    const dy = (y - (c.cy + c.ry * 0.5)) / (c.ry * 1.6);
+    if (dx * dx + dy * dy <= 1) {
+      const now = performance.now();
+      if (now - _cauldronHintTs > 3000) {
+        _cauldronHintTs = now;
+        scene.cauldronWiggle();
+        audio.voice('cauldron_hint', { onText: witchSay });
       }
     }
   }

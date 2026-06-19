@@ -136,6 +136,17 @@ export function initScene(root) {
     ctx.fill();
   }
 
+  // เขย่าหม้อ + ลบ class อัตโนมัติหลัง animation จบ
+  scene.cauldronWiggle = function () {
+    if (!cauldronImgEl) return;
+    cauldronImgEl.classList.remove('wiggle');
+    void cauldronImgEl.offsetWidth;
+    cauldronImgEl.classList.add('wiggle');
+    cauldronImgEl.addEventListener('animationend', () => {
+      cauldronImgEl.classList.remove('wiggle');
+    }, { once: true });
+  };
+
   // drawCauldron: ตัวหม้อใช้ DOM img แล้ว — วาดเฉพาะโจทย์ FILL_FINAL บน fxCanvas
   scene.drawCauldron = function (promptWord) {
     if (promptWord && promptWord.final) {
