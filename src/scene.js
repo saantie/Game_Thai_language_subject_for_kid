@@ -6,6 +6,8 @@ export function initScene(root) {
   const fxCanvas = root.querySelector('#fxCanvas');
   const witchEl  = root.querySelector('.witch');
   const cauldronImgEl = document.getElementById('cauldronImg');
+  const princessEl    = document.getElementById('princessImg');
+  let _princessStage  = 0;
   const bg = bgCanvas.getContext('2d');
   const fx = fxCanvas.getContext('2d');
 
@@ -203,6 +205,26 @@ export function initScene(root) {
         }, 900);
       }
     },
+  };
+
+  // เปลี่ยน stage เจ้าหญิง 1–8 พร้อม flash เวทมนตร์ (swap src ตรงจุดสว่างสุด)
+  scene.setPrincessStage = function (n) {
+    if (!princessEl) return;
+    const stage = Math.max(1, Math.min(8, n));
+    if (stage === _princessStage) return;
+    _princessStage = stage;
+    if (stage === 1) {
+      princessEl.src = 'public/assets/images/princess_1.png';
+      return;
+    }
+    // เริ่ม animation flash → swap src ตอน brightness peak (200ms)
+    princessEl.classList.remove('transform');
+    void princessEl.offsetWidth;
+    princessEl.classList.add('transform');
+    setTimeout(() => {
+      princessEl.src = `public/assets/images/princess_${stage}.png`;
+    }, 200);
+    setTimeout(() => princessEl.classList.remove('transform'), 580);
   };
 
   scene.clearFx = function () {

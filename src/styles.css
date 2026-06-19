@@ -88,6 +88,28 @@ html, body {
 @keyframes witchCast  { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-16px) rotate(-10deg) scale(1.08); } }
 @keyframes witchCheer { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-22px) scale(1.15); } }
 
+/* [2.5] เจ้าหญิง — กลายร่างตามความคืบหน้า, ด้านขวาของหม้อ */
+.princess-img {
+  position: fixed;
+  right: 3%;
+  bottom: 8%;
+  z-index: 2;
+  width: clamp(90px, 18vw, 180px);
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+  transform-origin: bottom center;
+  filter: drop-shadow(0 6px 20px rgba(255, 180, 60, 0.45));
+}
+@keyframes princessTransform {
+  0%   { transform: scale(1);    filter: drop-shadow(0 6px 20px rgba(255,180,60,0.45)) brightness(1); }
+  40%  { transform: scale(1.14); filter: drop-shadow(0 0 40px rgba(255,240,80,1))      brightness(2.2); }
+  100% { transform: scale(1);    filter: drop-shadow(0 6px 20px rgba(255,180,60,0.45)) brightness(1); }
+}
+.princess-img.transform {
+  animation: princessTransform 0.55s ease-out forwards;
+}
+
 /* แม่มดพูด (toast) */
 .toast {
   position: fixed;

@@ -158,6 +158,12 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     blend = null;
     held = null;
 
+    // อัปเดต stage เจ้าหญิง (1–7 ระหว่างเล่น, 8 ตอนจบ)
+    const princessStage = Math.max(1, Math.min(7,
+      words.length > 0 ? Math.ceil((roundIndex / words.length) * 7) + 1 : 1
+    ));
+    scene.setPrincessStage(princessStage);
+
     // FILL_FINAL: สร้างฟองใหม่ทุกรอบ (target + distractors)
     if (matra.mode !== TWO_PART) {
       bubbles = shuffle([currentWord.final, ...currentWord.distractors]).map(makeBubble);
@@ -489,6 +495,8 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     const ratio = perfectCount / total;
     const stars = ratio >= 1 ? 3 : ratio >= 0.5 ? 2 : 1;
     app.progress[matra.id] = Math.max(app.progress[matra.id] || 0, stars);
+
+    scene.setPrincessStage(8); // เจ้าหญิงกลับคืนสู่ร่างสมบูรณ์!
 
     running = false;
     cancelAnimationFrame(rafId);
