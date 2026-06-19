@@ -119,6 +119,11 @@ function startMatraById(id) {
 }
 
 // ---- wiring buttons ----
+// Android detection — ซ่อน fallback buttons, mic อยู่ตรงกลาง
+if (/Android/i.test(navigator.userAgent)) {
+  document.body.classList.add('is-android');
+}
+
 // register once ก่อน gesture แรก — ไม่ต้องการ user gesture สำหรับ visibilitychange
 audio.initVisibility();
 

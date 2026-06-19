@@ -708,7 +708,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   // ---------- UI helpers ----------
   function renderSpellHint() {
     dom.hint.textContent = currentWord.spell.join(' – ');
-    dom.hint.style.display = app.settings.showSpellHint ? 'block' : 'none';
+    // แสดงเสมอ (display ควบคุมด้วย CSS .vb-hint { display: block })
   }
   function witchSay(text) {
     dom.toast.textContent = text;

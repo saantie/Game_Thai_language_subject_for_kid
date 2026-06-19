@@ -316,7 +316,7 @@ html, body {
 }
 .vb-word {
   position: relative; z-index: 1;
-  font-size: clamp(52px,13vw,92px);
+  font-size: clamp(68px,17vw,115px);
   font-weight: 800;
   color: #ffd04d;
   text-shadow:
@@ -328,9 +328,17 @@ html, body {
 }
 .vb-word.reveal { animation: wordReveal .68s cubic-bezier(.34,1.4,.64,1) both; }
 
-.vb-hint { font-size: clamp(15px,2.8vw,21px); color: #ffe08a; margin-bottom: 4px; display: none; }
+.vb-hint {
+  font-size: clamp(15px,2.8vw,20px); color: #ffe08a;
+  margin: 4px 0 8px; display: block; /* แสดงเสมอ */
+  letter-spacing: 1px;
+}
 .vb-state { font-size: 14px; min-height: 18px; opacity: .9; margin-top: 6px; }
 .vb-fallback { display: flex; gap: 10px; justify-content: center; margin-top: 12px; }
+
+/* Android — ซ่อน ok/retry, mic ตรงกลาง */
+.is-android .vb-fallback { display: none !important; }
+.is-android .btn-mic { margin-top: 8px; }
 
 /* ---- buttons ---- */
 button { font-family: inherit; cursor: pointer; border: none; }
