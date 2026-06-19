@@ -138,6 +138,46 @@ $('#startBtn').addEventListener('click', () => {
 $('#startAdultBtn').addEventListener('click', () => openAdultGate(app, adultScreen));
 $('#levelAdultBtn').addEventListener('click', () => openAdultGate(app, adultScreen));
 
+// ---- PWA Install button ----
+(function setupInstall() {
+  const installBtn = $('#installBtn');
+  if (!installBtn) return;
+
+  // standalone = แอปถูกติดตั้งแล้ว → ซ่อนปุ่ม
+  const isStandalone =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true;
+  if (isStandalone) return;
+
+  // แสดงปุ่มทันที (กรณี iOS ไม่มี beforeinstallprompt หรือ Chrome ยิงก่อน)
+  installBtn.classList.remove('hidden');
+
+  let _deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _deferredPrompt = e;
+    installBtn.classList.remove('hidden');
+  });
+
+  installBtn.addEventListener('click', () => {
+    if (_deferredPrompt) {
+      _deferredPrompt.prompt();
+      _deferredPrompt.userChoice.then(() => { _deferredPrompt = null; });
+    } else {
+      // iOS หรือ browser ที่ไม่รองรับ beforeinstallprompt
+      alert(
+        'วิธีติดตั้งแอป:\n' +
+        '• iPhone/iPad: กดปุ่ม Share ↑ แล้วเลือก "เพิ่มไปที่หน้าจอโฮม"\n' +
+        '• Android (Chrome): กดเมนู ⋮ แล้วเลือก "เพิ่มในหน้าจอหลัก"'
+      );
+    }
+  });
+
+  window.addEventListener('appinstalled', () => {
+    installBtn.classList.add('hidden');
+  });
+}());
+
 $('#backBtn').addEventListener('click', () => {
   game.stop();
   showScreen('level');

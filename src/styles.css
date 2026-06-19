@@ -684,8 +684,140 @@ button { font-family: inherit; cursor: pointer; border: none; }
   .vb-word { font-size: clamp(40px, 11vw, 70px) !important; }
 }
 
+/* =====================================================
+   ลูกแก้วเวทมนตร์ — ปุ่มเริ่มเล่น (Glass Ball Start Button)
+   ===================================================== */
+.glass-ball-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px 0;
+}
+
+/* เรืองแสงด้านหลัง — sibling ของ btn ไม่กระทบ mix-blend-mode ลูก */
+.gb-outer-glow {
+  position: absolute;
+  width: clamp(160px, 40vw, 220px);
+  height: clamp(160px, 40vw, 220px);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -56%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(190,120,255,0.65) 0%, rgba(120,60,220,0.3) 40%, transparent 70%);
+  filter: blur(22px);
+  animation: gbGlowPulse 3s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes gbGlowPulse {
+  0%, 100% { opacity: 0.55; transform: translate(-50%, -56%) scale(0.92); }
+  50%       { opacity: 1;    transform: translate(-50%, -56%) scale(1.12); }
+}
+
+/* ปุ่มหลัก — NO transform/filter/opacity animation (กัน stacking context ทำลาย multiply) */
+.glass-ball-btn {
+  position: relative;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: block;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.glass-ball-btn:active { opacity: 0.88; }
+
+/* ภาพลูกแก้ว — mix-blend-mode:multiply ลบพื้นขาว, float animation OK (img ไม่มีลูก) */
+.glass-ball-img {
+  width: clamp(230px, 58vw, 300px);
+  height: auto;
+  display: block;
+  mix-blend-mode: multiply;
+  animation: gbFloat 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes gbFloat {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-9px); }
+}
+
+/* แสงวาวภายในลูกแก้ว */
+.gb-shine {
+  position: absolute;
+  width: 44%; height: 38%;
+  left: 18%; top: 7%;
+  background: radial-gradient(ellipse at 40% 35%, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.25) 45%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: gbShinePulse 2.6s ease-in-out infinite;
+  z-index: 1;
+}
+@keyframes gbShinePulse {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50%       { opacity: 0.90; transform: scale(1.12) translateX(6px); }
+}
+
+/* ข้อความ "เริ่มเล่น" กลางลูกแก้ว */
+.glass-ball-text {
+  position: absolute;
+  top: 38%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(18px, 4.8vw, 26px);
+  font-weight: 800;
+  color: #fff;
+  text-shadow:
+    0 0 14px rgba(255,220,80,1),
+    0 0 30px rgba(255,180,50,0.9),
+    0 2px 5px rgba(0,0,0,0.65);
+  letter-spacing: 2px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ประกายรอบลูกแก้ว */
+.gb-spark {
+  position: absolute;
+  pointer-events: none;
+  z-index: 3;
+  animation: gbSparkAnim ease-in-out infinite;
+  line-height: 1;
+}
+.gb-spark.s1 { top: 6%;  left: 16%; font-size: 15px; color: #ffe566; animation-duration: 1.9s; animation-delay: 0s; }
+.gb-spark.s2 { top: 3%;  left: 62%; font-size: 11px; color: #fff;    animation-duration: 2.4s; animation-delay: -0.8s; }
+.gb-spark.s3 { top: 32%; left: 81%; font-size: 13px; color: #aef0ff; animation-duration: 1.6s; animation-delay: -1.3s; }
+.gb-spark.s4 { top: 54%; left: 10%; font-size: 10px; color: #ffe566; animation-duration: 2.1s; animation-delay: -0.5s; }
+.gb-spark.s5 { top: 14%; left: 46%; font-size: 17px; color: #fff;    animation-duration: 2.9s; animation-delay: -1.9s; }
+@keyframes gbSparkAnim {
+  0%, 100% { opacity: 0;   transform: scale(0.2) rotate(0deg); }
+  40%, 60%  { opacity: 1;   transform: scale(1.3) rotate(180deg); }
+}
+
+/* ปุ่มติดตั้ง PWA */
+.btn-install {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(120,70,220,0.88), rgba(60,30,130,0.88));
+  color: #fff;
+  font-family: 'Sarabun', 'Segoe UI', sans-serif;
+  font-weight: 700;
+  border-radius: 22px;
+  padding: 10px 24px;
+  font-size: clamp(14px, 3.5vw, 17px);
+  border: 1.5px solid rgba(180,130,255,0.6);
+  box-shadow: 0 4px 20px rgba(100,50,200,0.45), inset 0 1px 0 rgba(255,255,255,0.15);
+  margin-top: 10px;
+  cursor: pointer;
+  transition: transform 0.12s, filter 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-install:hover  { filter: brightness(1.18); transform: scale(1.04); }
+.btn-install:active { transform: scale(0.96); }
+
 /* prefers-reduced-motion: ปิดทุก animation */
 @media (prefers-reduced-motion: reduce) {
   .vs, .voicebar:not(.hidden), .vb-word.reveal,
-  .witch, .btn-mic.listening { animation: none !important; }
+  .witch, .btn-mic.listening,
+  .glass-ball-img, .gb-shine, .gb-spark, .gb-outer-glow { animation: none !important; }
 }
