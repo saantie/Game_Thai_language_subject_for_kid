@@ -56,6 +56,8 @@ export function showAdultPage(app, screenEl) {
   };
   screenEl.querySelector('#adultBack').onclick = () => {
     screenEl.classList.remove('show');
+    screenEl.classList.add('hidden');
   };
+  screenEl.classList.remove('hidden');
   screenEl.classList.add('show');
 }
