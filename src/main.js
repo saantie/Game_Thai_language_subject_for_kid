@@ -7,12 +7,13 @@ import { createGame } from './game.js';
 import { buildLevelSelect } from './ui/levelSelect.js';
 import { openAdultGate } from './ui/adultPage.js';
 import { MATRA } from './data/matra.js';
+import { loadProgress, saveProgress } from './storage.js';
 
 const MATRA_BY_ID = Object.fromEntries(MATRA.map((m) => [m.id, m]));
 
 // ---- app state กลาง (ต้นแบบเก็บใน memory; production ใช้ IndexedDB/Firebase) ----
 const app = {
-  progress: {}, // { matraId: stars }
+  progress: loadProgress(), // โหลดจาก localStorage — { matraId: stars }
   settings: { showSpellHint: false, bgm: true },
 };
 
@@ -52,7 +53,7 @@ const game = createGame({
   app,
   dom,
   onExit: () => {
-    // จบมาตรา → กลับหน้าเลือก (รีเฟรชดาว/ปลดล็อก)
+    saveProgress(app.progress); // บันทึกดาวลง localStorage
     showScreen('level');
   },
 });
