@@ -23,6 +23,7 @@ const startScreen = $('#startScreen');
 const levelScreen = $('#levelScreen');
 const adultScreen = $('#adultScreen');
 const sceneRoot = $('#sceneRoot');
+const magicOrbs = $('#magicOrbs');
 
 const dom = {
   hud: $('#hud'),
@@ -83,6 +84,7 @@ function showScreen(which) {
   }
   startScreen.classList.toggle('hidden', which !== 'start');
   levelScreen.classList.toggle('hidden', which !== 'level');
+  magicOrbs.classList.toggle('hidden', which !== 'level');
   adultScreen.classList.add('hidden'); // ปิด adult overlay เสมอ
   dom.hud.classList.toggle('hidden', which !== 'game');
   dom.voicebar.classList.add('hidden');

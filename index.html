@@ -117,6 +117,14 @@
     </div>
 
     <script type="module" src="src/main.js"></script>
+    <!-- แสงวิเศษลอยรอบขอบหน้าจอ — แสดงเฉพาะหน้าเลือกมาตรา -->
+    <div id="magicOrbs" class="magic-orbs hidden" aria-hidden="true">
+      <span></span><span></span><span></span>
+      <span></span><span></span><span></span>
+      <span></span><span></span><span></span>
+      <span></span><span></span><span></span>
+    </div>
+
     <script>
       // ลงทะเบียน Service Worker — เฉพาะ secure context (https/localhost), ไม่ทำงานบน file://
       if ('serviceWorker' in navigator && location.protocol !== 'file:') {
