@@ -14,3 +14,9 @@ export function saveProgress(progress) {
     localStorage.setItem(KEY, JSON.stringify(progress));
   } catch (e) {}
 }
+
+export function clearProgress() {
+  try {
+    localStorage.removeItem(KEY);
+  } catch (e) {}
+}

@@ -7,7 +7,7 @@ import { createGame } from './game.js';
 import { buildLevelSelect } from './ui/levelSelect.js';
 import { openAdultGate } from './ui/adultPage.js';
 import { MATRA } from './data/matra.js';
-import { loadProgress, saveProgress } from './storage.js';
+import { loadProgress, saveProgress, clearProgress } from './storage.js';
 
 const MATRA_BY_ID = Object.fromEntries(MATRA.map((m) => [m.id, m]));
 
@@ -24,6 +24,7 @@ const levelScreen = $('#levelScreen');
 const adultScreen = $('#adultScreen');
 const sceneRoot = $('#sceneRoot');
 const magicOrbs = $('#magicOrbs');
+const resetBtn = $('#resetProgressBtn');
 
 const dom = {
   hud: $('#hud'),
@@ -85,6 +86,7 @@ function showScreen(which) {
   startScreen.classList.toggle('hidden', which !== 'start');
   levelScreen.classList.toggle('hidden', which !== 'level');
   magicOrbs.classList.toggle('hidden', which !== 'level');
+  resetBtn.classList.toggle('hidden', which !== 'level');
   adultScreen.classList.add('hidden'); // ปิด adult overlay เสมอ
   dom.hud.classList.toggle('hidden', which !== 'game');
   dom.voicebar.classList.add('hidden');
@@ -123,7 +125,8 @@ audio.initVisibility();
 $('#startBtn').addEventListener('click', () => {
   audio.unlock();
   if (app.settings.bgm) audio.setBgmEnabled(true);
-  audio.voice('greet', { onText: witchSay });
+  // ขอ mic permission หลังเสียงทักทายพูดจบ — ไม่ให้ dialog ไมค์ซ้อนทับเสียง TTS
+  audio.voice('greet', { onText: witchSay, onEnd: () => audio.requestMicPermission() });
   showScreen('level');
 });
 
@@ -141,6 +144,14 @@ function witchSay(text) {
   clearTimeout(witchSay._t);
   witchSay._t = setTimeout(() => dom.toast.classList.remove('show'), 3500);
 }
+
+resetBtn.addEventListener('click', () => {
+  if (window.confirm('ล้างคะแนนและมาตราที่เล่นไปทั้งหมด?')) {
+    clearProgress();
+    app.progress = {};
+    buildLevelSelect($('#levelGrid'), app, (id) => startMatraById(id));
+  }
+});
 
 // เริ่มที่หน้า start
 showScreen('start');

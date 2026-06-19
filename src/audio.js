@@ -67,12 +67,6 @@ export const audio = {
         window.speechSynthesis.speak(u);
       } catch (e) {}
     }
-    // iOS/iPadOS Safari: SpeechRecognition ต้องการ mic permission
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then((stream) => stream.getTracks().forEach((t) => t.stop()))
-        .catch(() => {});
-    }
     // เชื่อม bgmEl เข้า Web Audio graph (ต้องทำใน user gesture)
     if (ctx && bgmEl && !bgmSourceConnected) {
       try {
@@ -84,6 +78,15 @@ export const audio = {
     // เริ่มเล่น BGM ถ้าเปิดไว้ก่อน unlock
     if (bgmTarget > 0 && bgmEl) bgmEl.play().catch(() => {});
     this.ready = true;
+  },
+
+  // ขอ mic permission แยกต่างหาก — เรียกหลังเสียงทักทายพูดจบ ไม่ซ้อนทับ TTS
+  requestMicPermission() {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then((stream) => stream.getTracks().forEach((t) => t.stop()))
+        .catch(() => {});
+    }
   },
 
   // ---------- SFX ----------

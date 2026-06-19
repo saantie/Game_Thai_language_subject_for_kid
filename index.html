@@ -119,6 +119,9 @@
     </div>
 
     <script type="module" src="src/main.js"></script>
+    <!-- ปุ่มรีเซ็ต progress — แสดงเฉพาะหน้าเลือกมาตรา, มุมล่างขวา -->
+    <button id="resetProgressBtn" class="btn-reset-game hidden">↺ รีเซ็ตเกม</button>
+
     <!-- แสงวิเศษลอยรอบขอบหน้าจอ — แสดงเฉพาะหน้าเลือกมาตรา -->
     <div id="magicOrbs" class="magic-orbs hidden" aria-hidden="true">
       <span></span><span></span><span></span>
@@ -131,7 +134,13 @@
       // ลงทะเบียน Service Worker — เฉพาะ secure context (https/localhost), ไม่ทำงานบน file://
       if ('serviceWorker' in navigator && location.protocol !== 'file:') {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW:', e));
+          // updateViaCache:'none' → browser ตรวจ sw.js จาก network เสมอ ไม่ติด HTTP cache
+          navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+            .then((reg) => {
+              // ตรวจ update ทุก 5 นาที (กัน browser ไม่ poll เอง)
+              setInterval(() => reg.update(), 5 * 60 * 1000);
+            })
+            .catch((e) => console.warn('SW:', e));
         });
         // SW version ใหม่ activate → reload อัตโนมัติ รับ code ล่าสุดทันที
         navigator.serviceWorker.addEventListener('message', (e) => {
