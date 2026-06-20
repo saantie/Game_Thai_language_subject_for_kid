@@ -32,6 +32,93 @@ export const MATRA = [
       { display:'อา', lead:'อ', sara:'า', spell:['ออ','อา','อา'] }, // อา (ญาติ)
     ],
   },
+  // ─── แม่กา — สระอื่น ๆ (ไม่มีตัวสะกด) ───────────────────────────────────────
+  {
+    id: 'sara_ii',
+    name: 'สระ อี',
+    mode: 'TWO_PART',
+    sessionSize: 7,
+    sara: 'ี',
+    bubbles: ['ม','ด','ป','ต','ผ','ช','ฝ'],
+    words: [
+      { display:'มี', lead:'ม', sara:'ี', spell:['มอ','อี','มี'] },   // มีของ
+      { display:'ดี', lead:'ด', sara:'ี', spell:['ดอ','อี','ดี'] },   // ดีใจ
+      { display:'ปี', lead:'ป', sara:'ี', spell:['ปอ','อี','ปี'] },   // ปีใหม่
+      { display:'ตี', lead:'ต', sara:'ี', spell:['ตอ','อี','ตี'] },   // ตีกลอง
+      { display:'ผี', lead:'ผ', sara:'ี', spell:['ผอ','อี','ผี'] },   // ผีปอบ
+      { display:'ชี', lead:'ช', sara:'ี', spell:['ชอ','อี','ชี'] },   // แม่ชี
+      { display:'ฝี', lead:'ฝ', sara:'ี', spell:['ฝอ','อี','ฝี'] },   // ฝีมือ
+    ],
+  },
+  {
+    id: 'sara_ue',
+    name: 'สระ อือ',
+    mode: 'TWO_PART',
+    sessionSize: 4,
+    sara: 'ือ',
+    bubbles: ['ม','ค','ถ','ล'],
+    words: [
+      { display:'มือ', lead:'ม', sara:'ือ', spell:['มอ','อือ','มือ'] }, // มือ
+      { display:'คือ', lead:'ค', sara:'ือ', spell:['คอ','อือ','คือ'] }, // คือ
+      { display:'ถือ', lead:'ถ', sara:'ือ', spell:['ถอ','อือ','ถือ'] }, // ถือของ
+      { display:'ลือ', lead:'ล', sara:'ือ', spell:['ลอ','อือ','ลือ'] }, // ลือชา
+    ],
+  },
+  {
+    id: 'sara_uu',
+    name: 'สระ อู',
+    mode: 'TWO_PART',
+    sessionSize: 6,
+    sara: 'ู',
+    bubbles: ['ห','ร','ด','ช','ป','ง'],
+    words: [
+      { display:'หู', lead:'ห', sara:'ู', spell:['หอ','อู','หู'] },   // หูฟัง
+      { display:'รู', lead:'ร', sara:'ู', spell:['รอ','อู','รู'] },   // รูปู
+      { display:'ดู', lead:'ด', sara:'ู', spell:['ดอ','อู','ดู'] },   // ดูทีวี
+      { display:'ชู', lead:'ช', sara:'ู', spell:['ชอ','อู','ชู'] },   // ชูมือ
+      { display:'ปู', lead:'ป', sara:'ู', spell:['ปอ','อู','ปู'] },   // ปูทะเล
+      { display:'งู', lead:'ง', sara:'ู', spell:['งอ','อู','งู'] },   // งูเหลือม
+    ],
+  },
+  {
+    id: 'sara_o',
+    name: 'สระ ออ',
+    mode: 'TWO_PART',
+    sessionSize: 8,
+    sara: 'ออ',
+    bubbles: ['ก','ข','ค','ต','พ','ย','ร','ห'],
+    words: [
+      { display:'กอ', lead:'ก', sara:'อ', spell:['กอ','ออ','กอ'] },   // กอหญ้า
+      { display:'ขอ', lead:'ข', sara:'อ', spell:['ขอ','ออ','ขอ'] },   // ขอร้อง
+      { display:'คอ', lead:'ค', sara:'อ', spell:['คอ','ออ','คอ'] },   // คอยาว
+      { display:'ตอ', lead:'ต', sara:'อ', spell:['ตอ','ออ','ตอ'] },   // ตอไม้
+      { display:'พอ', lead:'พ', sara:'อ', spell:['พอ','ออ','พอ'] },   // พอดี
+      { display:'ยอ', lead:'ย', sara:'อ', spell:['ยอ','ออ','ยอ'] },   // ยอดเขา
+      { display:'รอ', lead:'ร', sara:'อ', spell:['รอ','ออ','รอ'] },   // รอก่อน
+      { display:'หอ', lead:'ห', sara:'อ', spell:['หอ','ออ','หอ'] },   // หอคอย
+    ],
+  },
+  {
+    id: 'sara_am',
+    name: 'สระ อำ',
+    mode: 'TWO_PART',
+    sessionSize: 8,
+    sara: 'ำ',
+    bubbles: ['ท','จ','ด','ย','น','ล','ค','ข','ต','ร'],
+    words: [
+      { display:'ทำ', lead:'ท', sara:'ำ', spell:['ทอ','อำ','ทำ'] },   // ทำงาน
+      { display:'จำ', lead:'จ', sara:'ำ', spell:['จอ','อำ','จำ'] },   // จำได้
+      { display:'ดำ', lead:'ด', sara:'ำ', spell:['ดอ','อำ','ดำ'] },   // สีดำ
+      { display:'ยำ', lead:'ย', sara:'ำ', spell:['ยอ','อำ','ยำ'] },   // ส้มตำ
+      { display:'นำ', lead:'น', sara:'ำ', spell:['นอ','อำ','นำ'] },   // นำทาง
+      { display:'ลำ', lead:'ล', sara:'ำ', spell:['ลอ','อำ','ลำ'] },   // ลำต้น
+      { display:'คำ', lead:'ค', sara:'ำ', spell:['คอ','อำ','คำ'] },   // คำพูด
+      { display:'ขำ', lead:'ข', sara:'ำ', spell:['ขอ','อำ','ขำ'] },   // ขำขัน
+      { display:'ตำ', lead:'ต', sara:'ำ', spell:['ตอ','อำ','ตำ'] },   // ตำน้ำพริก
+      { display:'รำ', lead:'ร', sara:'ำ', spell:['รอ','อำ','รำ'] },   // รำไทย
+    ],
+  },
+  // ─── มาตราตัวสะกด ─────────────────────────────────────────────────────────
   {
     id: 'kong',
     name: 'แม่ กง',
