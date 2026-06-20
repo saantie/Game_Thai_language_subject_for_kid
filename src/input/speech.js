@@ -32,11 +32,16 @@ export function createRecognizer() {
         }
         onResult && onResult(alts);
       };
-      recog.onerror = () => {};
-      recog.onend = () => {
+      // guard: onEnd ต้อง fire แค่ครั้งเดียว ไม่ว่า onerror หรือ onend จะยิงก่อน
+      let fired = false;
+      const finish = () => {
+        if (fired) return;
+        fired = true;
         this.listening = false;
         onEnd && onEnd();
       };
+      recog.onerror = () => finish();
+      recog.onend = () => finish();
       try {
         recog.start();
       } catch (e) {

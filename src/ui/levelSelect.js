@@ -1,6 +1,7 @@
 // ui/levelSelect.js — หน้าเลือกมาตรา สร้างจาก data โดยตรง (ไม่ฮาร์ดโค้ด)
 
 import { MATRA } from '../data/matra.js';
+import { audio } from '../audio.js';
 
 // progress: { [matraId]: stars(0-3) } เก็บใน app state กลาง
 export function isUnlocked(app, index) {
@@ -25,7 +26,11 @@ export function buildLevelSelect(container, app, onPick) {
       <span class="lv-icon">${unlocked ? '&#x2728;' : '&#x26BF;'}</span>
       <span class="lv-name">${m.name}</span>
       <span class="lv-stars">${starString(stars)}</span>`;
-    card.onclick = () => unlocked && onPick(m.id);
+    card.onclick = () => {
+      if (!unlocked) return;
+      audio.sfx('ting');
+      onPick(m.id);
+    };
     container.appendChild(card);
   });
 }

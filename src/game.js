@@ -333,7 +333,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   }
 
   function listen() {
-    if (state !== 'READING' || !recog.supported) return;
+    if (!running || state !== 'READING' || !recog.supported) return;
     setState('LISTENING');
     dom.micState.textContent = '🔴 กำลังฟัง...';
     dom.micBtn.classList.add('listening');
@@ -356,6 +356,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   }
 
   function evaluate(correct, heard) {
+    if (!running) return;
     if (state === 'EVALUATING' || state === 'REWARD') return;
     setState('EVALUATING');
     dom.micBtn.classList.remove('listening');
@@ -466,7 +467,8 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     scene.witch.play('idle');
     audio.voice('reveal', { onText: witchSay });
     setTimeout(() => {
-      audio.playSpellReveal(currentWord, () => setTimeout(startEchoRound, 700));
+      if (!running) return;
+      audio.playSpellReveal(currentWord, () => setTimeout(() => { if (running) startEchoRound(); }, 700));
     }, 1400);
   }
 
@@ -757,6 +759,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     relayout() { layoutBubbles(); },
     stop() {
       running = false;
+      setState('IDLE');
       cancelAnimationFrame(rafId);
       recog.stop();
       audio.stopSpeaking();

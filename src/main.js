@@ -57,6 +57,7 @@ const game = createGame({
   onExit: () => {
     saveProgress(app.progress); // บันทึกดาวลง localStorage
     showScreen('level');
+    if (audio.ready) audio.startLevelBgm();
   },
 });
 
@@ -91,8 +92,13 @@ function showScreen(which) {
   dom.hud.classList.toggle('hidden', which !== 'game');
   dom.voicebar.classList.add('hidden');
   dom.resultScreen.classList.add('hidden');
+  // สลับ BGM ตามหน้า — startLevelBgm() เรียกจาก call site เพื่อควบคุมจังหวะ
   if (which === 'level') {
     buildLevelSelect($('#levelGrid'), app, (id) => startMatraById(id));
+  } else if (which === 'game') {
+    audio.stopLevelBgm();
+  } else if (which === 'start') {
+    audio.stopLevelBgm();
   }
 }
 
@@ -106,15 +112,18 @@ window.addEventListener('popstate', (e) => {
     // game state ไม่สามารถ resume — เปลี่ยน entry นี้เป็น level แทน
     history.replaceState({ screen: 'level' }, '');
     showScreen('level');
+    if (audio.ready) audio.startLevelBgm();
   } else {
     showScreen(to);
+    if (to === 'level' && audio.ready) audio.startLevelBgm();
   }
   _inPopstate = false;
 });
 
 function startMatraById(id) {
   const matra = MATRA_BY_ID[id];
-  showScreen('game');
+  showScreen('game'); // stopLevelBgm เรียกใน showScreen
+  if (app.settings.bgm) audio.setBgmEnabled(true);
   game.startMatra(matra);
 }
 
@@ -129,9 +138,14 @@ audio.initVisibility();
 
 $('#startBtn').addEventListener('click', () => {
   audio.unlock();
-  if (app.settings.bgm) audio.setBgmEnabled(true);
-  // ขอ mic permission หลังเสียงทักทายพูดจบ — ไม่ให้ dialog ไมค์ซ้อนทับเสียง TTS
-  audio.voice('greet', { onText: witchSay, onEnd: () => audio.requestMicPermission() });
+  // ขอ mic + เริ่ม level BGM หลัง TTS ทักทายพูดจบ — ป้องกัน audio session conflict บน iOS
+  audio.voice('greet', {
+    onText: witchSay,
+    onEnd: () => {
+      audio.requestMicPermission();
+      if (audio.ready) audio.startLevelBgm();
+    },
+  });
   showScreen('level');
 });
 
@@ -181,6 +195,7 @@ $('#levelAdultBtn').addEventListener('click', () => openAdultGate(app, adultScre
 $('#backBtn').addEventListener('click', () => {
   game.stop();
   showScreen('level');
+  if (audio.ready) audio.startLevelBgm();
 });
 
 function witchSay(text) {

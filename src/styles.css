@@ -727,49 +727,59 @@ button { font-family: inherit; cursor: pointer; border: none; }
 }
 .glass-ball-btn:active { opacity: 0.88; }
 
-/* ภาพลูกแก้ว — mix-blend-mode:multiply ลบพื้นขาว, float animation OK (img ไม่มีลูก) */
+/*
+  ภาพลูกแก้ว — ใช้ clip-path ตัดพื้นขาวตามขอบทรงกลม (sphere center ~50%,44%)
+  คำนวณจากสัดส่วนรูป 400×218: sphere radius≈95px, center=(200,95)
+*/
 .glass-ball-img {
   width: clamp(230px, 58vw, 300px);
   height: auto;
   display: block;
-  mix-blend-mode: multiply;
   animation: gbFloat 3.2s ease-in-out infinite;
   pointer-events: none;
+  clip-path: polygon(
+    50% 0%,
+    62% 7%,  69% 18%, 73% 31%, 74% 44%, 72% 61%, 66% 75%,
+    59% 85%, 62% 100%,
+    38% 100%, 41% 85%,
+    34% 75%, 28% 61%, 26% 44%, 27% 31%, 31% 18%, 38% 7%
+  );
 }
 @keyframes gbFloat {
   0%, 100% { transform: translateY(0px); }
   50%       { transform: translateY(-9px); }
 }
 
-/* แสงวาวภายในลูกแก้ว */
+/* แสงวาวภายในลูกแก้ว — อยู่ในขอบทรงกลม */
 .gb-shine {
   position: absolute;
-  width: 44%; height: 38%;
-  left: 18%; top: 7%;
-  background: radial-gradient(ellipse at 40% 35%, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.25) 45%, transparent 70%);
+  width: 28%; height: 26%;
+  left: 30%; top: 20%;
+  background: radial-gradient(ellipse at 35% 30%, rgba(255,255,255,0.80) 0%, rgba(255,255,255,0.20) 50%, transparent 72%);
   border-radius: 50%;
   pointer-events: none;
   animation: gbShinePulse 2.6s ease-in-out infinite;
   z-index: 1;
 }
 @keyframes gbShinePulse {
-  0%, 100% { opacity: 0.45; transform: scale(1); }
-  50%       { opacity: 0.90; transform: scale(1.12) translateX(6px); }
+  0%, 100% { opacity: 0.40; transform: scale(1); }
+  50%       { opacity: 0.88; transform: scale(1.15) translate(5px, -3px); }
 }
 
-/* ข้อความ "เริ่มเล่น" กลางลูกแก้ว */
+/* ข้อความ "เริ่มเล่น" กลางลูกแก้ว — ฟอนท์ Mali + สีทอง */
 .glass-ball-text {
   position: absolute;
-  top: 38%; left: 50%;
+  top: 40%; left: 50%;
   transform: translate(-50%, -50%);
-  font-size: clamp(18px, 4.8vw, 26px);
-  font-weight: 800;
-  color: #fff;
+  font-family: 'Mali', 'Sarabun', cursive;
+  font-size: clamp(20px, 5.2vw, 28px);
+  font-weight: 700;
+  color: #ffd700;
   text-shadow:
-    0 0 14px rgba(255,220,80,1),
-    0 0 30px rgba(255,180,50,0.9),
-    0 2px 5px rgba(0,0,0,0.65);
-  letter-spacing: 2px;
+    0 0 10px rgba(255,210,0,1),
+    0 0 22px rgba(255,160,0,0.85),
+    0 1px 6px rgba(0,0,0,0.75);
+  letter-spacing: 3px;
   white-space: nowrap;
   pointer-events: none;
   z-index: 2;
@@ -783,10 +793,10 @@ button { font-family: inherit; cursor: pointer; border: none; }
   animation: gbSparkAnim ease-in-out infinite;
   line-height: 1;
 }
-.gb-spark.s1 { top: 6%;  left: 16%; font-size: 15px; color: #ffe566; animation-duration: 1.9s; animation-delay: 0s; }
-.gb-spark.s2 { top: 3%;  left: 62%; font-size: 11px; color: #fff;    animation-duration: 2.4s; animation-delay: -0.8s; }
-.gb-spark.s3 { top: 32%; left: 81%; font-size: 13px; color: #aef0ff; animation-duration: 1.6s; animation-delay: -1.3s; }
-.gb-spark.s4 { top: 54%; left: 10%; font-size: 10px; color: #ffe566; animation-duration: 2.1s; animation-delay: -0.5s; }
+.gb-spark.s1 { top: 18%; left: 32%; font-size: 15px; color: #ffe566; animation-duration: 1.9s; animation-delay: 0s; }
+.gb-spark.s2 { top: 8%;  left: 57%; font-size: 11px; color: #fff;    animation-duration: 2.4s; animation-delay: -0.8s; }
+.gb-spark.s3 { top: 35%; left: 68%; font-size: 13px; color: #aef0ff; animation-duration: 1.6s; animation-delay: -1.3s; }
+.gb-spark.s4 { top: 58%; left: 32%; font-size: 10px; color: #ffe566; animation-duration: 2.1s; animation-delay: -0.5s; }
 .gb-spark.s5 { top: 14%; left: 46%; font-size: 17px; color: #fff;    animation-duration: 2.9s; animation-delay: -1.9s; }
 @keyframes gbSparkAnim {
   0%, 100% { opacity: 0;   transform: scale(0.2) rotate(0deg); }

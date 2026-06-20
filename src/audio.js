@@ -10,10 +10,13 @@
 let ctx = null;
 let master = null;
 let bgmGain = null;
-let bgmEl = null;           // HTML Audio element สำหรับ MP3 BGM
+let bgmEl = null;           // HTML Audio element สำหรับ MP3 BGM (game)
 let bgmSourceConnected = false;
 let bgmTarget = 0.0;        // ค่าเริ่ม: ปิด (เปิดตอน unlock ถ้า settings.bgm=true)
 let ducked = false;
+let levelBgmEl = null;       // BGM หน้าเลือกมาตรา (Witchy Pocket Moon)
+let levelBgmSourceConnected = false;
+let levelBgmActive = false;
 
 // ---- เสียงพากย์แม่มด (สุ่มกันจำเจ) ----
 const VOICE = {
@@ -61,13 +64,6 @@ export const audio = {
       bgmGain.connect(master);
       if (ctx.state === 'suspended') ctx.resume();
     }
-    // ปลุก speechSynthesis ด้วย utterance ว่าง (บางเบราว์เซอร์ต้องการ)
-    if ('speechSynthesis' in window) {
-      try {
-        const u = new SpeechSynthesisUtterance('');
-        window.speechSynthesis.speak(u);
-      } catch (e) {}
-    }
     // เชื่อม bgmEl เข้า Web Audio graph (ต้องทำใน user gesture)
     if (ctx && bgmEl && !bgmSourceConnected) {
       try {
@@ -113,6 +109,9 @@ export const audio = {
       case 'wrong_soft':
         this._blip(220, 0.18, 'sine', t);
         break;
+      case 'ting':
+        this._ting(t);
+        break;
       default:
         break;
     }
@@ -139,6 +138,29 @@ export const audio = {
 
   _arp(freqs, step, t) {
     freqs.forEach((f, i) => this._blip(f, 0.16, 'triangle', t + i * step));
+  },
+
+  _ting(t) {
+    // ฟรุ้งฟริ้ง — ascending sparkle arpeggio สำหรับกดเลือกมาตรา
+    const notes = [1047, 1319, 1568, 2093, 2637];
+    notes.forEach((f, i) => {
+      const dt = t + i * 0.058;
+      const o = ctx.createOscillator();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(f, dt);
+      o.frequency.exponentialRampToValueAtTime(f * 1.5, dt + 0.13);
+      const g = this._gain(dt, 0.15, 0.17);
+      o.connect(g); o.start(dt); o.stop(dt + 0.22);
+    });
+    // แสงเพิ่มเติม: sine ชั้นสูงเบา ๆ กระพริบท้าย
+    [2093, 2637, 3136, 4186].forEach((f, i) => {
+      const dt = t + 0.18 + i * 0.048;
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f;
+      const g = this._gain(dt, 0.07, 0.09);
+      o.connect(g); o.start(dt); o.stop(dt + 0.13);
+    });
   },
 
   _boom(t) {
@@ -214,14 +236,15 @@ export const audio = {
     echo.connect(echoLp).connect(echoG); echo.start(t + 0.18);
   },
 
-  // ---------- BGM (MP3 file) ----------
+  // ---------- Game BGM (Moonlit Broomhop) ----------
   startBgm() {
+    levelBgmActive = false;
+    if (levelBgmEl) levelBgmEl.pause(); // หยุด level BGM เมื่อเข้าเกม
     if (!bgmEl) {
       bgmEl = new Audio('public/music/Moonlit Broomhop.mp3');
       bgmEl.loop = true;
       bgmEl.preload = 'auto';
     }
-    // เชื่อม Web Audio graph ถ้า ctx พร้อมแล้ว
     if (ctx && !bgmSourceConnected) {
       try {
         const src = ctx.createMediaElementSource(bgmEl);
@@ -229,10 +252,10 @@ export const audio = {
         bgmSourceConnected = true;
       } catch (e) {}
     }
-    bgmEl.play().catch(() => {}); // autoplay block → จะ retry ใน unlock()
+    bgmEl.play().catch(() => {});
   },
   setBgmEnabled(on) {
-    bgmTarget = on ? 0.20 : 0.0; // 0.20 = เบาพอไม่รบกวนเสียงพูด
+    bgmTarget = on ? 0.20 : 0.0;
     if (on) this.startBgm();
     else if (bgmEl) bgmEl.pause();
     if (bgmGain && ctx) bgmGain.gain.linearRampToValueAtTime(bgmTarget, ctx.currentTime + 0.8);
@@ -240,15 +263,46 @@ export const audio = {
   // เรียกครั้งเดียวตอน init — หยุด/เล่น BGM เมื่อ tab ถูกซ่อน/แสดง
   initVisibility() {
     document.addEventListener('visibilitychange', () => {
-      if (!bgmEl || bgmTarget === 0) return;
       if (document.hidden) {
-        bgmEl.pause();
+        bgmEl?.pause();
+        levelBgmEl?.pause();
       } else {
-        bgmEl.play().catch(() => {});
-        // ถ้า ctx suspend (iOS) ให้ resume ด้วย
-        if (ctx && ctx.state === 'suspended') ctx.resume();
+        if (ctx?.state === 'suspended') ctx.resume();
+        if (levelBgmActive && levelBgmEl) {
+          levelBgmEl.play().catch(() => {});
+        } else if (bgmTarget > 0 && bgmEl) {
+          bgmEl.play().catch(() => {});
+        }
       }
     });
+  },
+
+  // ---------- Level BGM (Witchy Pocket Moon) ----------
+  startLevelBgm() {
+    levelBgmActive = true;
+    bgmTarget = 0.25;
+    if (bgmEl) bgmEl.pause();              // หยุด game BGM
+    if (!levelBgmEl) {
+      levelBgmEl = new Audio('public/music/Witchy Pocket Moon (1).mp3');
+      levelBgmEl.loop = true;
+      levelBgmEl.preload = 'auto';
+    }
+    if (ctx && !levelBgmSourceConnected) {
+      try {
+        const src = ctx.createMediaElementSource(levelBgmEl);
+        src.connect(bgmGain);
+        levelBgmSourceConnected = true;
+      } catch (e) {}
+    }
+    // ถ้า duck active อยู่ ไม่ขึ้น gain ตอนนี้ — unduck() จะขึ้นให้เมื่อ TTS จบ
+    if (bgmGain && ctx && !ducked) bgmGain.gain.linearRampToValueAtTime(bgmTarget, ctx.currentTime + 0.6);
+    levelBgmEl.play().catch(() => {});
+  },
+  stopLevelBgm() {
+    levelBgmActive = false;
+    if (levelBgmEl) levelBgmEl.pause();
+    bgmTarget = 0;
+    if (bgmGain && ctx) bgmGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3);
   },
   duck() {
     ducked = true;
@@ -301,19 +355,25 @@ export const audio = {
   },
 
   // เฉลยสะกดคำ: เล่นทีละพยางค์ตาม word.spell แล้วต่อด้วยคำเต็ม
+  _spellCancelled: false,
   playSpellReveal(word, done) {
+    this._spellCancelled = false;
     this.sfx('chime');
     const parts = word.spell.slice();
     let i = 0;
     const next = () => {
+      if (this._spellCancelled) return;
       if (i >= parts.length) return done && done();
       const syll = parts[i++];
-      this.speak(syll, { rate: 0.75, pitch: 1.0, onEnd: () => setTimeout(next, 200) });
+      this.speak(syll, { rate: 0.75, pitch: 1.0, onEnd: () => {
+        if (!this._spellCancelled) setTimeout(next, 200);
+      }});
     };
     setTimeout(next, 350);
   },
 
   stopSpeaking() {
+    this._spellCancelled = true;
     if ('speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
