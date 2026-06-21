@@ -269,7 +269,9 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       if (solved) {
         dom.hudWord.textContent = `${currentWord.lead} + ${sara} = ${currentWord.display}`;
       } else if (held) {
-        dom.hudWord.textContent = `${held.letter} + ${sara} = ${held.letter}${sara}`;
+        const previewWord = matra.words.find((w) => w.lead === held.letter);
+        const previewDisplay = previewWord ? previewWord.display : held.letter + sara;
+        dom.hudWord.textContent = `${held.letter} + ${sara} = ${previewDisplay}`;
       } else {
         dom.hudWord.textContent = `? + ${sara}`;
       }

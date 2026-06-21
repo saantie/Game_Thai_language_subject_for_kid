@@ -118,6 +118,52 @@ export const MATRA = [
       { display:'รำ', lead:'ร', sara:'ำ', spell:['รอ','อำ','รำ'] },   // รำไทย
     ],
   },
+  {
+    id: 'sara_ao',
+    name: 'สระ เอา',
+    mode: 'TWO_PART',
+    sessionSize: 7,
+    sara: 'เา',
+    bubbles: ['ก','ข','ต','ด','ม','ร','ส','ห'],
+    words: [
+      { display:'เกา', lead:'ก', sara:'เา', spell:['กอ','เอา','เกา'] },   // เกาหลัง
+      { display:'เขา', lead:'ข', sara:'เา', spell:['ขอ','เอา','เขา'] },   // ภูเขา
+      { display:'เตา', lead:'ต', sara:'เา', spell:['ตอ','เอา','เตา'] },   // เตาไฟ
+      { display:'เดา', lead:'ด', sara:'เา', spell:['ดอ','เอา','เดา'] },   // เดาคำตอบ
+      { display:'เมา', lead:'ม', sara:'เา', spell:['มอ','เอา','เมา'] },   // เมารถ
+      { display:'เรา', lead:'ร', sara:'เา', spell:['รอ','เอา','เรา'] },   // พวกเรา
+      { display:'เสา', lead:'ส', sara:'เา', spell:['สอ','เอา','เสา'] },   // เสาไฟ
+      { display:'เหา', lead:'ห', sara:'เา', spell:['หอ','เอา','เหา'] },   // เหา (แมลง)
+    ],
+  },
+  {
+    id: 'sara_ia',
+    name: 'สระ เอีย',
+    mode: 'TWO_PART',
+    sessionSize: 4,
+    sara: 'เีย',
+    bubbles: ['ม','ส','ล','ป'],
+    words: [
+      { display:'เมีย', lead:'ม', sara:'เีย', spell:['มอ','เอีย','เมีย'] },   // เมีย
+      { display:'เสีย', lead:'ส', sara:'เีย', spell:['สอ','เอีย','เสีย'] },   // เสียของ
+      { display:'เลีย', lead:'ล', sara:'เีย', spell:['ลอ','เอีย','เลีย'] },   // เลียไอศกรีม
+      { display:'เปีย', lead:'ป', sara:'เีย', spell:['ปอ','เอีย','เปีย'] },   // เปียผม
+    ],
+  },
+  {
+    id: 'sara_uea',
+    name: 'สระ เอือ',
+    mode: 'TWO_PART',
+    sessionSize: 4,
+    sara: 'เือ',
+    bubbles: ['ส','ร','ล','จ'],
+    words: [
+      { display:'เสือ', lead:'ส', sara:'เือ', spell:['สอ','เอือ','เสือ'] },   // เสือโคร่ง
+      { display:'เรือ', lead:'ร', sara:'เือ', spell:['รอ','เอือ','เรือ'] },   // เรือแล่น
+      { display:'เลือ', lead:'ล', sara:'เือ', spell:['ลอ','เอือ','เลือ'] },   // เลือเกิน
+      { display:'เจือ', lead:'จ', sara:'เือ', spell:['จอ','เอือ','เจือ'] },   // เจือจาง
+    ],
+  },
   // ─── มาตราตัวสะกด ─────────────────────────────────────────────────────────
   {
     id: 'kong',
