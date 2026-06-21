@@ -164,6 +164,134 @@ export const MATRA = [
       { display:'เจือ', lead:'จ', sara:'เือ', spell:['จอ','เอือ','เจือ'] },   // เจือจาง
     ],
   },
+  {
+    id: 'sara_a',
+    name: 'สระ อะ',
+    mode: 'TWO_PART',
+    sessionSize: 7,
+    sara: 'ะ',
+    bubbles: ['ก','ค','จ','ป','น','ล','ม'],
+    words: [
+      { display:'กะ', lead:'ก', sara:'ะ', spell:['กอ','อะ','กะ'] },     // กะประมาณ
+      { display:'คะ', lead:'ค', sara:'ะ', spell:['คอ','อะ','คะ'] },     // คะ (สุภาพ)
+      { display:'จะ', lead:'จ', sara:'ะ', spell:['จอ','อะ','จะ'] },     // จะไป
+      { display:'ปะ', lead:'ป', sara:'ะ', spell:['ปอ','อะ','ปะ'] },     // ปะรอยขาด
+      { display:'นะ', lead:'น', sara:'ะ', spell:['นอ','อะ','นะ'] },     // นะคะ
+      { display:'ละ', lead:'ล', sara:'ะ', spell:['ลอ','อะ','ละ'] },     // ละเล่น
+      { display:'มะ', lead:'ม', sara:'ะ', spell:['มอ','อะ','มะ'] },     // มะม่วง
+    ],
+  },
+  {
+    id: 'sara_i',
+    name: 'สระ อิ',
+    mode: 'TWO_PART',
+    sessionSize: 4,
+    sara: 'ิ',
+    bubbles: ['ต','ม','ช','ส'],
+    words: [
+      { display:'ติ', lead:'ต', sara:'ิ', spell:['ตอ','อิ','ติ'] },     // ติเตียน
+      { display:'มิ', lead:'ม', sara:'ิ', spell:['มอ','อิ','มิ'] },     // มิใช่
+      { display:'ชิ', lead:'ช', sara:'ิ', spell:['ชอ','อิ','ชิ'] },     // ลองชิ
+      { display:'สิ', lead:'ส', sara:'ิ', spell:['สอ','อิ','สิ'] },     // ไปสิ
+    ],
+  },
+  {
+    id: 'sara_u',
+    name: 'สระ อุ',
+    mode: 'TWO_PART',
+    sessionSize: 4,
+    sara: 'ุ',
+    bubbles: ['ด','ต','พ','ม'],
+    words: [
+      { display:'ดุ', lead:'ด', sara:'ุ', spell:['ดอ','อุ','ดุ'] },     // ดุมาก
+      { display:'ตุ', lead:'ต', sara:'ุ', spell:['ตอ','อุ','ตุ'] },     // ตุ (พุงป่อง)
+      { display:'พุ', lead:'พ', sara:'ุ', spell:['พอ','อุ','พุ'] },     // พุน้ำ
+      { display:'มุ', lead:'ม', sara:'ุ', spell:['มอ','อุ','มุ'] },     // มุ่งมั่น
+    ],
+  },
+  {
+    id: 'sara_e_short',
+    name: 'สระ เอะ',
+    mode: 'TWO_PART',
+    sessionSize: 3,
+    sara: 'เะ',
+    bubbles: ['ก','ต','ป'],
+    words: [
+      { display:'เกะ', lead:'ก', sara:'เะ', spell:['กอ','เอะ','เกะ'] },   // เกะกะ
+      { display:'เตะ', lead:'ต', sara:'เะ', spell:['ตอ','เอะ','เตะ'] },   // เตะบอล
+      { display:'เปะ', lead:'ป', sara:'เะ', spell:['ปอ','เอะ','เปะ'] },   // พอเปะ
+    ],
+  },
+  {
+    id: 'sara_ae_short',
+    name: 'สระ แอะ',
+    mode: 'TWO_PART',
+    sessionSize: 3,
+    sara: 'แะ',
+    bubbles: ['ก','ต','ป'],
+    words: [
+      { display:'แกะ', lead:'ก', sara:'แะ', spell:['กอ','แอะ','แกะ'] },   // ลูกแกะ
+      { display:'แตะ', lead:'ต', sara:'แะ', spell:['ตอ','แอะ','แตะ'] },   // แตะต้อง
+      { display:'แปะ', lead:'ป', sara:'แะ', spell:['ปอ','แอะ','แปะ'] },   // แปะกระดาษ
+    ],
+  },
+  {
+    id: 'sara_o_short',
+    name: 'สระ เอาะ',
+    mode: 'TWO_PART',
+    sessionSize: 4,
+    sara: 'เาะ',
+    bubbles: ['ก','จ','ป','ต'],
+    words: [
+      { display:'เกาะ', lead:'ก', sara:'เาะ', spell:['กอ','เอาะ','เกาะ'] },   // เกาะทะเล
+      { display:'เจาะ', lead:'จ', sara:'เาะ', spell:['จอ','เอาะ','เจาะ'] },   // เจาะรู
+      { display:'เปาะ', lead:'ป', sara:'เาะ', spell:['ปอ','เอาะ','เปาะ'] },   // เปราะบาง
+      { display:'เตาะ', lead:'ต', sara:'เาะ', spell:['ตอ','เอาะ','เตาะ'] },   // เดินเตาะแตะ
+    ],
+  },
+  {
+    id: 'sara_oo',
+    name: 'สระ โอ',
+    mode: 'TWO_PART',
+    sessionSize: 4,
+    sara: 'โ',
+    bubbles: ['ต','บ','ห','ด'],
+    words: [
+      { display:'โต', lead:'ต', sara:'โ', spell:['ตอ','โอ','โต'] },     // โตขึ้น
+      { display:'โบ', lead:'บ', sara:'โ', spell:['บอ','โอ','โบ'] },     // โบผม
+      { display:'โห', lead:'ห', sara:'โ', spell:['หอ','โอ','โห'] },     // โห! (อุทาน)
+      { display:'โด', lead:'ด', sara:'โ', spell:['ดอ','โอ','โด'] },     // โด เร มี (ดนตรี)
+    ],
+  },
+  {
+    id: 'sara_ua',
+    name: 'สระ อัว',
+    mode: 'TWO_PART',
+    sessionSize: 4,
+    sara: 'ัว',
+    bubbles: ['ต','ห','ม','ร'],
+    words: [
+      { display:'ตัว', lead:'ต', sara:'ัว', spell:['ตอ','อัว','ตัว'] },   // ร่างกาย
+      { display:'หัว', lead:'ห', sara:'ัว', spell:['หอ','อัว','หัว'] },   // หัวใจ
+      { display:'มัว', lead:'ม', sara:'ัว', spell:['มอ','อัว','มัว'] },   // ท้องฟ้ามัว
+      { display:'รัว', lead:'ร', sara:'ัว', spell:['รอ','อัว','รัว'] },   // รัวกลอง
+    ],
+  },
+  {
+    id: 'sara_ae',
+    name: 'สระ แอ',
+    mode: 'TWO_PART',
+    sessionSize: 5,
+    sara: 'แ',
+    bubbles: ['ก','ต','น','ล','ม'],
+    words: [
+      { display:'แก', lead:'ก', sara:'แ', spell:['กอ','แอ','แก'] },     // ยาแก้
+      { display:'แต', lead:'ต', sara:'แ', spell:['ตอ','แอ','แต'] },     // แต่ว่า
+      { display:'แน', lead:'น', sara:'แ', spell:['นอ','แอ','แน'] },     // แน่ใจ
+      { display:'แล', lead:'ล', sara:'แ', spell:['ลอ','แอ','แล'] },     // แลดู
+      { display:'แม', lead:'ม', sara:'แ', spell:['มอ','แอ','แม'] },     // แม่
+    ],
+  },
   // ─── มาตราตัวสะกด ─────────────────────────────────────────────────────────
   {
     id: 'kong',
