@@ -314,17 +314,39 @@ export const audio = {
     if (bgmGain && ctx) bgmGain.gain.linearRampToValueAtTime(bgmTarget, ctx.currentTime + 0.5);
   },
 
-  // ---------- Voice (TTS) ----------
+  // ---------- MP3 player (core) ----------
+  // เล่นไฟล์ MP3 ด้วย HTMLAudioElement; ถ้าโหลดไม่ได้ → เรียก fallback()
+  _playMp3(path, fallback, onEnd) {
+    this.duck();
+    const el = new Audio(path);
+    el.onended = () => { this.unduck(); onEnd && onEnd(); };
+    el.onerror = () => {
+      this.unduck();
+      if (fallback) fallback(); else onEnd && onEnd();
+    };
+    el.play().catch(() => {
+      this.unduck();
+      if (fallback) fallback(); else onEnd && onEnd();
+    });
+  },
+
+  // ---------- Voice (MP3 ก่อน, fallback TTS) ----------
   // เล่นวลีแม่มด + คืน text ที่พูด (เพื่อโชว์เป็นคำพูด) ผ่าน onText
   voice(key, opts = {}) {
     const pool = VOICE[key] || [''];
-    const text = pool[(Math.random() * pool.length) | 0];
+    const idx  = (Math.random() * pool.length) | 0;
+    const text = pool[idx];
     opts.onText && opts.onText(text);
-    this.speak(text, opts);
+    const path = `public/assets/audio/voice/${key}_${idx + 1}.mp3`;
+    this._playMp3(
+      path,
+      () => this.speak(text, { onEnd: opts.onEnd }),  // TTS fallback ถ้าไฟล์ยังไม่มี
+      opts.onEnd
+    );
     return text;
   },
 
-  // พูดข้อความใด ๆ ด้วย TTS ภาษาไทย; onEnd เรียกเมื่อพูดจบ
+  // พูดข้อความใด ๆ ด้วย TTS ภาษาไทย (fallback / ใช้ตรงกรณีพิเศษ)
   speak(text, opts = {}) {
     const { rate = 0.85, pitch = 1.0, onEnd } = opts;
     if (!('speechSynthesis' in window) || !text) {
