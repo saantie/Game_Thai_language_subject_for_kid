@@ -105,7 +105,7 @@ html, body {
   right: 3%;
   bottom: 8%;
   z-index: 2;
-  width: clamp(90px, 18vw, 180px);
+  width: clamp(130px, 22vw, 240px);
   height: auto;
   pointer-events: none;
   user-select: none;
@@ -114,11 +114,50 @@ html, body {
 }
 @keyframes princessTransform {
   0%   { transform: scale(1);    filter: drop-shadow(0 6px 20px rgba(255,180,60,0.45)) brightness(1); }
-  40%  { transform: scale(1.14); filter: drop-shadow(0 0 40px rgba(255,240,80,1))      brightness(2.2); }
+  35%  { transform: scale(1.18); filter: drop-shadow(0 0 60px rgba(255,240,80,1))      brightness(2.6); }
   100% { transform: scale(1);    filter: drop-shadow(0 6px 20px rgba(255,180,60,0.45)) brightness(1); }
 }
 .princess-img.transform {
-  animation: princessTransform 0.55s ease-out forwards;
+  animation: princessTransform 0.7s ease-out forwards;
+}
+
+/* เอฟเฟกต์กลายร่างเจ้าหญิง — แสงลงมา + วาบพื้น */
+.px-beam {
+  position: fixed;
+  pointer-events: none;
+  z-index: 3;
+  transform-origin: top center;
+  animation: pxBeam 1s ease-in-out forwards;
+}
+@keyframes pxBeam {
+  0%   { opacity: 0;   transform: scaleY(0); }
+  20%  { opacity: 0.95; transform: scaleY(0.4); }
+  60%  { opacity: 0.8;  transform: scaleY(1); }
+  100% { opacity: 0;   transform: scaleY(1); }
+}
+.px-flash {
+  position: fixed;
+  pointer-events: none;
+  z-index: 3;
+  border-radius: 50%;
+  opacity: 0;
+  animation: pxFlash 0.65s ease-out 0.45s forwards;
+}
+@keyframes pxFlash {
+  0%   { opacity: 1;   transform: scale(0); }
+  50%  { opacity: 0.85; }
+  100% { opacity: 0;   transform: scale(1); }
+}
+.px-spark {
+  position: fixed;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0;
+  animation: pxSpark 0.9s ease-out 0.4s forwards;
+}
+@keyframes pxSpark {
+  0%   { opacity: 1;   transform: translate(0,0) scale(1.2); }
+  100% { opacity: 0;   transform: translate(var(--sx),var(--sy)) scale(0.3); }
 }
 
 /* แม่มดพูด (toast) */
