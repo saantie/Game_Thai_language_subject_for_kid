@@ -377,19 +377,28 @@ export const audio = {
   },
 
   // เฉลยสะกดคำ: เล่นทีละพยางค์ตาม word.spell แล้วต่อด้วยคำเต็ม
+  // ทุกพยางค์ลอง MP3 ก่อน → fallback TTS ถ้าไฟล์ยังไม่มี
   _spellCancelled: false,
   playSpellReveal(word, done) {
     this._spellCancelled = false;
     this.sfx('chime');
     const parts = word.spell.slice();
+    const last  = parts.length - 1;
     let i = 0;
     const next = () => {
       if (this._spellCancelled) return;
-      if (i >= parts.length) return done && done();
-      const syll = parts[i++];
-      this.speak(syll, { rate: 0.75, pitch: 1.0, onEnd: () => {
-        if (!this._spellCancelled) setTimeout(next, 200);
-      }});
+      if (i > last) return done && done();
+      const syll   = parts[i];
+      const isWord = (i === last);   // item สุดท้าย = คำเต็ม → โฟลเดอร์ word/
+      i++;
+      const folder = isWord ? 'word' : 'spell';
+      const path   = `public/assets/audio/${folder}/${encodeURIComponent(syll)}.mp3`;
+      const after  = () => { if (!this._spellCancelled) setTimeout(next, 200); };
+      this._playMp3(
+        path,
+        () => this.speak(syll, { rate: 0.75, pitch: 1.0, onEnd: after }),  // TTS fallback
+        after
+      );
     };
     setTimeout(next, 350);
   },
