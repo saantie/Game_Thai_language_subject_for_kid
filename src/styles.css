@@ -437,6 +437,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
 .btn-primary:active { transform: translateY(3px); box-shadow: 0 3px 0 #2f9d72; }
 .btn-primary.big { font-size: clamp(18px, 4.5vw, 26px); padding: clamp(12px, 3vh, 18px) clamp(24px, 7vw, 44px); }
 .btn-link { background: none; color: #cdbcff; text-decoration: underline; margin-top: 14px; font-size: 15px; }
+.app-version { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); font-size: 11px; color: rgba(180,160,220,0.45); letter-spacing: 0.05em; pointer-events: none; }
 .btn-reset-game {
   position: fixed; bottom: 16px; right: 16px; z-index: 8;
   background: rgba(60, 20, 80, 0.72); color: rgba(255,180,180,0.85);
