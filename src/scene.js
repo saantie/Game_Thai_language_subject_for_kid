@@ -224,17 +224,21 @@ export function initScene(root) {
   //   3) วาบพื้น (ขาว→ทอง) + Magic Chime พร้อมกัน
   //   4) swap รูปเจ้าหญิง → animation กลายร่าง + ประกายระยิบระยับ
   function _spawnPrincessFx(stage) {
-    const BEAM_DELAY  = 360;   // รอคะแนนวิ่งจบ (roll 520ms, เรียก setPrincess 250ms หลัง onArrive)
-    const BEAM_DUR    = 700;
-    const FLASH_T     = BEAM_DELAY + BEAM_DUR;   // ~1060ms
-    const TRANSFORM_T = FLASH_T + 120;            // ~1180ms
-    const CLEANUP_T   = TRANSFORM_T + 1700;       // ~2880ms
+    const BEAM_DELAY  = 180;                       // ลด 50%
+    const BEAM_DUR    = 350;                       // ลด 50%
+    const FLASH_T     = BEAM_DELAY + BEAM_DUR;     // 530ms
+    const TRANSFORM_T = FLASH_T + 60;              // 590ms
 
-    // ── ① 3 ลำแสง ──────────────────────────────────────────────────────
+    // ── ① 3 ลำแสง + Magic Chime ──────────────────────────────────────────
     setTimeout(() => {
       const rect  = princessEl.getBoundingClientRect();
       const cx    = rect.left + rect.width / 2;
       const beamH = rect.top + rect.height * 0.78;
+
+      // เสียง Magic Chime เริ่มพร้อม beam
+      const chime = new Audio('public/assets/audio/Magic%20Chime.mp3');
+      chime.volume = 0.85;
+      chime.play().catch(() => {});
 
       const BEAMS = [
         { dx: 0,   w: 88, blur: 7, a: 0.95 },
@@ -258,7 +262,6 @@ export function initScene(root) {
         document.body.appendChild(div);
         beamEls.push(div);
 
-        // 2 ประกายดาวไหลลงตามลำแสง
         ['✦', '✧'].forEach((g, k) => {
           const sp = document.createElement('div');
           sp.className = 'px-beam-spark';
@@ -267,25 +270,21 @@ export function initScene(root) {
             left:       `${cx + b.dx - 6}px`,
             top:        '0px',
             '--beam-h': `${beamH}px`,
-            '--dur':    `${BEAM_DUR - 80}ms`,
-            '--delay':  `${k * 130}ms`,
+            '--dur':    `${BEAM_DUR - 40}ms`,
+            '--delay':  `${k * 65}ms`,
           });
           document.body.appendChild(sp);
           beamEls.push(sp);
         });
       });
-      setTimeout(() => beamEls.forEach((e) => e.remove()), BEAM_DUR + 350);
+      setTimeout(() => beamEls.forEach((e) => e.remove()), BEAM_DUR + 175);
     }, BEAM_DELAY);
 
-    // ── ② วาบพื้น + Magic Chime ──────────────────────────────────────────
+    // ── ② วาบพื้น ──────────────────────────────────────────────────────────
     setTimeout(() => {
       const rect  = princessEl.getBoundingClientRect();
       const cx    = rect.left + rect.width / 2;
       const botY  = rect.bottom;
-
-      const chime = new Audio('public/assets/audio/Magic%20Chime.mp3');
-      chime.volume = 0.85;
-      chime.play().catch(() => {});
 
       const flashW = rect.width * 3.2;
       const flashH = 52;
@@ -319,13 +318,13 @@ export function initScene(root) {
       setTimeout(() => {
         flash.remove();
         document.querySelectorAll('.px-ground-spark').forEach((e) => e.remove());
-      }, 1100);
+      }, 550);
     }, FLASH_T);
 
     // ── ③ swap รูป + animation กลายร่าง + ประกายระยิบระยับ ───────────────
     setTimeout(() => {
       princessEl.src = `public/assets/images/princess_${stage}.png`;
-    }, FLASH_T + 60);
+    }, FLASH_T + 30);
 
     setTimeout(() => {
       const rect  = princessEl.getBoundingClientRect();
@@ -348,15 +347,15 @@ export function initScene(root) {
           left:      `${cx + Math.cos(angle) * spread * r - 8}px`,
           top:       `${midY + Math.sin(angle) * spread * r * 0.55 - 8}px`,
           fontSize:  `${10 + Math.random() * 9}px`,
-          '--dur':   `${550 + Math.random() * 650}ms`,
-          '--delay': `${Math.random() * 950}ms`,
+          '--dur':   `${280 + Math.random() * 320}ms`,
+          '--delay': `${Math.random() * 475}ms`,
         });
         document.body.appendChild(tw);
       }
       setTimeout(() => {
         princessEl.classList.remove('transform');
         document.querySelectorAll('.px-twinkle').forEach((e) => e.remove());
-      }, 1600);
+      }, 800);
     }, TRANSFORM_T);
   }
 
