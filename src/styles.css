@@ -113,11 +113,11 @@ html, body {
   filter: drop-shadow(0 6px 20px rgba(255, 180, 60, 0.45));
 }
 @keyframes princessTransform {
-  0%   { transform: scale(1);    filter: drop-shadow(0 6px 20px rgba(255,180,60,0.45)) brightness(1); }
-  20%  { transform: scale(1.06); filter: drop-shadow(0 0 40px rgba(255,240,80,0.8))    brightness(1.9); }
-  48%  { transform: scale(1.18); filter: drop-shadow(0 0 70px rgba(255,240,80,1))      brightness(2.9); }
-  72%  { transform: scale(1.08); filter: drop-shadow(0 0 30px rgba(255,220,100,0.6))   brightness(1.5); }
-  100% { transform: scale(1);    filter: drop-shadow(0 6px 20px rgba(255,180,60,0.45)) brightness(1); }
+  0%   { filter: drop-shadow(0 6px 20px rgba(255,180,60,0.45)) brightness(1); }
+  20%  { filter: drop-shadow(0 0 40px rgba(255,240,80,0.8))    brightness(1.9); }
+  48%  { filter: drop-shadow(0 0 70px rgba(255,240,80,1))      brightness(2.9); }
+  72%  { filter: drop-shadow(0 0 30px rgba(255,220,100,0.6))   brightness(1.5); }
+  100% { filter: drop-shadow(0 6px 20px rgba(255,180,60,0.45)) brightness(1); }
 }
 .princess-img.transform {
   animation: princessTransform 1.4s ease-in-out forwards;
@@ -151,6 +151,35 @@ html, body {
   12%  { opacity: 1; }
   88%  { opacity: 0.7; }
   100% { opacity: 0;   transform: translateY(var(--beam-h, 300px)) scale(0.4); }
+}
+.px-beam-tip {
+  position: fixed;
+  pointer-events: none;
+  z-index: 5;
+  border-radius: 50%;
+  filter: blur(5px);
+  background: radial-gradient(circle, #fff 0%, rgba(255,255,160,0.85) 45%, transparent 100%);
+  animation: pxBeamTip var(--dur, 350ms) ease-in forwards;
+}
+@keyframes pxBeamTip {
+  0%   { opacity: 0; transform: translateY(0); }
+  6%   { opacity: 1; }
+  88%  { opacity: 0.9; }
+  100% { opacity: 0;  transform: translateY(var(--beam-h, 400px)); }
+}
+.px-beam-drip {
+  position: fixed;
+  pointer-events: none;
+  z-index: 6;
+  font-size: 8px;
+  color: rgba(255, 255, 200, 0.92);
+  text-shadow: 0 0 4px #fff, 0 0 8px rgba(255,240,120,0.7);
+  opacity: 0;
+  animation: pxBeamDrip 300ms ease-out var(--delay, 0ms) forwards;
+}
+@keyframes pxBeamDrip {
+  0%   { opacity: 1; transform: translate(0, 0) scale(1.1); }
+  100% { opacity: 0; transform: translate(var(--dx, 12px), 18px) scale(0.2); }
 }
 .px-flash {
   position: fixed;

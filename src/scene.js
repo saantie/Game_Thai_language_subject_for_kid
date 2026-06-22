@@ -276,6 +276,36 @@ export function initScene(root) {
           document.body.appendChild(sp);
           beamEls.push(sp);
         });
+
+        // หัว beam โค้งมนเรืองแสง วิ่งตามปลาย scaleY
+        const tip = document.createElement('div');
+        tip.className = 'px-beam-tip';
+        Object.assign(tip.style, {
+          left:       `${cx + b.dx - 20}px`,
+          top:        '0px',
+          width:      `${b.w + 8}px`,
+          height:     '22px',
+          '--beam-h': `${beamH}px`,
+          '--dur':    `${BEAM_DUR}ms`,
+        });
+        document.body.appendChild(tip);
+        beamEls.push(tip);
+
+        // drip sparkles โปรยปรายจากหัว beam
+        for (let d = 0; d < 5; d++) {
+          const frac = 0.12 + (d / 5) * 0.80;
+          const drip = document.createElement('div');
+          drip.className = 'px-beam-drip';
+          drip.textContent = ['✦', '✧', '✦', '✧', '·'][d];
+          Object.assign(drip.style, {
+            left:      `${cx + b.dx + (Math.random() - 0.5) * b.w * 0.5}px`,
+            top:       `${beamH * frac - 4}px`,
+            '--delay': `${Math.round(frac * BEAM_DUR)}ms`,
+            '--dx':    `${(Math.random() < 0.5 ? -1 : 1) * (10 + Math.random() * 18)}px`,
+          });
+          document.body.appendChild(drip);
+          beamEls.push(drip);
+        }
       });
 
       // twinkle ไหลลงตาม beam ทีละจุดตามความลึก
