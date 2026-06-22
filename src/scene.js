@@ -375,6 +375,10 @@ export function initScene(root) {
 
   scene.clearFx = function () {
     fx.clearRect(0, 0, scene.W, scene.H);
+  };
+
+  // เรียกตอนออกจากเกม/เริ่มมาตราใหม่ — ล้าง DOM elements ที่ค้างอยู่
+  scene.stopPrincessFx = function () {
     document.querySelectorAll('.px-beam,.px-beam-spark,.px-flash,.px-ground-spark,.px-twinkle').forEach((e) => e.remove());
     if (princessEl) princessEl.classList.remove('transform');
   };

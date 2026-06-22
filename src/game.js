@@ -765,6 +765,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       cancelAnimationFrame(rafId);
       recog.stop();
       audio.stopSpeaking();
+      scene.stopPrincessFx();
     },
   };
 }
