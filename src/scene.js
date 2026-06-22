@@ -224,16 +224,16 @@ export function initScene(root) {
   //   3) วาบพื้น (ขาว→ทอง) + Magic Chime พร้อมกัน
   //   4) swap รูปเจ้าหญิง → animation กลายร่าง + ประกายระยิบระยับ
   function _spawnPrincessFx(stage) {
-    const BEAM_DELAY  = 180;                       // ลด 50%
-    const BEAM_DUR    = 350;                       // ลด 50%
-    const FLASH_T     = BEAM_DELAY + BEAM_DUR;     // 530ms
-    const TRANSFORM_T = FLASH_T + 60;              // 590ms
+    const BEAM_DELAY  = 80;
+    const BEAM_DUR    = 350;
+    const FLASH_T     = BEAM_DELAY + BEAM_DUR;     // 430ms
+    const TRANSFORM_T = FLASH_T + 60;              // 490ms
 
     // ── ① 3 ลำแสง + Magic Chime ──────────────────────────────────────────
     setTimeout(() => {
       const rect  = princessEl.getBoundingClientRect();
       const cx    = rect.left + rect.width / 2;
-      const beamH = rect.top + rect.height * 0.78;
+      const beamH = rect.bottom;                   // ยาวถึงเท้าเจ้าหญิง (จุด flash)
 
       // เสียง Magic Chime เริ่มพร้อม beam
       const chime = new Audio('public/assets/audio/Magic%20Chime.mp3');
@@ -277,6 +277,22 @@ export function initScene(root) {
           beamEls.push(sp);
         });
       });
+
+      // twinkle ไหลลงตาม beam ทีละจุดตามความลึก
+      [0.22, 0.42, 0.60, 0.76, 0.90].forEach((frac, i) => {
+        const tw = document.createElement('div');
+        tw.className = 'px-twinkle';
+        tw.textContent = ['✦', '✧', '★', '✦', '✧'][i];
+        Object.assign(tw.style, {
+          left:      `${cx + (i % 2 === 0 ? -20 : 18)}px`,
+          top:       `${beamH * frac - 8}px`,
+          '--dur':   '260ms',
+          '--delay': `${Math.round(frac * (BEAM_DUR - 50))}ms`,
+        });
+        document.body.appendChild(tw);
+        beamEls.push(tw);
+      });
+
       setTimeout(() => beamEls.forEach((e) => e.remove()), BEAM_DUR + 175);
     }, BEAM_DELAY);
 
