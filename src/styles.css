@@ -103,7 +103,7 @@ html, body {
 .princess-img {
   position: fixed;
   right: 3%;
-  bottom: 8%;
+  bottom: 20%;
   z-index: 2;
   width: clamp(130px, 22vw, 240px);
   height: auto;
@@ -114,26 +114,43 @@ html, body {
 }
 @keyframes princessTransform {
   0%   { transform: scale(1);    filter: drop-shadow(0 6px 20px rgba(255,180,60,0.45)) brightness(1); }
-  35%  { transform: scale(1.18); filter: drop-shadow(0 0 60px rgba(255,240,80,1))      brightness(2.6); }
+  20%  { transform: scale(1.06); filter: drop-shadow(0 0 40px rgba(255,240,80,0.8))    brightness(1.9); }
+  48%  { transform: scale(1.18); filter: drop-shadow(0 0 70px rgba(255,240,80,1))      brightness(2.9); }
+  72%  { transform: scale(1.08); filter: drop-shadow(0 0 30px rgba(255,220,100,0.6))   brightness(1.5); }
   100% { transform: scale(1);    filter: drop-shadow(0 6px 20px rgba(255,180,60,0.45)) brightness(1); }
 }
 .princess-img.transform {
-  animation: princessTransform 0.7s ease-out forwards;
+  animation: princessTransform 1.4s ease-in-out forwards;
 }
 
-/* เอฟเฟกต์กลายร่างเจ้าหญิง — แสงลงมา + วาบพื้น */
+/* เอฟเฟกต์กลายร่างเจ้าหญิง: 3 ลำแสง + วาบพื้น + ประกาย */
 .px-beam {
   position: fixed;
   pointer-events: none;
   z-index: 3;
   transform-origin: top center;
-  animation: pxBeam 1s ease-in-out forwards;
+  animation: pxBeam 0.75s cubic-bezier(0.15, 0, 0.55, 1) forwards;
 }
 @keyframes pxBeam {
-  0%   { opacity: 0;   transform: scaleY(0); }
-  20%  { opacity: 0.95; transform: scaleY(0.4); }
-  60%  { opacity: 0.8;  transform: scaleY(1); }
-  100% { opacity: 0;   transform: scaleY(1); }
+  0%   { opacity: 0;    transform: scaleY(0); }
+  12%  { opacity: 0.95; }
+  65%  { opacity: 0.85; transform: scaleY(1); }
+  100% { opacity: 0;    transform: scaleY(1); }
+}
+.px-beam-spark {
+  position: fixed;
+  pointer-events: none;
+  z-index: 4;
+  font-size: 10px;
+  color: rgba(255,255,230,0.95);
+  text-shadow: 0 0 5px #fff, 0 0 10px rgba(255,255,180,0.8);
+  animation: pxBeamSpark var(--dur, 650ms) ease-in var(--delay, 0ms) forwards;
+}
+@keyframes pxBeamSpark {
+  0%   { opacity: 0;   transform: translateY(0) scale(0.6); }
+  12%  { opacity: 1; }
+  88%  { opacity: 0.7; }
+  100% { opacity: 0;   transform: translateY(var(--beam-h, 300px)) scale(0.4); }
 }
 .px-flash {
   position: fixed;
@@ -141,23 +158,40 @@ html, body {
   z-index: 3;
   border-radius: 50%;
   opacity: 0;
-  animation: pxFlash 0.65s ease-out 0.45s forwards;
+  filter: blur(14px);
+  animation: pxFlash 0.75s ease-out forwards;
 }
 @keyframes pxFlash {
-  0%   { opacity: 1;   transform: scale(0); }
-  50%  { opacity: 0.85; }
-  100% { opacity: 0;   transform: scale(1); }
+  0%   { opacity: 0;   transform: scale(0); }
+  18%  { opacity: 1;   transform: scale(0.5); }
+  55%  { opacity: 0.9; transform: scale(1); }
+  100% { opacity: 0;   transform: scale(1.15); }
 }
-.px-spark {
+.px-ground-spark {
   position: fixed;
   pointer-events: none;
-  z-index: 3;
+  z-index: 4;
+  color: rgba(255,255,215,0.95);
+  text-shadow: 0 0 6px #fff, 0 0 12px rgba(255,220,80,0.7);
   opacity: 0;
-  animation: pxSpark 0.9s ease-out 0.4s forwards;
+  animation: pxGroundSpark 0.85s ease-out forwards;
 }
-@keyframes pxSpark {
-  0%   { opacity: 1;   transform: translate(0,0) scale(1.2); }
-  100% { opacity: 0;   transform: translate(var(--sx),var(--sy)) scale(0.3); }
+@keyframes pxGroundSpark {
+  0%   { opacity: 1;   transform: translate(0,0) scale(1.3); }
+  100% { opacity: 0;   transform: translate(var(--sx),var(--sy)) scale(0.25); }
+}
+.px-twinkle {
+  position: fixed;
+  pointer-events: none;
+  z-index: 4;
+  color: rgba(255,255,210,0.95);
+  text-shadow: 0 0 8px rgba(255,250,150,1), 0 0 16px rgba(255,220,60,0.6);
+  animation: pxTwinkle var(--dur, 700ms) ease-in-out var(--delay, 0ms) forwards;
+}
+@keyframes pxTwinkle {
+  0%, 100% { opacity: 0;   transform: scale(0.3) rotate(0deg); }
+  45%       { opacity: 1;   transform: scale(1.4) rotate(25deg); }
+  65%       { opacity: 0.8; transform: scale(1.1) rotate(-10deg); }
 }
 
 /* แม่มดพูด (toast) */

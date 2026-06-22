@@ -14,8 +14,6 @@ let bgmEl = null;           // HTML Audio element สำหรับ MP3 BGM (ga
 let bgmSourceConnected = false;
 let bgmTarget = 0.0;        // ค่าเริ่ม: ปิด (เปิดตอน unlock ถ้า settings.bgm=true)
 let ducked = false;
-let levelBgmEl = null;       // BGM หน้าเลือกมาตรา (Witchy Pocket Moon)
-let levelBgmSourceConnected = false;
 let levelBgmActive = false;
 
 // ---- เสียงพากย์แม่มด (สุ่มกันจำเจ) ----
@@ -97,9 +95,12 @@ export const audio = {
       case 'bubble':
         this._blip(880, 0.07, 'sine', t);
         break;
-      case 'boom':
-        this._boom(t);
+      case 'boom': {
+        const sw = new Audio('public/assets/audio/Swoosh.mp3');
+        sw.volume = 0.75;
+        sw.play().catch(() => this._boom(ctx.currentTime));
         break;
+      }
       case 'star':
         this._arp([784, 988, 1319], 0.09, t);
         break;
@@ -236,10 +237,8 @@ export const audio = {
     echo.connect(echoLp).connect(echoG); echo.start(t + 0.18);
   },
 
-  // ---------- Game BGM (Moonlit Broomhop) ----------
-  startBgm() {
-    levelBgmActive = false;
-    if (levelBgmEl) levelBgmEl.pause(); // หยุด level BGM เมื่อเข้าเกม
+  // ---------- BGM (Moonlit Broomhop — ใช้ทั้ง level select และ in-game) ----------
+  _ensureBgm() {
     if (!bgmEl) {
       bgmEl = new Audio('public/music/Moonlit Broomhop.mp3');
       bgmEl.loop = true;
@@ -252,11 +251,29 @@ export const audio = {
         bgmSourceConnected = true;
       } catch (e) {}
     }
+  },
+  startBgm() {
+    levelBgmActive = false;
+    this._ensureBgm();
+    bgmTarget = 0.20;
+    if (bgmGain && ctx && !ducked) bgmGain.gain.linearRampToValueAtTime(bgmTarget, ctx.currentTime + 0.6);
     bgmEl.play().catch(() => {});
   },
+  startLevelBgm() {
+    levelBgmActive = true;
+    this._ensureBgm();
+    bgmTarget = 0.25;
+    if (bgmGain && ctx && !ducked) bgmGain.gain.linearRampToValueAtTime(bgmTarget, ctx.currentTime + 0.6);
+    bgmEl.play().catch(() => {});
+  },
+  stopLevelBgm() {
+    levelBgmActive = false;
+    bgmTarget = 0;
+    if (bgmGain && ctx) bgmGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3);
+  },
   setBgmEnabled(on) {
-    bgmTarget = on ? 0.20 : 0.0;
-    if (on) this.startBgm();
+    bgmTarget = on ? (levelBgmActive ? 0.25 : 0.20) : 0.0;
+    if (on) { this._ensureBgm(); bgmEl.play().catch(() => {}); }
     else if (bgmEl) bgmEl.pause();
     if (bgmGain && ctx) bgmGain.gain.linearRampToValueAtTime(bgmTarget, ctx.currentTime + 0.8);
   },
@@ -265,44 +282,11 @@ export const audio = {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         bgmEl?.pause();
-        levelBgmEl?.pause();
       } else {
         if (ctx?.state === 'suspended') ctx.resume();
-        if (levelBgmActive && levelBgmEl) {
-          levelBgmEl.play().catch(() => {});
-        } else if (bgmTarget > 0 && bgmEl) {
-          bgmEl.play().catch(() => {});
-        }
+        if (bgmTarget > 0 && bgmEl) bgmEl.play().catch(() => {});
       }
     });
-  },
-
-  // ---------- Level BGM (Witchy Pocket Moon) ----------
-  startLevelBgm() {
-    levelBgmActive = true;
-    bgmTarget = 0.25;
-    if (bgmEl) bgmEl.pause();              // หยุด game BGM
-    if (!levelBgmEl) {
-      levelBgmEl = new Audio('public/music/Witchy Pocket Moon (1).mp3');
-      levelBgmEl.loop = true;
-      levelBgmEl.preload = 'auto';
-    }
-    if (ctx && !levelBgmSourceConnected) {
-      try {
-        const src = ctx.createMediaElementSource(levelBgmEl);
-        src.connect(bgmGain);
-        levelBgmSourceConnected = true;
-      } catch (e) {}
-    }
-    // ถ้า duck active อยู่ ไม่ขึ้น gain ตอนนี้ — unduck() จะขึ้นให้เมื่อ TTS จบ
-    if (bgmGain && ctx && !ducked) bgmGain.gain.linearRampToValueAtTime(bgmTarget, ctx.currentTime + 0.6);
-    levelBgmEl.play().catch(() => {});
-  },
-  stopLevelBgm() {
-    levelBgmActive = false;
-    if (levelBgmEl) levelBgmEl.pause();
-    bgmTarget = 0;
-    if (bgmGain && ctx) bgmGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3);
   },
   duck() {
     ducked = true;

@@ -218,78 +218,149 @@ export function initScene(root) {
     },
   };
 
-  // แสงยิงลงมา + วาบพื้น + เสียง Magic Chime เมื่อเจ้าหญิงกลายร่าง
-  function _spawnPrincessFx() {
-    const rect = princessEl.getBoundingClientRect();
-    const cx   = rect.left + rect.width  / 2;
-    const botY = rect.bottom;
-    const topY = rect.top;
+  // ลำดับเอฟเฟกต์กลายร่างเจ้าหญิง:
+  //   1) หน่วงให้คะแนนวิ่งจบก่อน (~350ms)
+  //   2) 3 ลำแสงยิงลงมา (700ms) พร้อมประกายดาวไหลลงตามลำแสง
+  //   3) วาบพื้น (ขาว→ทอง) + Magic Chime พร้อมกัน
+  //   4) swap รูปเจ้าหญิง → animation กลายร่าง + ประกายระยิบระยับ
+  function _spawnPrincessFx(stage) {
+    const BEAM_DELAY  = 360;   // รอคะแนนวิ่งจบ (roll 520ms, เรียก setPrincess 250ms หลัง onArrive)
+    const BEAM_DUR    = 700;
+    const FLASH_T     = BEAM_DELAY + BEAM_DUR;   // ~1060ms
+    const TRANSFORM_T = FLASH_T + 120;            // ~1180ms
+    const CLEANUP_T   = TRANSFORM_T + 1700;       // ~2880ms
 
-    // เล่นเสียง Magic Chime
-    const chime = new Audio('public/assets/audio/Magic%20Chime.mp3');
-    chime.volume = 0.85;
-    chime.play().catch(() => {});
-
-    // แสงยิงจากด้านบนลงมาถึงตัวเจ้าหญิง
-    const beamW = Math.round(rect.width * 0.55);
-    const beam  = document.createElement('div');
-    beam.className = 'px-beam';
-    Object.assign(beam.style, {
-      left:       `${cx - beamW / 2}px`,
-      top:        '0',
-      width:      `${beamW}px`,
-      height:     `${topY + rect.height * 0.75}px`,
-      background: `linear-gradient(to bottom,
-        rgba(255,240,160,0) 0%,
-        rgba(255,220,80,0.55) 35%,
-        rgba(255,255,200,0.9) 85%,
-        rgba(255,255,255,1) 100%)`,
-    });
-    document.body.appendChild(beam);
-
-    // วาบกระจายที่พื้นที่เจ้าหญิงยืน
-    const flashW = rect.width * 2.8;
-    const flashH = 36;
-    const flash  = document.createElement('div');
-    flash.className = 'px-flash';
-    Object.assign(flash.style, {
-      left:       `${cx - flashW / 2}px`,
-      top:        `${botY - flashH / 2}px`,
-      width:      `${flashW}px`,
-      height:     `${flashH}px`,
-      background: 'radial-gradient(ellipse, rgba(255,250,180,1) 0%, rgba(255,210,60,0.7) 45%, transparent 100%)',
-    });
-    document.body.appendChild(flash);
-
-    // ประกายดาวกระจายจากพื้น
-    const GLYPHS = ['✦','⭐','✧','★','✩','💫'];
-    for (let s = 0; s < 9; s++) {
-      const angle = (s / 9) * Math.PI * 2;
-      const dist  = 55 + Math.random() * 70;
-      const spark = document.createElement('div');
-      spark.className = 'px-spark';
-      spark.textContent = GLYPHS[s % GLYPHS.length];
-      Object.assign(spark.style, {
-        left:      `${cx - 10}px`,
-        top:       `${botY - 18}px`,
-        fontSize:  `${13 + Math.random() * 9}px`,
-        color:     'gold',
-        textShadow:'0 0 6px rgba(255,220,50,0.9)',
-        '--sx':    `${Math.cos(angle) * dist}px`,
-        '--sy':    `${Math.sin(angle) * dist * 0.35 - 15}px`,
-      });
-      document.body.appendChild(spark);
-    }
-
-    // ลบ element ทั้งหมดหลัง animation จบ
+    // ── ① 3 ลำแสง ──────────────────────────────────────────────────────
     setTimeout(() => {
-      beam.remove();
-      flash.remove();
-      document.querySelectorAll('.px-spark').forEach((e) => e.remove());
-    }, 1600);
+      const rect  = princessEl.getBoundingClientRect();
+      const cx    = rect.left + rect.width / 2;
+      const beamH = rect.top + rect.height * 0.78;
+
+      const BEAMS = [
+        { dx: 0,   w: 88, blur: 7, a: 0.95 },
+        { dx: -66, w: 52, blur: 8, a: 0.62 },
+        { dx:  66, w: 52, blur: 8, a: 0.62 },
+      ];
+      const beamEls = [];
+      BEAMS.forEach((b) => {
+        const div = document.createElement('div');
+        div.className = 'px-beam';
+        Object.assign(div.style, {
+          left:   `${cx + b.dx - b.w / 2}px`,
+          top:    '0px',
+          width:  `${b.w}px`,
+          height: `${beamH}px`,
+          filter: `blur(${b.blur}px)`,
+          background:
+            `linear-gradient(to right, transparent 0%, rgba(255,255,220,${b.a}) 50%, transparent 100%),` +
+            `linear-gradient(to bottom, rgba(255,255,220,0) 0%, rgba(255,255,240,${b.a * 0.8}) 100%)`,
+        });
+        document.body.appendChild(div);
+        beamEls.push(div);
+
+        // 2 ประกายดาวไหลลงตามลำแสง
+        ['✦', '✧'].forEach((g, k) => {
+          const sp = document.createElement('div');
+          sp.className = 'px-beam-spark';
+          sp.textContent = g;
+          Object.assign(sp.style, {
+            left:       `${cx + b.dx - 6}px`,
+            top:        '0px',
+            '--beam-h': `${beamH}px`,
+            '--dur':    `${BEAM_DUR - 80}ms`,
+            '--delay':  `${k * 130}ms`,
+          });
+          document.body.appendChild(sp);
+          beamEls.push(sp);
+        });
+      });
+      setTimeout(() => beamEls.forEach((e) => e.remove()), BEAM_DUR + 350);
+    }, BEAM_DELAY);
+
+    // ── ② วาบพื้น + Magic Chime ──────────────────────────────────────────
+    setTimeout(() => {
+      const rect  = princessEl.getBoundingClientRect();
+      const cx    = rect.left + rect.width / 2;
+      const botY  = rect.bottom;
+
+      const chime = new Audio('public/assets/audio/Magic%20Chime.mp3');
+      chime.volume = 0.85;
+      chime.play().catch(() => {});
+
+      const flashW = rect.width * 3.2;
+      const flashH = 52;
+      const flash  = document.createElement('div');
+      flash.className = 'px-flash';
+      Object.assign(flash.style, {
+        left:       `${cx - flashW / 2}px`,
+        top:        `${botY - flashH / 2}px`,
+        width:      `${flashW}px`,
+        height:     `${flashH}px`,
+        background: 'radial-gradient(ellipse, rgba(255,255,255,1) 0%, rgba(255,215,50,0.9) 44%, transparent 78%)',
+      });
+      document.body.appendChild(flash);
+
+      const GLYPHS = ['✦', '✧', '★', '✩', '✦', '✧', '★', '✩', '✦', '✧'];
+      for (let s = 0; s < 10; s++) {
+        const angle = (s / 10) * Math.PI * 2;
+        const dist  = 52 + Math.random() * 82;
+        const sp    = document.createElement('div');
+        sp.className = 'px-ground-spark';
+        sp.textContent = GLYPHS[s];
+        Object.assign(sp.style, {
+          left:     `${cx - 10}px`,
+          top:      `${botY - 20}px`,
+          fontSize: `${12 + Math.random() * 10}px`,
+          '--sx':   `${Math.cos(angle) * dist}px`,
+          '--sy':   `${Math.sin(angle) * dist * 0.28 - 22}px`,
+        });
+        document.body.appendChild(sp);
+      }
+      setTimeout(() => {
+        flash.remove();
+        document.querySelectorAll('.px-ground-spark').forEach((e) => e.remove());
+      }, 1100);
+    }, FLASH_T);
+
+    // ── ③ swap รูป + animation กลายร่าง + ประกายระยิบระยับ ───────────────
+    setTimeout(() => {
+      princessEl.src = `public/assets/images/princess_${stage}.png`;
+    }, FLASH_T + 60);
+
+    setTimeout(() => {
+      const rect  = princessEl.getBoundingClientRect();
+      const cx    = rect.left + rect.width / 2;
+      const midY  = rect.top  + rect.height / 2;
+
+      princessEl.classList.remove('transform');
+      void princessEl.offsetWidth;
+      princessEl.classList.add('transform');
+
+      const TW = ['✦', '✧', '★', '✩', '✦', '✧', '★', '✩', '✦', '✧'];
+      for (let i = 0; i < 10; i++) {
+        const angle  = Math.random() * Math.PI * 2;
+        const r      = 0.35 + Math.random() * 0.65;
+        const spread = rect.width * 0.68;
+        const tw     = document.createElement('div');
+        tw.className = 'px-twinkle';
+        tw.textContent = TW[i];
+        Object.assign(tw.style, {
+          left:      `${cx + Math.cos(angle) * spread * r - 8}px`,
+          top:       `${midY + Math.sin(angle) * spread * r * 0.55 - 8}px`,
+          fontSize:  `${10 + Math.random() * 9}px`,
+          '--dur':   `${550 + Math.random() * 650}ms`,
+          '--delay': `${Math.random() * 950}ms`,
+        });
+        document.body.appendChild(tw);
+      }
+      setTimeout(() => {
+        princessEl.classList.remove('transform');
+        document.querySelectorAll('.px-twinkle').forEach((e) => e.remove());
+      }, 1600);
+    }, TRANSFORM_T);
   }
 
-  // เปลี่ยน stage เจ้าหญิง 1–8 พร้อม flash เวทมนตร์ (swap src ตรงจุดสว่างสุด)
+  // เปลี่ยน stage เจ้าหญิง 1–8 พร้อม flash เวทมนตร์
   scene.setPrincessStage = function (n) {
     if (!princessEl) return;
     const stage = Math.max(1, Math.min(8, n));
@@ -299,20 +370,13 @@ export function initScene(root) {
       princessEl.src = 'public/assets/images/princess_1.png';
       return;
     }
-    // แสงลงมา + เสียง + swap รูปตอน brightness peak
-    _spawnPrincessFx();
-    princessEl.classList.remove('transform');
-    void princessEl.offsetWidth;
-    princessEl.classList.add('transform');
-    setTimeout(() => {
-      princessEl.src = `public/assets/images/princess_${stage}.png`;
-    }, 250);
-    setTimeout(() => princessEl.classList.remove('transform'), 700);
+    _spawnPrincessFx(stage);
   };
 
   scene.clearFx = function () {
-    // fxCanvas โปร่งใส — เคลียร์ด้วย clearRect ไม่ใช่ fillRect
     fx.clearRect(0, 0, scene.W, scene.H);
+    document.querySelectorAll('.px-beam,.px-beam-spark,.px-flash,.px-ground-spark,.px-twinkle').forEach((e) => e.remove());
+    if (princessEl) princessEl.classList.remove('transform');
   };
 
   scene.onResize = function (cb) {
