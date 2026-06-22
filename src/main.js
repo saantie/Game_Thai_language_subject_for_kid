@@ -11,6 +11,15 @@ import { loadProgress, saveProgress, clearProgress } from './storage.js';
 
 const MATRA_BY_ID = Object.fromEntries(MATRA.map((m) => [m.id, m]));
 
+// แสดง version จาก sw.js จริง (ไม่ hardcode)
+fetch('sw.js')
+  .then((r) => r.text())
+  .then((txt) => {
+    const m = txt.match(/CACHE\s*=\s*['"]witch-cauldron-(v\d+)['"]/);
+    if (m) document.querySelector('.app-version').textContent = m[1];
+  })
+  .catch(() => {});
+
 // ---- app state กลาง (ต้นแบบเก็บใน memory; production ใช้ IndexedDB/Firebase) ----
 const app = {
   progress: loadProgress(), // โหลดจาก localStorage — { matraId: stars }
