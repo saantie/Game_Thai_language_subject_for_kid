@@ -363,29 +363,30 @@ export const audio = {
     }
   },
 
-  // เฉลยสะกดคำ: เล่นทีละพยางค์ตาม word.spell แล้วต่อด้วยคำเต็ม
-  // ทุกพยางค์ลอง MP3 ก่อน → fallback TTS ถ้าไฟล์ยังไม่มี
+  // เฉลยสะกดคำ: เล่นทีละพยางค์ตาม word.spell
+  // มี MP3 → เล่นทีละไฟล์ | ไม่มี MP3 → พูด TTS ทุกพยางค์ที่เหลือในคราวเดียว (ไม่กระตุก)
   _spellCancelled: false,
   playSpellReveal(word, done) {
     this._spellCancelled = false;
     this.sfx('chime');
     const parts = word.spell.slice();
-    const last  = parts.length - 1;
     let i = 0;
     const next = () => {
       if (this._spellCancelled) return;
-      if (i > last) return done && done();
-      const syll   = parts[i];
-      const isWord = (i === last);   // item สุดท้าย = คำเต็ม → โฟลเดอร์ word/
-      i++;
+      if (i >= parts.length) return done && done();
+      const idx    = i++;
+      const syll   = parts[idx];
+      const isWord = (idx === parts.length - 1);
       const folder = isWord ? 'word' : 'spell';
       const path   = `public/assets/audio/${folder}/${encodeURIComponent(syll)}.mp3`;
-      const after  = () => { if (!this._spellCancelled) setTimeout(next, 200); };
-      this._playMp3(
-        path,
-        () => this.speak(syll, { rate: 0.75, pitch: 1.0, onEnd: after }),  // TTS fallback
-        after
-      );
+      const afterMp3 = () => { if (!this._spellCancelled) setTimeout(next, 160); };
+      // TTS fallback: พูดพยางค์ที่เหลือทั้งหมดในครั้งเดียว → ไม่มี startup latency ซ้ำ
+      const ttsFallback = () => {
+        if (this._spellCancelled) return;
+        const remaining = parts.slice(idx).join(' ');
+        this.speak(remaining, { rate: 0.72, onEnd: done });
+      };
+      this._playMp3(path, ttsFallback, afterMp3);
     };
     setTimeout(next, 350);
   },
