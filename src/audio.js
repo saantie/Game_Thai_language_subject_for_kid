@@ -303,15 +303,18 @@ export const audio = {
   _playMp3(path, fallback, onEnd) {
     this.duck();
     const el = new Audio(path);
-    el.onended = () => { this.unduck(); onEnd && onEnd(); };
-    el.onerror = () => {
+    // settled flag ป้องกัน onerror + play().catch() ยิง fallback/onEnd 2 ครั้ง
+    let settled = false;
+    const resolve = (isError) => {
+      if (settled) return;
+      settled = true;
       this.unduck();
-      if (fallback) fallback(); else onEnd && onEnd();
+      if (isError) { if (fallback) fallback(); else onEnd && onEnd(); }
+      else          { onEnd && onEnd(); }
     };
-    el.play().catch(() => {
-      this.unduck();
-      if (fallback) fallback(); else onEnd && onEnd();
-    });
+    el.onended = () => resolve(false);
+    el.onerror = () => resolve(true);
+    el.play().catch(() => resolve(true));
   },
 
   // ---------- Voice (MP3 ก่อน, fallback TTS) ----------
