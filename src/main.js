@@ -12,7 +12,7 @@ import { loadProgress, saveProgress, clearProgress } from './storage.js';
 const MATRA_BY_ID = Object.fromEntries(MATRA.map((m) => [m.id, m]));
 
 // แสดง version จาก sw.js จริง (ไม่ hardcode)
-fetch('sw.js')
+fetch('sw.js?_=' + Date.now())
   .then((r) => r.text())
   .then((txt) => {
     const m = txt.match(/CACHE\s*=\s*['"]witch-cauldron-(v\d+)['"]/);
