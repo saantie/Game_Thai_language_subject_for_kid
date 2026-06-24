@@ -221,7 +221,7 @@ export function initScene(root) {
   // ลำดับเอฟเฟกต์กลายร่างเจ้าหญิง:
   //   1) หน่วงให้คะแนนวิ่งจบก่อน (~350ms)
   //   2) 3 ลำแสงยิงลงมา (700ms) พร้อมประกายดาวไหลลงตามลำแสง
-  //   3) วาบพื้น (ขาว→ทอง) + Magic Chime พร้อมกัน
+  //   2.5) Magic Chime เริ่มก่อนลำแสง 20ms
   //   4) swap รูปเจ้าหญิง → animation กลายร่าง + ประกายระยิบระยับ
   function _spawnPrincessFx(stage) {
     const BEAM_DELAY  = 80;
@@ -229,16 +229,18 @@ export function initScene(root) {
     const FLASH_T     = BEAM_DELAY + BEAM_DUR;     // 430ms
     const TRANSFORM_T = FLASH_T + 60;              // 490ms
 
-    // ── ① 3 ลำแสง + Magic Chime ──────────────────────────────────────────
+    // Magic Chime เริ่ม 20ms ก่อนลำแสง
+    setTimeout(() => {
+      const chime = new Audio('public/assets/audio/Magic%20Chime.mp3');
+      chime.volume = 0.85;
+      chime.play().catch(() => {});
+    }, BEAM_DELAY - 20);
+
+    // ── ① 3 ลำแสง ────────────────────────────────────────────────────────
     setTimeout(() => {
       const rect  = princessEl.getBoundingClientRect();
       const cx    = rect.left + rect.width / 2;
       const beamH = rect.bottom;                   // ยาวถึงเท้าเจ้าหญิง (จุด flash)
-
-      // เสียง Magic Chime เริ่มพร้อม beam
-      const chime = new Audio('public/assets/audio/Magic%20Chime.mp3');
-      chime.volume = 0.85;
-      chime.play().catch(() => {});
 
       const BEAMS = [
         { dx: 0,   w: 88, blur: 7, a: 0.95 },
