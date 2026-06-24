@@ -82,7 +82,7 @@ html, body {
   left: 3%;
   bottom: 8%;
   z-index: 2;
-  width: clamp(90px, 18vw, 180px);
+  width: clamp(225px, 45vw, 450px);
   height: auto;
   filter: drop-shadow(0 6px 16px rgba(80, 20, 160, 0.55));
   transform-origin: bottom center;
@@ -763,7 +763,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
   .vs.s4 { --r:58px; } .vs.s5 { --r:56px; } .vs.s6 { --r:50px; }
 
   /* แม่มดและ toast เล็กลงกันทับ voicebar */
-  .witch { width: clamp(60px, 14vh, 100px); bottom: 2%; }
+  .witch { width: clamp(150px, 35vh, 250px); bottom: 2%; }
   .toast {
     bottom: calc(2% + clamp(62px, 14vh, 102px));
     font-size: clamp(12px, 1.8vh, 15px);
