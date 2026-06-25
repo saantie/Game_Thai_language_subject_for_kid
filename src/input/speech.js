@@ -22,7 +22,7 @@ export function createRecognizer() {
       this._recog = recog;
       recog.lang = 'th-TH';
       recog.interimResults = false;
-      recog.maxAlternatives = 3;
+      recog.maxAlternatives = 5;
       this.listening = true;
 
       recog.onresult = (e) => {
@@ -60,16 +60,21 @@ export function createRecognizer() {
   };
 }
 
-// เทียบคำที่ได้ยินกับเป้าหมาย — ตัดวรรณยุกต์/ช่องว่าง แล้วเช็คว่ามีคำเป้าหมายอยู่
+// เทียบคำที่ได้ยินกับเป้าหมาย — normalize แล้วเช็ค substring
 export function matchWord(alternatives, target) {
-  const clean = (s) =>
+  const normalize = (s) =>
     (s || '')
-      .replace(/[่-๋์]/g, '') // วรรณยุกต์ + ทัณฑฆาต
+      .replace(/[็่้๊๋์]/g, '')  // ็ mai tai khu + วรรณยุกต์ 4 + ์ thanthakat
+      .replace(/ใ/g, 'ไ')          // ไ/ใ เสียงเดียวกัน
+      .replace(/ณ/g, 'น')          // ณ/น เสียงเดียวกัน
+      .replace(/ญ/g, 'ย')          // ญ/ย เสียงเดียวกัน
+      .replace(/ฬ/g, 'ล')          // ฬ/ล เสียงเดียวกัน
+      .replace(/ัม/g, 'ำ')         // อัม → อำ (STT อาจสะกดต่างกัน)
       .replace(/\s+/g, '')
       .trim();
-  const t = clean(target);
+  const t = normalize(target);
   return alternatives.some((a) => {
-    const c = clean(a);
+    const c = normalize(a);
     return c === t || c.includes(t) || t.includes(c);
   });
 }
