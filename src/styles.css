@@ -92,11 +92,9 @@ html, body {
 }
 @media (prefers-reduced-motion: no-preference) {
   .witch.idle  { animation: witchIdle 2.2s ease-in-out infinite; }
-  .witch.cast  { animation: witchCast 0.5s ease-in-out 2; }
   .witch.cheer { animation: witchCheer 0.45s ease-in-out 3; }
 }
 @keyframes witchIdle  { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-8px) rotate(2deg); } }
-@keyframes witchCast  { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-16px) rotate(-10deg) scale(1.08); } }
 @keyframes witchCheer { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-22px) scale(1.15); } }
 
 /* [2.5] เจ้าหญิง — กลายร่างตามความคืบหน้า, ด้านขวาของหม้อ */
