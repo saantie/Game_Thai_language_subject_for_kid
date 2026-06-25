@@ -729,12 +729,19 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     // แสดงเสมอ (display ควบคุมด้วย CSS .vb-hint { display: block })
   }
   function witchSay(text) {
+    scene.witch.play('talk');
     dom.toast.textContent = text;
     dom.toast.classList.add('show');
     clearTimeout(witchSay._t);
-    witchSay._t = setTimeout(() => dom.toast.classList.remove('show'), 3500);
+    witchSay._t = setTimeout(() => {
+      dom.toast.classList.remove('show');
+      scene.witch.revertTalk();
+    }, 3500);
   }
-  function showVoicebar() { show(dom.voicebar, true); }
+  function showVoicebar() {
+    show(dom.voicebar, true);
+    scene.witch.play('read');
+  }
   function hideVoicebar() { show(dom.voicebar, false); }
   function setState(s) { state = s; }
 

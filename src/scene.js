@@ -204,17 +204,33 @@ export function initScene(root) {
     ctx.restore();
   }
 
-  // ---------- แม่มด (DOM emoji + CSS) ----------
+  // ---------- แม่มด (DOM + CSS) ----------
+  const WITCH_IMG = {
+    idle:  'public/assets/images/wish%20happy.gif',
+    cast:  'public/assets/images/wish%20happy.gif',
+    cheer: 'public/assets/images/wish%20happy.gif',
+    read:  'public/assets/images/wish%20point%20up.gif',
+    talk:  'public/assets/images/wishtalk2.gif',
+  };
   let witchResetTimer = null;
+  let _witchBase = 'idle'; // state ล่าสุดที่ไม่ใช่ talk (ใช้ revertTalk คืนรูป)
   scene.witch = {
     play(state) {
       witchEl.className = 'witch ' + state;
+      witchEl.src = WITCH_IMG[state] || WITCH_IMG.idle;
+      if (state !== 'talk') _witchBase = state;
       clearTimeout(witchResetTimer);
       if (state === 'cheer' || state === 'cast') {
         witchResetTimer = setTimeout(() => {
           witchEl.className = 'witch idle';
+          witchEl.src = WITCH_IMG.idle;
+          _witchBase = 'idle';
         }, 900);
       }
+    },
+    revertTalk() {
+      witchEl.className = 'witch ' + _witchBase;
+      witchEl.src = WITCH_IMG[_witchBase] || WITCH_IMG.idle;
     },
   };
 

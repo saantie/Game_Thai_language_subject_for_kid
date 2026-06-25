@@ -1,6 +1,6 @@
 // sw.js — Service Worker: cache-first + stale-while-revalidate + auto-reload on update
 // bump CACHE string ทุกครั้งที่ deploy ใหม่ → browser detect diff → install → reload client
-const CACHE = 'witch-cauldron-v79';
+const CACHE = 'witch-cauldron-v80';
 
 const APP_SHELL = [
   './',
@@ -22,6 +22,8 @@ const APP_SHELL = [
   './src/ui/adultPage.js',
   './public/assets/images/glass%20ball.png',
   './public/assets/images/wish%20happy.gif',
+  './public/assets/images/wish%20point%20up.gif',
+  './public/assets/images/wishtalk2.gif',
   './public/assets/images/Arrow.png',
   './public/assets/images/book.png',
   './public/assets/images/book2.png',
