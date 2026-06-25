@@ -79,8 +79,8 @@ html, body {
 /* [2] แม่มด — DOM + CSS animation */
 .witch {
   position: fixed;
-  left: 3%;
-  bottom: 8%;
+  left: 0%;
+  bottom: 28%;
   z-index: 2;
   width: clamp(225px, 45vw, 450px);
   height: auto;
@@ -227,7 +227,7 @@ html, body {
 .toast {
   position: fixed;
   left: 12%;
-  bottom: calc(8% + clamp(90px, 18vw, 180px));
+  bottom: calc(28% + clamp(225px, 45vw, 450px));
   max-width: 60%;
   z-index: 5;
   background: #fff;
@@ -763,9 +763,9 @@ button { font-family: inherit; cursor: pointer; border: none; }
   .vs.s4 { --r:58px; } .vs.s5 { --r:56px; } .vs.s6 { --r:50px; }
 
   /* แม่มดและ toast เล็กลงกันทับ voicebar */
-  .witch { width: clamp(150px, 35vh, 250px); bottom: 2%; }
+  .witch { width: clamp(150px, 35vh, 250px); bottom: 28%; }
   .toast {
-    bottom: calc(2% + clamp(62px, 14vh, 102px));
+    bottom: calc(28% + clamp(150px, 35vh, 250px));
     font-size: clamp(12px, 1.8vh, 15px);
     padding: 7px 12px;
   }
