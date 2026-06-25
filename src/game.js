@@ -303,7 +303,6 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     audio.sfx('boom');
     spawnExplosion(scene.cauldron.cx, scene.cauldron.cy - scene.cauldron.ry * 0.2);
     blend = { text: currentWord.display, t0: performance.now() };
-    scene.witch.play('cast');
     // animation: BOOM flash → brew → reading
     scene.setCauldronFrame(5, 'flash'); // ลำแสงฟ้า — ปฏิกิริยาเวทมนตร์
     setTimeout(() => scene.setCauldronFrame(2), 380);  // น้ำเขียว รูน
