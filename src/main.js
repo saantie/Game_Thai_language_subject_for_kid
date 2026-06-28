@@ -129,19 +129,27 @@ window.addEventListener('popstate', (e) => {
 
 const videoOverlay = $('#videoOverlay');
 const introVideo   = $('#introVideo');
+const videoFade    = $('#videoFade');
 const skipVideoBtn = $('#skipVideoBtn');
+
+const FADE_MS = 650; // ความเร็ว fade to black
 
 function playIntroVideo(src, onDone) {
   let done = false;
   const finish = () => {
     if (done) return;
     done = true;
-    introVideo.pause();
-    introVideo.removeAttribute('src');
-    introVideo.load();
-    videoOverlay.classList.add('hidden');
-    videoOverlay.setAttribute('aria-hidden', 'true');
-    onDone();
+    // fade to black แล้วค่อยปิด overlay
+    videoFade.style.opacity = '1';
+    setTimeout(() => {
+      introVideo.pause();
+      introVideo.removeAttribute('src');
+      introVideo.load();
+      videoFade.style.opacity = '0'; // reset ไว้ใช้ครั้งต่อไป
+      videoOverlay.classList.add('hidden');
+      videoOverlay.setAttribute('aria-hidden', 'true');
+      onDone();
+    }, FADE_MS);
   };
 
   introVideo.src = src;

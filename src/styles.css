@@ -969,6 +969,14 @@ button { font-family: inherit; cursor: pointer; border: none; }
   height: 100%;
   object-fit: contain;
 }
+.video-fade {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  transition: opacity 0.65s ease;
+  pointer-events: none;
+}
 .btn-skip-video {
   position: absolute;
   bottom: 28px;
