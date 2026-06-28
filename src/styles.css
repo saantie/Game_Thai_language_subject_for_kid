@@ -984,8 +984,10 @@ button { font-family: inherit; cursor: pointer; border: none; }
 .intro-overlay.visible { opacity: 1; }
 .intro-overlay.hidden  { display: none; }
 .intro-witch-img {
-  width: clamp(200px, 55vw, 380px);
+  width: clamp(380px, 90vw, 700px);
+  max-height: 90vh;
   height: auto;
+  object-fit: contain;
   filter: drop-shadow(0 8px 32px rgba(109,40,217,0.7));
 }
 
