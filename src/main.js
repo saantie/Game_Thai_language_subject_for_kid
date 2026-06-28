@@ -102,6 +102,7 @@ function showScreen(which) {
   dom.resultScreen.classList.add('hidden');
   // สลับ BGM ตามหน้า — startLevelBgm() เรียกจาก call site เพื่อควบคุมจังหวะ
   if (which === 'level') {
+    audio.stopLevelBgm();   // level select เงียบ — BGM เริ่มเมื่อเกมเริ่ม
     buildLevelSelect($('#levelGrid'), app, (id) => startMatraById(id));
   } else if (which === 'game') {
     audio.stopLevelBgm();
@@ -197,11 +198,7 @@ audio.initVisibility();
 
 $('#startBtn').addEventListener('click', () => {
   audio.unlock();
-  // ขอ mic + เริ่ม level BGM หลัง TTS ทักทายพูดจบ — ป้องกัน audio session conflict บน iOS
-  audio.voice('greet', {
-    onText: witchSay,
-    onEnd: () => { audio.requestMicPermission(); },
-  });
+  audio.requestMicPermission();
   showScreen('level');
 });
 
