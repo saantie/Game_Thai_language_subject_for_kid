@@ -978,11 +978,8 @@ button { font-family: inherit; cursor: pointer; border: none; }
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  transition: opacity 0.45s ease;
 }
-.intro-overlay.visible { opacity: 1; }
-.intro-overlay.hidden  { display: none; }
+.intro-overlay.hidden { display: none; }
 .intro-witch-img {
   width: clamp(380px, 90vw, 700px);
   max-height: 90vh;

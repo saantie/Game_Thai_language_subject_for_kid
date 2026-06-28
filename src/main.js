@@ -135,18 +135,10 @@ const introOverlay  = $('#introOverlay');
 
 function showIntroSpeech(onDone) {
   introOverlay.classList.remove('hidden');
-  // rAF เพื่อให้ browser paint display:flex ก่อน opacity transition
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => introOverlay.classList.add('visible'));
-  });
   audio.voice('start_game', {
     onEnd: () => {
-      introOverlay.classList.remove('visible');
-      // รอ fade-out transition (0.45s) แล้วซ่อน
-      setTimeout(() => {
-        introOverlay.classList.add('hidden');
-        onDone();
-      }, 460);
+      introOverlay.classList.add('hidden');
+      onDone();
     },
   });
 }
