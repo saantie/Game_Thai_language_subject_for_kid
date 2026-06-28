@@ -124,6 +124,15 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     }
   }
 
+  function scoreToEvilWishStage(s) {
+    if (s >= 650) return 5;
+    if (s >= 550) return 4;
+    if (s >= 450) return 3;
+    if (s >= 250) return 2;
+    if (s >= 150) return 1;
+    return 0;
+  }
+
   // ---------- Round flow ----------
   function startMatra(m) {
     matra = m;
@@ -131,6 +140,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     perfectCount = 0;
     score = 0;
     updateScore();
+    scene.initCharacter(m.character);
     dom.hudName.textContent = m.name;
     show(dom.hud, true);
 
@@ -196,6 +206,9 @@ export function createGame({ scene, audio, app, dom, onExit }) {
         scorePillEl.classList.remove('bump');
         void scorePillEl.offsetWidth;
         scorePillEl.classList.add('bump');
+      }
+      if (matra && matra.character === 'evil_wish') {
+        scene.setEvilWishStage(scoreToEvilWishStage(score));
       }
     } else {
       dom.hudScore.textContent = score;
@@ -499,7 +512,11 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     const stars = ratio >= 1 ? 3 : ratio >= 0.5 ? 2 : 1;
     app.progress[matra.id] = Math.max(app.progress[matra.id] || 0, stars);
 
-    scene.setPrincessStage(8); // เจ้าหญิงกลับคืนสู่ร่างสมบูรณ์!
+    if (matra.character === 'evil_wish') {
+      scene.setEvilWishStage(5);
+    } else {
+      scene.setPrincessStage(8); // เจ้าหญิงกลับคืนสู่ร่างสมบูรณ์!
+    }
 
     running = false;
     cancelAnimationFrame(rafId);

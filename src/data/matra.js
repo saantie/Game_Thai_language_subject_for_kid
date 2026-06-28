@@ -6,6 +6,7 @@ export const MATRA = [
     name: 'แม่ ก กา',
     mode: 'TWO_PART',
     video: 'public/video/Movie%201.mp4',  // วิดีโอนำเข้าสู่มาตรานี้
+    character: 'evil_wish',               // ใช้ Evil wish แทนเจ้าหญิง
     sessionSize: 8, // เล่นทีละ 8 ตัวสุ่ม — เปลี่ยนทุกรอบ
     sara: 'า',
     // เฉพาะพยัญชนะที่ + า แล้วเป็น "คำจริงที่มีความหมาย" และ STT (th-TH) รู้จัก

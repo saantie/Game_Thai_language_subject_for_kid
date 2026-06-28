@@ -1,6 +1,6 @@
 // sw.js — Service Worker: cache-first + stale-while-revalidate + auto-reload on update
 // bump CACHE string ทุกครั้งที่ deploy ใหม่ → browser detect diff → install → reload client
-const CACHE = 'witch-cauldron-v93';
+const CACHE = 'witch-cauldron-v94';
 
 const APP_SHELL = [
   './',
@@ -27,6 +27,17 @@ const APP_SHELL = [
   './public/assets/images/Arrow.png',
   './public/assets/images/book.png',
   './public/assets/images/book2.png',
+  './public/assets/images/Evil%20wish/0.gif',
+  './public/assets/images/Evil%20wish/1.gif',
+  './public/assets/images/Evil%20wish/2.gif',
+  './public/assets/images/Evil%20wish/3.gif',
+  './public/assets/images/Evil%20wish/4.gif',
+  './public/assets/images/Evil%20wish/5.gif',
+  './public/assets/images/Evil%20wish/0-1.gif',
+  './public/assets/images/Evil%20wish/1-2.gif',
+  './public/assets/images/Evil%20wish/2%20-%203.gif',
+  './public/assets/images/Evil%20wish/3-4.gif',
+  './public/assets/images/Evil%20wish/4-5.gif',
   './public/assets/images/princess_1.png',
   './public/assets/images/princess_2.png',
   './public/assets/images/princess_3.png',

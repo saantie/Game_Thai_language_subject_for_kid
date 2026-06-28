@@ -52,6 +52,25 @@ export function initScene(root) {
   // preload frames 2-5 ล่วงหน้า กัน flicker ตอนสลับ (frame 1 โหลดจาก HTML แล้ว)
   [2,3,4,5].forEach((n) => { const img = new Image(); img.src = `public/assets/images/cauldron${n}.png`; });
 
+  // ---------- Evil wish character ----------
+  const EVIL_WISH_DIR = 'public/assets/images/Evil%20wish/';
+  const EVIL_WISH_STATIC = [0,1,2,3,4,5].map(n => `${EVIL_WISH_DIR}${n}.gif`);
+  const EVIL_WISH_TRANS = {
+    '0-1': `${EVIL_WISH_DIR}0-1.gif`,
+    '1-2': `${EVIL_WISH_DIR}1-2.gif`,
+    '2-3': `${EVIL_WISH_DIR}2%20-%203.gif`,
+    '3-4': `${EVIL_WISH_DIR}3-4.gif`,
+    '4-5': `${EVIL_WISH_DIR}4-5.gif`,
+  };
+  const EVIL_WISH_TRANS_MS = 1600;
+  // preload all evil wish GIFs
+  [...EVIL_WISH_STATIC, ...Object.values(EVIL_WISH_TRANS)].forEach(src => {
+    new Image().src = src;
+  });
+  let _character  = 'princess';
+  let _evilStage  = -1;
+  let _transTimer = null;
+
   function drawScene() {
     const W = scene.W,
       H = scene.H;
@@ -423,8 +442,44 @@ export function initScene(root) {
     }, TRANSFORM_T);
   }
 
+  // เริ่มต้น character สำหรับมาตราใหม่ — 'evil_wish' หรือ 'princess'
+  scene.initCharacter = function(charType) {
+    _character = charType || 'princess';
+    _evilStage = -1;
+    _princessStage = 0;
+    clearTimeout(_transTimer);
+    if (princessEl) princessEl.classList.remove('transform');
+    if (_character === 'evil_wish') {
+      if (princessEl) princessEl.src = EVIL_WISH_STATIC[0];
+      _evilStage = 0;
+    } else {
+      if (princessEl) princessEl.src = 'public/assets/images/princess_1.png';
+    }
+  };
+
+  // เปลี่ยน Evil wish stage 0–5 ตามคะแนน พร้อม transition GIF 1 loop
+  scene.setEvilWishStage = function(n) {
+    if (!princessEl || _character !== 'evil_wish') return;
+    const stage = Math.max(0, Math.min(5, n));
+    if (stage === _evilStage) return;
+    const from = _evilStage;
+    _evilStage = stage;
+    clearTimeout(_transTimer);
+    const transKey = `${from}-${stage}`;
+    const transSrc = (from >= 0 && stage === from + 1) ? EVIL_WISH_TRANS[transKey] : null;
+    if (transSrc) {
+      princessEl.src = transSrc;
+      _transTimer = setTimeout(() => {
+        if (_evilStage === stage) princessEl.src = EVIL_WISH_STATIC[stage];
+      }, EVIL_WISH_TRANS_MS);
+    } else {
+      princessEl.src = EVIL_WISH_STATIC[stage];
+    }
+  };
+
   // เปลี่ยน stage เจ้าหญิง 1–8 พร้อม flash เวทมนตร์
   scene.setPrincessStage = function (n) {
+    if (_character === 'evil_wish') return; // ใช้ setEvilWishStage แทน
     if (!princessEl) return;
     const stage = Math.max(1, Math.min(8, n));
     if (stage === _princessStage) return;
@@ -442,7 +497,8 @@ export function initScene(root) {
 
   // เรียกตอนออกจากเกม/เริ่มมาตราใหม่ — ล้าง DOM elements ที่ค้างอยู่
   scene.stopPrincessFx = function () {
-    document.querySelectorAll('.px-beam,.px-beam-spark,.px-flash,.px-ground-spark,.px-twinkle').forEach((e) => e.remove());
+    clearTimeout(_transTimer);
+    document.querySelectorAll('.px-beam,.px-beam-spark,.px-beam-tip,.px-beam-drip,.px-flash,.px-ground-spark,.px-twinkle').forEach((e) => e.remove());
     if (princessEl) princessEl.classList.remove('transform');
   };
 
