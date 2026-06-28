@@ -139,13 +139,24 @@ function playIntroVideo(src, onDone) {
   const finish = () => {
     if (done) return;
     done = true;
-    // fade to black แล้วค่อยปิด overlay
+    // fade ภาพ + เสียงพร้อมกัน
     videoFade.style.opacity = '1';
+    const startVol = introVideo.volume || 1;
+    const STEPS = 20;
+    const stepMs = FADE_MS / STEPS;
+    let step = 0;
+    const fadeAudio = setInterval(() => {
+      step++;
+      introVideo.volume = Math.max(0, startVol * (1 - step / STEPS));
+      if (step >= STEPS) clearInterval(fadeAudio);
+    }, stepMs);
     setTimeout(() => {
+      clearInterval(fadeAudio);
       introVideo.pause();
+      introVideo.volume = 1;           // reset ไว้ใช้ครั้งต่อไป
       introVideo.removeAttribute('src');
       introVideo.load();
-      videoFade.style.opacity = '0'; // reset ไว้ใช้ครั้งต่อไป
+      videoFade.style.opacity = '0';
       videoOverlay.classList.add('hidden');
       videoOverlay.setAttribute('aria-hidden', 'true');
       onDone();
