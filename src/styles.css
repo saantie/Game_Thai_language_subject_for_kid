@@ -224,16 +224,16 @@ html, body {
 /* แม่มดพูด (toast) — speech bubble */
 .toast {
   position: fixed;
-  right: 52%;  /* ขอบขวาบอลลูนอยู่ที่ 48% จากซ้าย — ฝั่งแม่มด (ซ้ายกลาง) */
-  /* วางระดับปากแม่มด: 68% ของความสูง GIF นับจากฐาน */
-  bottom: calc(20% + clamp(170px, 34vw, 338px) * 0.68);
+  right: 52%;  /* ขอบขวาบอลลูนฝั่งแม่มด */
+  /* เหนือหัวแม่มด: ฐาน 20% + ความสูง GIF (≈ width×1.0) + ช่องว่าง */
+  bottom: calc(20% + clamp(225px, 45vw, 450px) + 12px);
   max-width: min(44vw, 220px);
   z-index: 5;
 
   background: linear-gradient(145deg, #7c3aed 0%, #4c1d95 100%);
   color: #fff;
   padding: 9px 14px 9px 12px;
-  border-radius: 18px 18px 4px 18px;   /* มุมล่างขวาแหลม — จุดต่อหาง */
+  border-radius: 18px 18px 18px 4px;   /* มุมล่างซ้ายแหลม — จุดต่อหาง */
   font-family: 'Mali', 'Sarabun', cursive;
   font-size: clamp(13px, 2vw, 16px);
   font-weight: 700;
@@ -248,12 +248,12 @@ html, body {
               transform 0.28s cubic-bezier(0.34, 1.26, 0.64, 1);
   pointer-events: none;
 }
-/* หางบอลลูนมุมล่างขวา ชี้ลงซ้ายหาปากแม่มด */
+/* หางบอลลูนมุมล่างซ้าย ชี้ลงซ้ายหาปากแม่มดที่อยู่ใต้บอลลูน */
 .toast::after {
   content: '';
   position: absolute;
   bottom: -9px;
-  right: 14px;
+  left: 18px;
   border: 9px solid transparent;
   border-top-color: #4c1d95;
   border-bottom: 0;
@@ -783,7 +783,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
   .witch { width: clamp(150px, 35vh, 250px); bottom: 20%; }
   .toast {
     right: 52%;
-    bottom: calc(20% + clamp(112px, 26vh, 187px) * 0.68);
+    bottom: calc(20% + clamp(150px, 35vh, 250px) + 8px);
     font-size: clamp(12px, 1.8vh, 15px);
     padding: 7px 12px;
   }
