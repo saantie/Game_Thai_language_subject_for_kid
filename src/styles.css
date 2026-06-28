@@ -952,3 +952,36 @@ button { font-family: inherit; cursor: pointer; border: none; }
   .witch, .btn-mic.listening,
   .glass-ball-img, .gb-shine, .gb-spark, .gb-outer-glow { animation: none !important; }
 }
+
+/* ---- วิดีโอ overlay ---- */
+.video-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.video-overlay.hidden { display: none; }
+.video-overlay video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.btn-skip-video {
+  position: absolute;
+  bottom: 28px;
+  right: 22px;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  border: 1.5px solid rgba(255,255,255,0.35);
+  border-radius: 20px;
+  padding: 7px 18px;
+  font-family: 'Mali', 'Sarabun', cursive;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  backdrop-filter: blur(4px);
+}

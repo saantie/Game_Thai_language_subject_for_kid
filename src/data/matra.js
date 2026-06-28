@@ -5,6 +5,7 @@ export const MATRA = [
     id: 'kaka',
     name: 'แม่ ก กา',
     mode: 'TWO_PART',
+    video: 'public/video/Movie%201.mp4',  // วิดีโอนำเข้าสู่มาตรานี้
     sessionSize: 8, // เล่นทีละ 8 ตัวสุ่ม — เปลี่ยนทุกรอบ
     sara: 'า',
     // เฉพาะพยัญชนะที่ + า แล้วเป็น "คำจริงที่มีความหมาย" และ STT (th-TH) รู้จัก

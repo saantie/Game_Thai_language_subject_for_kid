@@ -135,6 +135,12 @@
       </div>
     </div>
 
+    <!-- วิดีโอนำเข้าสู่มาตรา — แสดงระหว่างหน้าเลือกมาตรากับหน้าเกม -->
+    <div id="videoOverlay" class="video-overlay hidden" aria-hidden="true">
+      <video id="introVideo" playsinline webkit-playsinline preload="none"></video>
+      <button id="skipVideoBtn" class="btn-skip-video">ข้าม ›</button>
+    </div>
+
     <script type="module" src="src/main.js"></script>
     <!-- ปุ่มรีเซ็ต progress — แสดงเฉพาะหน้าเลือกมาตรา, มุมล่างขวา -->
     <button id="resetProgressBtn" class="btn-reset-game hidden">↺ รีเซ็ตเกม</button>

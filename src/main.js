@@ -129,11 +129,43 @@ window.addEventListener('popstate', (e) => {
   _inPopstate = false;
 });
 
+const videoOverlay = $('#videoOverlay');
+const introVideo   = $('#introVideo');
+const skipVideoBtn = $('#skipVideoBtn');
+
+function playIntroVideo(src, onDone) {
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    introVideo.pause();
+    introVideo.removeAttribute('src');
+    introVideo.load();          // ปล่อย memory buffer
+    videoOverlay.classList.add('hidden');
+    videoOverlay.setAttribute('aria-hidden', 'true');
+    onDone();
+  };
+  introVideo.src = src;
+  videoOverlay.classList.remove('hidden');
+  videoOverlay.setAttribute('aria-hidden', 'false');
+  introVideo.onended = finish;
+  skipVideoBtn.onclick = finish;
+  introVideo.play().catch(finish); // autoplay blocked → ข้ามวิดีโอทันที
+}
+
 function startMatraById(id) {
   const matra = MATRA_BY_ID[id];
-  showScreen('game'); // stopLevelBgm เรียกใน showScreen
-  if (app.settings.bgm) audio.setBgmEnabled(true);
-  game.startMatra(matra);
+  const launch = () => {
+    showScreen('game');
+    if (app.settings.bgm) audio.setBgmEnabled(true);
+    game.startMatra(matra);
+  };
+  if (matra.video) {
+    audio.stopLevelBgm();
+    playIntroVideo(matra.video, launch);
+  } else {
+    launch();
+  }
 }
 
 // ---- wiring buttons ----
