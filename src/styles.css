@@ -121,11 +121,13 @@ html, body {
   animation: princessTransform 1.4s ease-in-out forwards;
 }
 
-/* Evil wish — ใหญ่กว่าแม่มดน้อย + กลิ่นอายมืดน่ากลัว */
+/* Evil wish — ใหญ่กว่าแม่มดน้อย + อยู่มุมล่างขวาออกจากแนวหม้อ */
 .princess-img.evil-wish-mode {
   right: 0;
-  bottom: 12%;
-  width: clamp(260px, 52vw, 540px);
+  bottom: 0;
+  width: auto;
+  height: clamp(420px, 85vh, 860px);
+  max-width: 60vw;
   filter: drop-shadow(0 8px 28px rgba(180, 0, 80, 0.65));
 }
 @keyframes evilTransform {
