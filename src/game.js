@@ -146,6 +146,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       words = shuffle(m.words.slice());
     }
 
+    audio.voice('start_game', { onText: witchSay });
     startRound();
     if (!running) { running = true; loop(); }
   }

@@ -66,7 +66,6 @@ const game = createGame({
   onExit: () => {
     saveProgress(app.progress); // บันทึกดาวลง localStorage
     showScreen('level');
-    if (audio.ready) audio.startLevelBgm();
   },
 });
 
@@ -121,10 +120,8 @@ window.addEventListener('popstate', (e) => {
     // game state ไม่สามารถ resume — เปลี่ยน entry นี้เป็น level แทน
     history.replaceState({ screen: 'level' }, '');
     showScreen('level');
-    if (audio.ready) audio.startLevelBgm();
   } else {
     showScreen(to);
-    if (to === 'level' && audio.ready) audio.startLevelBgm();
   }
   _inPopstate = false;
 });
@@ -203,10 +200,7 @@ $('#startBtn').addEventListener('click', () => {
   // ขอ mic + เริ่ม level BGM หลัง TTS ทักทายพูดจบ — ป้องกัน audio session conflict บน iOS
   audio.voice('greet', {
     onText: witchSay,
-    onEnd: () => {
-      audio.requestMicPermission();
-      if (audio.ready) audio.startLevelBgm();
-    },
+    onEnd: () => { audio.requestMicPermission(); },
   });
   showScreen('level');
 });
@@ -257,7 +251,6 @@ $('#levelAdultBtn').addEventListener('click', () => openAdultGate(app, adultScre
 $('#backBtn').addEventListener('click', () => {
   game.stop();
   showScreen('level');
-  if (audio.ready) audio.startLevelBgm();
 });
 
 function witchSay(text) {
