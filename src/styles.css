@@ -125,9 +125,8 @@ html, body {
 .princess-img.evil-wish-mode {
   right: 0;
   bottom: 0;
-  width: auto;
-  height: clamp(420px, 85vh, 860px);
-  max-width: 60vw;
+  width: clamp(440px, 100vw, 900px);
+  height: auto;   /* รักษา aspect ratio ต้นฉบับ */
   filter: drop-shadow(0 8px 28px rgba(180, 0, 80, 0.65));
 }
 @keyframes evilTransform {
