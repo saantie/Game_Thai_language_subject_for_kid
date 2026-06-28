@@ -258,7 +258,7 @@ export function initScene(root) {
   //   2) 3 ลำแสงยิงลงมา (700ms) พร้อมประกายดาวไหลลงตามลำแสง
   //   2.5) Magic Chime เริ่มก่อนลำแสง 20ms
   //   4) swap รูปเจ้าหญิง → animation กลายร่าง + ประกายระยิบระยับ
-  function _spawnPrincessFx(stage) {
+  function _spawnPrincessFx(stage, swapSrc) {
     const BEAM_DELAY  = 80;
     const BEAM_DUR    = 350;
     const FLASH_T     = BEAM_DELAY + BEAM_DUR;     // 430ms
@@ -406,17 +406,20 @@ export function initScene(root) {
 
     // ── ③ swap รูป + animation กลายร่าง + ประกายระยิบระยับ ───────────────
     setTimeout(() => {
-      princessEl.src = `public/assets/images/princess_${stage}.png`;
+      princessEl.src = swapSrc !== undefined
+        ? swapSrc
+        : `public/assets/images/princess_${stage}.png`;
     }, FLASH_T + 30);
 
     setTimeout(() => {
       const rect  = princessEl.getBoundingClientRect();
       const cx    = rect.left + rect.width / 2;
       const midY  = rect.top  + rect.height / 2;
+      const animClass = _character === 'evil_wish' ? 'evil-transform' : 'transform';
 
-      princessEl.classList.remove('transform');
+      princessEl.classList.remove('transform', 'evil-transform');
       void princessEl.offsetWidth;
-      princessEl.classList.add('transform');
+      princessEl.classList.add(animClass);
 
       const TW = ['✦', '✧', '★', '✩', '✦', '✧', '★', '✩', '✦', '✧'];
       for (let i = 0; i < 10; i++) {
@@ -436,7 +439,7 @@ export function initScene(root) {
         document.body.appendChild(tw);
       }
       setTimeout(() => {
-        princessEl.classList.remove('transform');
+        princessEl.classList.remove('transform', 'evil-transform');
         document.querySelectorAll('.px-twinkle').forEach((e) => e.remove());
       }, 800);
     }, TRANSFORM_T);
@@ -448,7 +451,10 @@ export function initScene(root) {
     _evilStage = -1;
     _princessStage = 0;
     clearTimeout(_transTimer);
-    if (princessEl) princessEl.classList.remove('transform');
+    if (princessEl) {
+      princessEl.classList.remove('transform', 'evil-transform');
+      princessEl.classList.toggle('evil-wish-mode', _character === 'evil_wish');
+    }
     if (_character === 'evil_wish') {
       if (princessEl) princessEl.src = EVIL_WISH_STATIC[0];
       _evilStage = 0;
@@ -465,15 +471,17 @@ export function initScene(root) {
     const from = _evilStage;
     _evilStage = stage;
     clearTimeout(_transTimer);
+    const staticSrc = EVIL_WISH_STATIC[stage];
     const transKey = `${from}-${stage}`;
     const transSrc = (from >= 0 && stage === from + 1) ? EVIL_WISH_TRANS[transKey] : null;
     if (transSrc) {
+      // เล่น transition GIF 1 loop แล้วจึงยิงลำแสง + swap static
       princessEl.src = transSrc;
       _transTimer = setTimeout(() => {
-        if (_evilStage === stage) princessEl.src = EVIL_WISH_STATIC[stage];
+        if (_evilStage === stage) _spawnPrincessFx(stage, staticSrc);
       }, EVIL_WISH_TRANS_MS);
     } else {
-      princessEl.src = EVIL_WISH_STATIC[stage];
+      _spawnPrincessFx(stage, staticSrc);
     }
   };
 
@@ -499,7 +507,7 @@ export function initScene(root) {
   scene.stopPrincessFx = function () {
     clearTimeout(_transTimer);
     document.querySelectorAll('.px-beam,.px-beam-spark,.px-beam-tip,.px-beam-drip,.px-flash,.px-ground-spark,.px-twinkle').forEach((e) => e.remove());
-    if (princessEl) princessEl.classList.remove('transform');
+    if (princessEl) princessEl.classList.remove('transform', 'evil-transform');
   };
 
   scene.onResize = function (cb) {

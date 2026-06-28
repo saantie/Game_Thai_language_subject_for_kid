@@ -121,6 +121,24 @@ html, body {
   animation: princessTransform 1.4s ease-in-out forwards;
 }
 
+/* Evil wish — ใหญ่กว่าแม่มดน้อย + กลิ่นอายมืดน่ากลัว */
+.princess-img.evil-wish-mode {
+  right: 0;
+  bottom: 12%;
+  width: clamp(260px, 52vw, 540px);
+  filter: drop-shadow(0 8px 28px rgba(180, 0, 80, 0.65));
+}
+@keyframes evilTransform {
+  0%   { filter: drop-shadow(0 8px 28px rgba(180,0,80,0.65))  brightness(1); }
+  20%  { filter: drop-shadow(0 0 50px rgba(255,0,100,0.9))    brightness(2.0); }
+  48%  { filter: drop-shadow(0 0 80px rgba(200,0,200,1))      brightness(3.0); }
+  72%  { filter: drop-shadow(0 0 35px rgba(150,0,150,0.7))    brightness(1.6); }
+  100% { filter: drop-shadow(0 8px 28px rgba(180,0,80,0.65))  brightness(1); }
+}
+.princess-img.evil-transform {
+  animation: evilTransform 1.4s ease-in-out forwards;
+}
+
 /* เอฟเฟกต์กลายร่างเจ้าหญิง: 3 ลำแสง + วาบพื้น + ประกาย */
 .px-beam {
   position: fixed;
