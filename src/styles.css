@@ -244,8 +244,8 @@ html, body {
 .toast {
   position: fixed;
   right: 52%;  /* ขอบขวาบอลลูนฝั่งแม่มด */
-  /* เหนือหัวแม่มด: ฐาน 20% + ความสูง GIF (≈ width×1.0) + ช่องว่าง */
-  bottom: calc(20% + clamp(225px, 45vw, 450px) + 12px);
+  /* ปลายหาง (tip) ที่ระดับหมวก: ฐาน 20% + ความสูงจริง GIF (width×1.3) + หาง 9px */
+  bottom: calc(20% + clamp(293px, 58.5vw, 585px) + 9px);
   max-width: min(44vw, 220px);
   z-index: 5;
 
@@ -802,7 +802,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
   .witch { width: clamp(150px, 35vh, 250px); bottom: 20%; }
   .toast {
     right: 52%;
-    bottom: calc(20% + clamp(150px, 35vh, 250px) + 8px);
+    bottom: calc(20% + clamp(195px, 45.5vh, 325px) + 9px);
     font-size: clamp(12px, 1.8vh, 15px);
     padding: 7px 12px;
   }
