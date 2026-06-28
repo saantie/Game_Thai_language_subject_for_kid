@@ -127,10 +127,29 @@ window.addEventListener('popstate', (e) => {
   _inPopstate = false;
 });
 
-const videoOverlay = $('#videoOverlay');
-const introVideo   = $('#introVideo');
-const videoFade    = $('#videoFade');
-const skipVideoBtn = $('#skipVideoBtn');
+const videoOverlay  = $('#videoOverlay');
+const introVideo    = $('#introVideo');
+const videoFade     = $('#videoFade');
+const skipVideoBtn  = $('#skipVideoBtn');
+const introOverlay  = $('#introOverlay');
+
+function showIntroSpeech(onDone) {
+  introOverlay.classList.remove('hidden');
+  // rAF เพื่อให้ browser paint display:flex ก่อน opacity transition
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => introOverlay.classList.add('visible'));
+  });
+  audio.voice('start_game', {
+    onEnd: () => {
+      introOverlay.classList.remove('visible');
+      // รอ fade-out transition (0.45s) แล้วซ่อน
+      setTimeout(() => {
+        introOverlay.classList.add('hidden');
+        onDone();
+      }, 460);
+    },
+  });
+}
 
 const FADE_MS = 650; // ความเร็ว fade to black
 
@@ -193,11 +212,14 @@ function playIntroVideo(src, onDone) {
 
 function startMatraById(id) {
   const matra = MATRA_BY_ID[id];
-  const launch = () => {
+  const startGame = () => {
     showScreen('game');
     if (app.settings.bgm) audio.setBgmEnabled(true);
     game.startMatra(matra);
   };
+  const launch = matra.video
+    ? () => showIntroSpeech(startGame)   // วิดีโอจบ → หน้าม่วงพูด → เกม
+    : startGame;                          // ไม่มีวิดีโอ → เกมทันที
   if (matra.video) {
     audio.stopLevelBgm();
     playIntroVideo(matra.video, launch);

@@ -969,6 +969,26 @@ button { font-family: inherit; cursor: pointer; border: none; }
   height: 100%;
   object-fit: contain;
 }
+/* หน้าม่วงแม่มดพูด intro */
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 190;
+  background: linear-gradient(160deg, #6d28d9 0%, #4c1d95 55%, #2e1065 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+.intro-overlay.visible { opacity: 1; }
+.intro-overlay.hidden  { display: none; }
+.intro-witch-img {
+  width: clamp(200px, 55vw, 380px);
+  height: auto;
+  filter: drop-shadow(0 8px 32px rgba(109,40,217,0.7));
+}
+
 .video-fade {
   position: absolute;
   inset: 0;
