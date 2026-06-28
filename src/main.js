@@ -140,17 +140,38 @@ function playIntroVideo(src, onDone) {
     done = true;
     introVideo.pause();
     introVideo.removeAttribute('src');
-    introVideo.load();          // ปล่อย memory buffer
+    introVideo.load();
     videoOverlay.classList.add('hidden');
     videoOverlay.setAttribute('aria-hidden', 'true');
     onDone();
   };
+
   introVideo.src = src;
-  videoOverlay.classList.remove('hidden');
-  videoOverlay.setAttribute('aria-hidden', 'false');
+  introVideo.muted = false;
+  introVideo.onerror = finish;   // format/network error → ข้าม
   introVideo.onended = finish;
   skipVideoBtn.onclick = finish;
-  introVideo.play().catch(finish); // autoplay blocked → ข้ามวิดีโอทันที
+  videoOverlay.classList.remove('hidden');
+  videoOverlay.setAttribute('aria-hidden', 'false');
+
+  // รอโหลดพอเล่น แล้วค่อย play (ป้องกัน play before data)
+  const tryPlay = () =>
+    introVideo.play().catch(() => {
+      // autoplay blocked with sound → ลอง muted
+      introVideo.muted = true;
+      return introVideo.play().catch(finish); // ยังเล่นไม่ได้ → ข้าม
+    });
+
+  if (introVideo.readyState >= 3) {   // HAVE_FUTURE_DATA — โหลดพอแล้ว
+    tryPlay();
+  } else {
+    introVideo.addEventListener('canplay', function h() {
+      introVideo.removeEventListener('canplay', h);
+      tryPlay();
+    });
+    // timeout 10 วิ กัน network ช้า / offline
+    setTimeout(() => { if (!done) finish(); }, 10000);
+  }
 }
 
 function startMatraById(id) {
