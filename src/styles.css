@@ -129,6 +129,12 @@ html, body {
   height: auto;
   filter: drop-shadow(0 8px 28px rgba(180, 0, 80, 0.65));
 }
+@media (orientation: portrait) {
+  /* แนวตั้ง: แม่มดน้อยอยู่ right:50% (ขอบขวา=50vw) → ต้อง width<47vw ไม่ทับ */
+  .princess-img.evil-wish-mode {
+    width: clamp(130px, 44vw, 380px);
+  }
+}
 @keyframes evilTransform {
   0%   { filter: drop-shadow(0 8px 28px rgba(180,0,80,0.65))  brightness(1); }
   20%  { filter: drop-shadow(0 0 50px rgba(255,0,100,0.9))    brightness(2.0); }
