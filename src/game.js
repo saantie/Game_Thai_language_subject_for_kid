@@ -612,11 +612,17 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   }
 
   // ---------- Loop / render ----------
+  let _lastTick = 0;
   function loop() {
     if (!running) return;
+    rafId = requestAnimationFrame(loop);
+    // IDLE + ไม่มี particles → throttle 30fps (ฟองแค่ bob เบาๆ ไม่ต้อง 60fps)
+    const now = performance.now();
+    const isQuiet = state === 'IDLE' && particles.length === 0 && !blend;
+    if (isQuiet && now - _lastTick < 33) return;
+    _lastTick = now;
     update();
     render();
-    rafId = requestAnimationFrame(loop);
   }
 
   function update() {
@@ -691,16 +697,11 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     fx.textBaseline = 'middle';
     fx.shadowOffsetX = 0;
     fx.shadowOffsetY = 0;
-    // Layer 1 — amber glow กว้าง (shimmer ตาม pulse)
-    fx.shadowColor = `rgba(255,160,0,${0.55 + pulse * 0.30})`;
-    fx.shadowBlur = 14 + pulse * 10;
-    fx.fillStyle = '#FFD700';
+    fx.shadowColor = 'rgba(255,200,60,0.9)';
+    fx.shadowBlur = 8;
+    fx.fillStyle = '#FFF0A0';
     fx.fillText(b.letter, b.x, b.y);
-    // Layer 2 — bright gold บน (blur แน่น)
-    fx.shadowColor = 'rgba(255,248,160,0.95)';
-    fx.shadowBlur = 4;
-    fx.fillStyle = '#FFF4A0';
-    fx.fillText(b.letter, b.x, b.y);
+    fx.shadowBlur = 0;
     fx.restore();
   }
 

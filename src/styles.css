@@ -41,7 +41,7 @@ html, body {
   user-select: none;
   filter: drop-shadow(0 8px 28px rgba(80, 30, 200, 0.55));
   transform-origin: bottom center;
-  will-change: transform, filter;
+  will-change: transform;
 }
 @media (prefers-reduced-motion: no-preference) {
   .cauldron-img.flash {
@@ -125,7 +125,7 @@ html, body {
 .princess-img.evil-wish-mode {
   right: 0;
   bottom: 20%;
-  width: clamp(440px, 100vw, 900px);
+  width: clamp(300px, 65vw, 650px);
   height: auto;
   filter: drop-shadow(0 8px 28px rgba(180, 0, 80, 0.65));
 }
@@ -699,14 +699,6 @@ button { font-family: inherit; cursor: pointer; border: none; }
 .magic-orbs span:nth-child(4)  { right: 2%; width:20px; height:20px; background:#0099ff; animation: orbRight 15s -5s  infinite, orbPulse 2.0s -0.8s ease-in-out infinite; }
 .magic-orbs span:nth-child(5)  { right: 6%; width:13px; height:13px; background:#00ffcc; animation: orbRight 11s -9s  infinite, orbPulse 1.6s -1.5s ease-in-out infinite; }
 .magic-orbs span:nth-child(6)  { right: 1%; width:24px; height:24px; background:#22ff66; animation: orbRight 18s -1s  infinite, orbPulse 2.7s -0.3s ease-in-out infinite; }
-/* ขอบล่าง — ขวาไปซ้าย */
-.magic-orbs span:nth-child(7)  { bottom:3%; width:18px; height:18px; background:#33ccff; animation: orbBottom 14s -4s  infinite, orbPulse 2.2s -0.9s ease-in-out infinite; }
-.magic-orbs span:nth-child(8)  { bottom:8%; width:12px; height:12px; background:#00ff88; animation: orbBottom 9s  -8s  infinite, orbPulse 1.7s -1.8s ease-in-out infinite; }
-.magic-orbs span:nth-child(9)  { bottom:1%; width:20px; height:20px; background:#0077ff; animation: orbBottom 16s -11s infinite, orbPulse 2.5s -0.2s ease-in-out infinite; }
-/* ขอบซ้าย — ล่างขึ้นบน */
-.magic-orbs span:nth-child(10) { left: 2%;  width:16px; height:16px; background:#00ffbb; animation: orbLeft  12s -6s  infinite, orbPulse 1.9s -1.1s ease-in-out infinite; }
-.magic-orbs span:nth-child(11) { left: 6%;  width:22px; height:22px; background:#0055ff; animation: orbLeft  19s -3s  infinite, orbPulse 2.3s -0.6s ease-in-out infinite; }
-.magic-orbs span:nth-child(12) { left: 1%;  width:12px; height:12px; background:#44ffaa; animation: orbLeft  10s -10s infinite, orbPulse 1.5s -1.4s ease-in-out infinite; }
 
 .lv-icon { font-size: 32px; }
 .lv-name { font-weight: 800; font-size: 19px; }
