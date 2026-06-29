@@ -512,26 +512,29 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     const stars = ratio >= 1 ? 3 : ratio >= 0.5 ? 2 : 1;
     app.progress[matra.id] = Math.max(app.progress[matra.id] || 0, stars);
 
-    if (matra.character === 'evil_wish') {
-      scene.setEvilWishStage(5);
-    } else {
-      scene.setPrincessStage(8); // เจ้าหญิงกลับคืนสู่ร่างสมบูรณ์!
-    }
-
     running = false;
     cancelAnimationFrame(rafId);
     hideVoicebar();
 
-    // แสดง result screen พร้อมดาว
-    const starStr = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
-    const msg = stars === 3 ? 'ยอดเยี่ยม! ครบทุกตัว!' : stars === 2 ? 'เก่งมากจ้า!' : 'ดีนะ ฝึกอีกครั้งนะ!';
-    dom.resultStars.textContent = starStr;
-    dom.resultMsg.textContent = msg;
-    show(dom.resultScreen, true);
-    dom.resultBtn.onclick = () => {
-      show(dom.resultScreen, false);
-      onExit && onExit({ matraId: matra.id, stars });
+    // รอให้ animation เจ้าหญิง/แม่มดใจร้ายเสร็จก่อน แล้วค่อยแสดง result
+    const showResult = () => {
+      const starStr = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
+      const msg = stars === 3 ? 'ยอดเยี่ยม! ครบทุกตัว!' : stars === 2 ? 'เก่งมากจ้า!' : 'ดีนะ ฝึกอีกครั้งนะ!';
+      dom.resultStars.textContent = starStr;
+      dom.resultMsg.textContent = msg;
+      if (dom.resultCharImg) dom.resultCharImg.src = scene.getCharacterSrc();
+      show(dom.resultScreen, true);
+      dom.resultBtn.onclick = () => {
+        show(dom.resultScreen, false);
+        onExit && onExit({ matraId: matra.id, stars });
+      };
     };
+
+    if (matra.character === 'evil_wish') {
+      scene.setEvilWishStage(5, showResult);
+    } else {
+      scene.setPrincessStage(8, showResult);
+    }
   }
 
   let _cauldronHintTs = 0; // cooldown กัน spam

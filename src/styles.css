@@ -719,7 +719,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
   overflow-y: auto;
 }
 .result-emoji { line-height: 1; }
-.result-witch-img { width: clamp(80px, 20vw, 130px); height: auto; filter: drop-shadow(0 4px 14px rgba(80,20,160,.5)); }
+.result-witch-img { width: clamp(100px, 28vw, 200px); height: auto; filter: drop-shadow(0 4px 14px rgba(80,20,160,.5)); }
 .result-stars {
   font-size: clamp(44px, 11vw, 72px);
   letter-spacing: 6px;

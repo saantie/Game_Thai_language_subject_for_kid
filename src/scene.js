@@ -258,7 +258,7 @@ export function initScene(root) {
   //   2) 3 ลำแสงยิงลงมา (700ms) พร้อมประกายดาวไหลลงตามลำแสง
   //   2.5) Magic Chime เริ่มก่อนลำแสง 20ms
   //   4) swap รูปเจ้าหญิง → animation กลายร่าง + ประกายระยิบระยับ
-  function _spawnPrincessFx(stage, swapSrc) {
+  function _spawnPrincessFx(stage, swapSrc, done) {
     const BEAM_DELAY  = 80;
     const BEAM_DUR    = 350;
     const FLASH_T     = BEAM_DELAY + BEAM_DUR;     // 430ms
@@ -441,6 +441,7 @@ export function initScene(root) {
       setTimeout(() => {
         princessEl.classList.remove('transform', 'evil-transform');
         document.querySelectorAll('.px-twinkle').forEach((e) => e.remove());
+        if (done) done();
       }, 800);
     }, TRANSFORM_T);
   }
@@ -464,10 +465,10 @@ export function initScene(root) {
   };
 
   // เปลี่ยน Evil wish stage 0–5 ตามคะแนน พร้อม transition GIF 1 loop
-  scene.setEvilWishStage = function(n) {
-    if (!princessEl || _character !== 'evil_wish') return;
+  scene.setEvilWishStage = function(n, done) {
+    if (!princessEl || _character !== 'evil_wish') { done && done(); return; }
     const stage = Math.max(0, Math.min(5, n));
-    if (stage === _evilStage) return;
+    if (stage === _evilStage) { done && done(); return; }
     const from = _evilStage;
     _evilStage = stage;
     clearTimeout(_transTimer);
@@ -478,25 +479,30 @@ export function initScene(root) {
       // เล่น transition GIF 1 loop แล้วจึงยิงลำแสง + swap static
       princessEl.src = transSrc;
       _transTimer = setTimeout(() => {
-        if (_evilStage === stage) _spawnPrincessFx(stage, staticSrc);
+        if (_evilStage === stage) _spawnPrincessFx(stage, staticSrc, done);
       }, EVIL_WISH_TRANS_MS);
     } else {
-      _spawnPrincessFx(stage, staticSrc);
+      _spawnPrincessFx(stage, staticSrc, done);
     }
   };
 
   // เปลี่ยน stage เจ้าหญิง 1–8 พร้อม flash เวทมนตร์
-  scene.setPrincessStage = function (n) {
-    if (_character === 'evil_wish') return; // ใช้ setEvilWishStage แทน
-    if (!princessEl) return;
+  scene.setPrincessStage = function (n, done) {
+    if (_character === 'evil_wish') { done && done(); return; }
+    if (!princessEl) { done && done(); return; }
     const stage = Math.max(1, Math.min(8, n));
-    if (stage === _princessStage) return;
+    if (stage === _princessStage) { done && done(); return; }
     _princessStage = stage;
     if (stage === 1) {
       princessEl.src = 'public/assets/images/princess_1.png';
+      done && done();
       return;
     }
-    _spawnPrincessFx(stage);
+    _spawnPrincessFx(stage, undefined, done);
+  };
+
+  scene.getCharacterSrc = function () {
+    return princessEl ? princessEl.src : '';
   };
 
   scene.clearFx = function () {

@@ -54,6 +54,7 @@ const dom = {
   resultStars: $('#resultStars'),
   resultMsg: $('#resultMsg'),
   resultBtn: $('#resultBtn'),
+  resultCharImg: $('#resultCharImg'),
 };
 
 const scene = initScene(sceneRoot);
