@@ -121,13 +121,16 @@ html, body {
   animation: princessTransform 1.4s ease-in-out forwards;
 }
 
-/* Evil wish — 1.2× แม่มดน้อย clamp(225px,45vw,450px) → clamp(270px,54vw,540px) ทุกอุปกรณ์ */
+/* Evil wish — landscape/desktop: 1.2× แม่มดน้อย; portrait: 62vw ใหญ่กว่าชัดเจน */
 .princess-img.evil-wish-mode {
   right: 0;
   bottom: 20%;
   width: clamp(270px, 54vw, 540px);
   height: auto;
   filter: drop-shadow(0 8px 28px rgba(180, 0, 80, 0.65));
+}
+@media (orientation: portrait) {
+  .princess-img.evil-wish-mode { width: clamp(270px, 62vw, 560px); }
 }
 @keyframes evilTransform {
   0%   { filter: drop-shadow(0 8px 28px rgba(180,0,80,0.65))  brightness(1); }
