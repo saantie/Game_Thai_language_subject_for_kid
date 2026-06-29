@@ -123,7 +123,7 @@ html, body {
 
 /* Evil wish — เท้าระดับเดียวกับแม่มดน้อย (bottom:20%) ชิดขวา */
 .princess-img.evil-wish-mode {
-  right: 0;
+  right: 3%;
   bottom: 20%;
   width: clamp(300px, 65vw, 650px);
   height: auto;
