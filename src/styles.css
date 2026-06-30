@@ -130,7 +130,7 @@ html, body {
   filter: drop-shadow(0 8px 28px rgba(180, 0, 80, 0.65));
 }
 @media (orientation: portrait) {
-  .princess-img.evil-wish-mode { width: clamp(270px, 62vw, 560px); }
+  .princess-img.evil-wish-mode { width: clamp(270px, 82vw, 740px); }
 }
 @keyframes evilTransform {
   0%   { filter: drop-shadow(0 8px 28px rgba(180,0,80,0.65))  brightness(1); }
