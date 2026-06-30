@@ -476,11 +476,15 @@ export function initScene(root) {
     const transKey = `${from}-${stage}`;
     const transSrc = (from >= 0 && stage === from + 1) ? EVIL_WISH_TRANS[transKey] : null;
     if (transSrc) {
-      // เล่น transition GIF 1 loop แล้วจึงยิงลำแสง + swap static
-      princessEl.src = transSrc;
-      _transTimer = setTimeout(() => {
-        if (_evilStage === stage) _spawnPrincessFx(stage, staticSrc, done);
-      }, EVIL_WISH_TRANS_MS);
+      // ยิงลำแสง+เสียงก่อน → ที่ 460ms: swap เป็น transition GIF → หลัง 1 loop: static
+      _spawnPrincessFx(stage, transSrc, () => {
+        _transTimer = setTimeout(() => {
+          if (_evilStage === stage) {
+            princessEl.src = staticSrc;
+            done && done();
+          }
+        }, EVIL_WISH_TRANS_MS);
+      });
     } else {
       _spawnPrincessFx(stage, staticSrc, done);
     }
