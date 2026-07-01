@@ -429,8 +429,8 @@ html, body {
 .vb-word-wrap {
   position: relative;
   display: flex; align-items: center; justify-content: center;
-  min-height: clamp(70px,16vw,110px);
-  margin: 4px 0 6px;
+  min-height: clamp(80px,18vw,130px);
+  margin: 4px 0 14px;
   width: 100%;
 }
 .vb-stars-orbit {
@@ -479,6 +479,7 @@ html, body {
     0 0 80px rgba(255,120,0,.32),
     0 5px 0 rgba(0,0,0,.38);
   line-height: 1.05;
+  padding-bottom: 0.22em; /* รองรับสระใต้ เช่น อุ อู ที่ยื่นล่าง baseline */
 }
 .vb-word.reveal { animation: wordReveal .68s cubic-bezier(.34,1.4,.64,1) both; }
 
