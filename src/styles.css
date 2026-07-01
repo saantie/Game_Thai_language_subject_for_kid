@@ -80,7 +80,7 @@ html, body {
 .witch {
   position: fixed;
   right: 50%;
-  bottom: calc(20% - 60vw);
+  bottom: calc(20% - 60vmax);
   z-index: 2;
   width: clamp(225px, 45vw, 450px);
   height: auto;
@@ -101,7 +101,7 @@ html, body {
 .princess-img {
   position: fixed;
   right: 3%;
-  bottom: calc(20% - 60vw);
+  bottom: calc(20% - 60vmax);
   z-index: 2;
   width: clamp(130px, 22vw, 240px);
   height: auto;
@@ -124,7 +124,7 @@ html, body {
 /* Evil wish — landscape/desktop: 1.2× แม่มดน้อย; portrait: 62vw ใหญ่กว่าชัดเจน */
 .princess-img.evil-wish-mode {
   right: 0;
-  bottom: calc(20% - 60vw);
+  bottom: calc(20% - 60vmax);
   width: clamp(270px, 54vw, 540px);
   height: auto;
   filter: drop-shadow(0 8px 28px rgba(180, 0, 80, 0.65));
@@ -248,7 +248,7 @@ html, body {
   position: fixed;
   right: 52%;  /* ขอบขวาบอลลูนฝั่งแม่มด */
   /* ปลายหางที่บนหัวแม่มด: ฐาน 20% + ความสูงจริง GIF (width×0.75) + หาง 9px */
-  bottom: calc(20% - 60vw + clamp(170px, 34vw, 338px) + 9px);
+  bottom: calc(20% - 60vmax + clamp(170px, 34vw, 338px) + 9px);
   max-width: min(44vw, 220px);
   z-index: 5;
 
@@ -487,6 +487,9 @@ html, body {
   font-size: clamp(15px,2.8vw,20px); color: #ffe08a;
   margin: 28px 0 8px; display: block; /* แสดงเสมอ */
   letter-spacing: 1px;
+}
+@media (orientation: portrait) {
+  .vb-hint { margin-top: 48px; }
 }
 .vb-state { font-size: 14px; min-height: 18px; opacity: .9; margin-top: 6px; }
 .vb-fallback { display: flex; gap: 10px; justify-content: center; margin-top: 12px; width: 100%; }
@@ -795,10 +798,10 @@ button { font-family: inherit; cursor: pointer; border: none; }
   .vs.s4 { --r:58px; } .vs.s5 { --r:56px; } .vs.s6 { --r:50px; }
 
   /* แม่มดและ toast เล็กลงกันทับ voicebar */
-  .witch { width: clamp(150px, 35vh, 250px); bottom: calc(20% - 60vw); }
+  .witch { width: clamp(150px, 35vh, 250px); bottom: calc(20% - 60vmax); }
   .toast {
     right: 52%;
-    bottom: calc(20% - 60vw + clamp(112px, 26vh, 188px) + 9px);
+    bottom: calc(20% - 60vmax + clamp(112px, 26vh, 188px) + 9px);
     font-size: clamp(12px, 1.8vh, 15px);
     padding: 7px 12px;
   }
