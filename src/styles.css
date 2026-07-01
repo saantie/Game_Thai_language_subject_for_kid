@@ -485,7 +485,7 @@ html, body {
 
 .vb-hint {
   font-size: clamp(15px,2.8vw,20px); color: #ffe08a;
-  margin: 4px 0 8px; display: block; /* แสดงเสมอ */
+  margin: 28px 0 8px; display: block; /* แสดงเสมอ */
   letter-spacing: 1px;
 }
 .vb-state { font-size: 14px; min-height: 18px; opacity: .9; margin-top: 6px; }
