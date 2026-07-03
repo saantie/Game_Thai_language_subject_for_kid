@@ -396,12 +396,16 @@ export function createGame({ scene, audio, app, dom, onExit }) {
         revealSpelling();
       } else {
         setState('READING');
-        audio.voice('retry', { onText: witchSay });
         dom.micState.textContent += ' — ลองอ่านอีกครั้งนะจ๊ะ';
-        // เปิดไมค์อัตโนมัติรอบ retry
-        setTimeout(() => {
-          if (state === 'READING' && recog.supported) listen();
-        }, 1800);
+        // เปิดไมค์อัตโนมัติรอบ retry — ต้องรอแม่มดพูดจบจริง (onEnd) ห้ามใช้ timer
+        // คงที่: TTS พูดยาวกว่า timer แล้วไมค์จะได้ยินเสียงแม่มดเอง → ประเมินผิด
+        // → แม่มดพูดซ้ำ → วนลูปพูดรัว/ไมค์เด้งรัว
+        audio.voice('retry', {
+          onText: witchSay,
+          onEnd: () => setTimeout(() => {
+            if (state === 'READING' && recog.supported) listen();
+          }, 250),
+        });
       }
     }
   }
@@ -563,6 +567,8 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       const b = best;
       held = b;
       b.held = true;
+      b.grabX = x; // จุดเริ่มหยิบ — onRelease ใช้เช็คว่า "ลากจริง" ก่อนรับลงหม้อ
+      b.grabY = y;
       b.pop = 0.6;
       b.bouncing = false;
       b.vx = 0;
@@ -618,7 +624,10 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     b.held = false;
     const c = scene.cauldron;
     // zone กว้าง — ปล่อยฟองบริเวณหม้อทั้งตัวรับได้ ไม่ต้องเล็งปากหม้อพอดี
-    const overMouth = Math.hypot(x - c.cx, (y - c.cy) / 1.1) <= c.rx;
+    // แต่ต้อง "ลากจริง" ด้วย — phantom pinch จาก AR หยิบ+ปล่อยที่จุดเดิมทันที
+    // ถ้าฟองลอยซ้อน zone หม้ออยู่แล้วจะกลายเป็นหย่อนเอง เกมเล่นเองเป็นลูป (bug v119)
+    const dragged = Math.hypot(x - (b.grabX ?? x), y - (b.grabY ?? y)) > Math.max(24, b.r * 0.6);
+    const overMouth = dragged && Math.hypot(x - c.cx, (y - c.cy) / 1.1) <= c.rx;
     if (overMouth) {
       dropInCauldron(b);
     } else {

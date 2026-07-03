@@ -11,6 +11,9 @@
 
 const PINCH_ON  = 0.30; // เริ่มจีบเมื่อ normDist ต่ำกว่านี้
 const PINCH_OFF = 0.45; // ปล่อยเมื่อสูงกว่านี้ — ช่องว่างกันฟองหลุดๆ ติดๆ ตอนเด็กจีบหลวม
+const PINCH_ON_FRAMES = 3; // ต้องจีบต่อเนื่อง 3 เฟรม (~100ms) ก่อนนับเป็นการหยิบ —
+                           // false detection เฟรมเดียวเคยยิง pick+release ที่จุดเดิม
+                           // = หย่อนฟองลงหม้อเอง เกมเล่นเองเป็นลูป (bug v119)
 const SMOOTH    = 0.4;  // EMA alpha — ตอบสนองไวพอ แต่ตัด jitter ความถี่สูง
 const DEAD_ZONE = 3;    // px หลัง smoothing
 const GRAB_SLOP = 1.6;  // รัศมีหยิบขยายสำหรับ pinch (game.js onPick param ที่ 3)
@@ -85,6 +88,7 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
   let paused = false;
   let lastVideoTime = -1;
   let isPinching = false;
+  let pinchFrames = 0;         // นับเฟรมจีบต่อเนื่อง — กัน phantom pinch เฟรมเดียว
   let lastX = 0, lastY = 0;
   let sx = 0, sy = 0;          // ตำแหน่งหลัง EMA smoothing
   let lockedWrist = null;      // ข้อมือของมือที่ล็อก จากเฟรมก่อน
@@ -153,6 +157,7 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
   }
 
   function forceRelease() {
+    pinchFrames = 0;
     if (!isPinching) return;
     isPinching = false;
     handlers.onRelease && handlers.onRelease(lastX, lastY);
@@ -164,6 +169,8 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
     sy += (y - sy) * SMOOTH;
 
     if (pinching && !isPinching) {
+      // ยืนยันจีบต่อเนื่องก่อนนับ — ตัด phantom pinch จาก false detection
+      if (++pinchFrames < PINCH_ON_FRAMES) { lastX = sx; lastY = sy; return; }
       isPinching = true;
       sx = x; sy = y; // reset filter ตอนเริ่มจีบ กันตำแหน่งค้างจากรอบก่อน
       handlers.onPick && handlers.onPick(sx, sy, GRAB_SLOP);
@@ -175,6 +182,7 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
       isPinching = false;
       handlers.onRelease && handlers.onRelease(sx, sy);
     }
+    if (!pinching) pinchFrames = 0;
     lastX = sx; lastY = sy;
   }
 
