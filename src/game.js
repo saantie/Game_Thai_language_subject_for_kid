@@ -659,6 +659,42 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     }
   }
 
+  // ---------- AR: กดปุ่มไมค์ด้วยนิ้วชี้ (ชี้ค้างไว้ = กด) ----------
+  // onPick/onRelease ผูกกับฟองในเกมเท่านั้น — AR ไม่มีวิธี "แตะ" ปุ่ม DOM แบบ touch
+  // ปกติ ต้องมีทางกดปุ่มไมค์ด้วยมือเปล่าด้วย (เช่นตอน "ไม่ได้ยินเสียง ลองกดพูดอีกครั้งนะ")
+  const MIC_DWELL_MS = 550; // ชี้ค้างนานเท่านี้ก่อนกดจริง — กันกดพลาดตอนกวาดผ่าน
+  let _micDwellStart = null;
+
+  function clearMicDwell() {
+    if (_micDwellStart == null) return;
+    _micDwellStart = null;
+    dom.micBtn.classList.remove('ar-dwelling');
+  }
+
+  function tryMicDwell(x, y) {
+    const btn = dom.micBtn;
+    if (btn.disabled || btn.classList.contains('listening') || btn.offsetParent === null) {
+      clearMicDwell();
+      return;
+    }
+    const r = btn.getBoundingClientRect();
+    const over = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    if (!over) { clearMicDwell(); return; }
+
+    const now = performance.now();
+    if (_micDwellStart == null) {
+      _micDwellStart = now;
+      btn.classList.remove('ar-dwelling');
+      void btn.offsetWidth; // reflow บังคับ restart animation
+      btn.classList.add('ar-dwelling'); // วงแหวนไล่ระดับให้เห็นว่ากำลังนับถอยหลัง
+      return;
+    }
+    if (now - _micDwellStart >= MIC_DWELL_MS) {
+      clearMicDwell();
+      listen();
+    }
+  }
+
   // ---------- AR hand-frame (มือเปิด/กางมือ จากกล้อง — pointer.js ไม่มี concept นี้) ----------
   const FLICK_MIN_DY = 9;   // px/เฟรม ขั้นต่ำที่นับเป็น "เดาะขึ้น" — ยังไม่ผ่านทดสอบเครื่องจริง
   const FLICK_RADIUS = 70;  // px รัศมีรอบนิ้วชี้ที่ถือว่ากระทบฟอง
@@ -667,8 +703,10 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   let _handPrev = null; // { x, y, ts } เฟรมมือก่อนหน้า สำหรับคำนวณความเร็วเดาะ
 
   function onHandFrame(frame) {
-    if (!frame) { _handPrev = null; return; }
+    if (!frame) { _handPrev = null; clearMicDwell(); return; }
     const { x, y, open, spread, palmUp } = frame;
+
+    if (!held) tryMicDwell(x, y); // เว้นตอนกำลังลากฟองอยู่ กันกดพลาดขณะลาก
 
     // ข้อ 6: ประกายดาวลอยตามนิ้วชี้ตอนกางมือ (ใช้ trail particle เดิมของการลาก)
     if (spread) spawnDragTrail(x, y);
