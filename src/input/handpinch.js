@@ -26,6 +26,9 @@ const GRIP_OFF = 0.85; // ปล่อยเมื่อสูงกว่าน
 const GRIP_ON_FRAMES = 3; // ต้องกำต่อเนื่อง 3 เฟรม (~125ms @24fps) ก่อนนับเป็นการหยิบ —
                           // false detection เฟรมเดียวเคยยิง pick+release ที่จุดเดิม
                           // = หย่อนฟองลงหม้อเอง เกมเล่นเองเป็นลูป (bug v119)
+const SPREAD_FULL = 1.05; // กางมือเต็มที่ (เกินช่วงแบมือปกติ 1.0–1.4) → ปล่อยฟองทันที
+                          // บายพาส hysteresis/smoothing ปกติ [ยังไม่ผ่านทดสอบเครื่องจริง
+                          // ปรับค่าได้ถ้ารู้สึกไวไป/ช้าไป]
 const SMOOTH    = 0.4;  // EMA alpha — ตอบสนองไวพอ แต่ตัด jitter ความถี่สูง
 const DEAD_ZONE = 3;    // px หลัง smoothing
 const GRAB_SLOP = 1.6;  // รัศมีหยิบขยายสำหรับ pinch (game.js onPick param ที่ 3)
@@ -107,34 +110,48 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
     return Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y);
   }
 
-  // sticky hand lock — คืน landmarks ของมือที่คุมเกม หรือ null ถ้ามือที่ล็อกหลุดเฟรม
-  function selectHand(allHands) {
-    if (allHands.length === 0) {
+  // sticky hand lock — คืน { lm, idx } ของมือที่คุมเกม หรือ null ถ้ามือที่ล็อกหลุดเฟรม
+  // ต้องคืน idx ด้วย (ไม่ใช่แค่ landmarks) เพื่อจับคู่กับ result.handednesses[idx]
+  // สำหรับคำนวณทิศฝ่ามือ (ข้อ 2/6 — ดู palmUpScore)
+  function selectHand(result) {
+    const hands = result.landmarks;
+    if (!hands || hands.length === 0) {
       if (++lostFrames >= LOST_RESET) lockedWrist = null;
       return null;
     }
     lostFrames = 0;
 
     if (lockedWrist) {
-      let best = null, bestD = Infinity;
-      for (const lm of allHands) {
+      let bestIdx = -1, bestD = Infinity;
+      hands.forEach((lm, i) => {
         const d = Math.hypot(lm[0].x - lockedWrist.x, lm[0].y - lockedWrist.y);
-        if (d < bestD) { bestD = d; best = lm; }
-      }
+        if (d < bestD) { bestD = d; bestIdx = i; }
+      });
       // ระหว่างลากฟองห้ามสลับมือเด็ดขาด — มือเดิมกระโดดไกลผิดปกติ = มือที่ล็อก
       // หลุดเฟรมและ best คือมือของเด็กอีกคน → ถือว่าไม่เจอมือ
       if (isGripping && bestD > 0.35) return null;
-      lockedWrist = { x: best[0].x, y: best[0].y };
-      return best;
+      lockedWrist = { x: hands[bestIdx][0].x, y: hands[bestIdx][0].y };
+      return { lm: hands[bestIdx], idx: bestIdx };
     }
 
     // ยังไม่มี lock → เลือกมือใหญ่สุด (ใกล้กล้องสุด = คนที่กำลังเล่น)
-    let best = allHands[0];
-    for (const lm of allHands) {
-      if (handSizeOf(lm) > handSizeOf(best)) best = lm;
-    }
-    lockedWrist = { x: best[0].x, y: best[0].y };
-    return best;
+    let bestIdx = 0;
+    hands.forEach((lm, i) => { if (handSizeOf(lm) > handSizeOf(hands[bestIdx])) bestIdx = i; });
+    lockedWrist = { x: hands[bestIdx][0].x, y: hands[bestIdx][0].y };
+    return { lm: hands[bestIdx], idx: bestIdx };
+  }
+
+  // ทิศฝ่ามือ (ข้อ 2/6 "หงายมือ"): cross product 2D ของเวกเตอร์ wrist→index_mcp(5)
+  // และ wrist→pinky_mcp(17) บอกทิศที่ฝ่ามือหันเทียบกล้อง (แนวคิดเดียวกับ backface
+  // culling ใน 2D) กลับเครื่องหมายกันมือซ้าย/ขวา (เป็นภาพกระจกกัน)
+  // [ยังไม่ผ่านทดสอบเครื่องจริง — ถ้าเดาะแล้วฟองไม่ลอยขึ้น/ทิศกลับด้าน ให้ negate ค่านี้]
+  function palmUpScore(lm, handLabel) {
+    const wrist = lm[0], idxMcp = lm[5], pinkyMcp = lm[17];
+    const v1x = idxMcp.x - wrist.x, v1y = idxMcp.y - wrist.y;
+    const v2x = pinkyMcp.x - wrist.x, v2y = pinkyMcp.y - wrist.y;
+    let cross = v1x * v2y - v1y * v2x;
+    if (handLabel === 'Left') cross = -cross;
+    return cross;
   }
 
   // map พิกัด normalized ของ MediaPipe → CSS px บน canvas
@@ -166,9 +183,10 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
     const norm = handSize > 0.01 ? sum / 4 / handSize : sum / 4;
     // hysteresis: threshold เข้า/ออกคนละค่า — ระหว่างกลางคงสถานะเดิม
     const gripping = isGripping ? norm < GRIP_OFF : norm < GRIP_ON;
+    const spread = norm > SPREAD_FULL; // ข้อ 1/6: กางมือเต็มที่
     // ตำแหน่งลาก = กลางฝ่ามือ (กำมือแล้วปลายนิ้วชี้หายไปในกำปั้น ใช้ไม่ได้)
     const { x, y } = toCanvas(palm.x, palm.y, canvasW, canvasH);
-    return { gripping, x, y };
+    return { gripping, x, y, spread };
   }
 
   function forceRelease() {
@@ -215,15 +233,35 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
       // detectForVideo ทำงานบน main thread ~5–15ms/frame
       const result = landmarker.detectForVideo(videoEl, performance.now());
 
-      const hand = selectHand(result.landmarks);
+      const hand = selectHand(result);
       if (hand) {
-        const { gripping, x, y } = getGripState(hand, canvasW, canvasH);
-        updateGripState(gripping, x, y);
+        const { gripping, x, y, spread } = getGripState(hand.lm, canvasW, canvasH);
+
+        if (spread && isGripping) {
+          // ข้อ 1: "กางมือออกให้ฟองหลุดทันที" — ปล่อยที่ตำแหน่งปัจจุบันทันที
+          // บายพาส EMA smoothing/hysteresis ปกติ ให้ความรู้สึกปล่อยฉับพลันตามตั้งใจ
+          isGripping = false;
+          gripFrames = 0;
+          sx = x; sy = y; lastX = x; lastY = y;
+          handlers.onRelease && handlers.onRelease(x, y);
+        } else {
+          updateGripState(gripping, x, y);
+        }
+
+        // ข้อ 2/6: ส่งเฟรมมือดิบทุกเฟรมที่เจอมือ (ไม่ขึ้นกับ grip state) ให้ game.js
+        // ทำ star trail ตอนกางมือ + เดาะฟองลอยขึ้นตอนหงายมือ — pointer.js ไม่มี concept นี้
+        const handLabel = result.handednesses?.[hand.idx]?.[0]?.categoryName;
+        const idxTip = toCanvas(hand.lm[8].x, hand.lm[8].y, canvasW, canvasH);
+        const palmUp = palmUpScore(hand.lm, handLabel) > 0;
+        handlers.onHandFrame && handlers.onHandFrame({
+          x: idxTip.x, y: idxTip.y, open: !isGripping, spread, palmUp,
+        });
       } else {
         // ไม่เห็นมือ (หรือมือที่ล็อกหลุดเฟรม) → release ทันที
         // [decision 2026-07-02: ไม่ใช้ grace period — ฟองลอยกลับที่เดิม
         //  ซึ่ง game.js จัดการให้เมื่อ release นอกหม้อ]
         forceRelease();
+        handlers.onHandFrame && handlers.onHandFrame(null);
       }
     }
 
@@ -307,6 +345,7 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
       clearInterval(watchdog);
       document.removeEventListener('visibilitychange', onVisibility);
       forceRelease();
+      handlers.onHandFrame && handlers.onHandFrame(null); // เคลียร์ _handPrev ฝั่ง game.js
       stream.getTracks().forEach((t) => t.stop());
       videoEl.srcObject = null;
       landmarker.close();

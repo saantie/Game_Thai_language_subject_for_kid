@@ -592,7 +592,14 @@ button { font-family: inherit; cursor: pointer; border: none; }
               inset 0 2px 0 rgba(255,255,255,.22);
 }
 .btn-mic:active:not(:disabled) { transform: scale(.92); }
-.btn-mic:disabled { opacity: .35; box-shadow: none; cursor: default; }
+/* ข้อ 5: ไมค์ปิด = ไอคอนสีเทา บนวงกลมฟ้าเดิม (ไม่จางทั้งวงกลม) */
+.btn-mic:disabled {
+  opacity: 1;
+  box-shadow: none;
+  cursor: default;
+  color: rgba(150,160,175,.85);
+  border-color: rgba(0,160,220,.35);
+}
 
 /* SVG mic icon */
 .mic-svg {

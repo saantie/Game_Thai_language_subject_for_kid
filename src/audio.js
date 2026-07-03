@@ -88,6 +88,13 @@ export const audio = {
     return Promise.resolve();
   },
 
+  // ข้อ 7: เสียงยืนยันอ่านถูก — ไฟล์จริง Magic Chime.mp3 (ไม่ใช่ synth 'star')
+  playCorrectChime() {
+    const a = new Audio('public/assets/audio/Magic%20Chime.mp3');
+    a.volume = 0.85;
+    a.play().catch(() => this.sfx('star')); // เล่นไม่ได้ (เช่น autoplay policy) → synth fallback
+  },
+
   // ---------- SFX ----------
   sfx(name) {
     if (!ctx) return;

@@ -124,6 +124,16 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     }
   }
 
+  // ประกายดาวระเบิดเต็มจอตอนอ่านถูก (ข้อ 7) — กระจายจุดกำเนิดหลายจุดทั่วจอ
+  // แทนการระเบิดจุดเดียวที่หม้อ ใช้ spawnStars เดิมซ้ำหลายจุด (ยังพูล particle เดิม)
+  function spawnFullScreenStars() {
+    const points = [
+      [0.10, 0.22], [0.50, 0.14], [0.90, 0.22],
+      [0.18, 0.62], [0.50, 0.52], [0.82, 0.62],
+    ];
+    points.forEach(([fx, fy]) => spawnStars(scene.W * fx, scene.H * fy));
+  }
+
   function scoreToEvilWishStage(s) {
     if (s >= 650) return 5;
     if (s >= 550) return 4;
@@ -353,20 +363,32 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     dom.micBtn.classList.add('listening');
     audio.duck();
     let got = false;
-    recog.start(
-      (alts) => {
-        got = true;
-        evaluate(matchWord(alts, currentWord.display), alts[0]);
-      },
-      () => {
-        dom.micBtn.classList.remove('listening');
-        audio.unduck();
-        if (!got && state === 'LISTENING') {
-          dom.micState.textContent = 'ไม่ได้ยินเสียง ลองกดพูดอีกครั้งนะ';
-          setState('READING');
+    const listenStartTs = performance.now();
+    const isFirstAttempt = readAttempts === 0;
+    const MIN_LISTEN_MS = 5000; // ข้อ 4: รอบแรกให้เวลาฟังอย่างน้อย 5 วิ ก่อนสรุปว่าไม่ได้ยิน
+    const attempt = () => {
+      recog.start(
+        (alts) => {
+          got = true;
+          evaluate(matchWord(alts, currentWord.display), alts[0]);
+        },
+        () => {
+          // เบราว์เซอร์บางตัวตัดฟังเร็วถ้าเงียบ — รอบแรกยังไม่ครบ 5 วิ ให้ฟังต่อ
+          if (!got && isFirstAttempt && state === 'LISTENING' &&
+              performance.now() - listenStartTs < MIN_LISTEN_MS) {
+            setTimeout(attempt, 150);
+            return;
+          }
+          dom.micBtn.classList.remove('listening');
+          audio.unduck();
+          if (!got && state === 'LISTENING') {
+            dom.micState.textContent = 'ไม่ได้ยินเสียง ลองกดพูดอีกครั้งนะ';
+            setState('READING');
+          }
         }
-      }
-    );
+      );
+    };
+    attempt();
   }
 
   function evaluate(correct, heard) {
@@ -471,8 +493,8 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     // updateScore จะถูกเรียกตอนการ์ดถึงป้ายคะแนน (onArrive) ไม่ใช่ตอนนี้
     scene.setCauldronFrame(4, 'reward'); // ควันม่วง — ฉลองอ่านถูก
     scene.witch.play('cheer');
-    audio.sfx('star');
-    spawnStars(scene.W * 0.5, scene.H * 0.38);
+    audio.playCorrectChime(); // ข้อ 7: เสียง Magic Chime.mp3 จริง
+    spawnFullScreenStars();   // ข้อ 7: ประกายดาวระเบิดเต็มจอ
     audio.voice('correct', { onText: witchSay });
     setTimeout(() => rewardFlyAnim(
       () => setTimeout(nextRound, 250),
@@ -609,11 +631,69 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     }
   }
 
+  // ข้อ 3: ฟองที่ถือชนฟองอื่น → เด้งออกทุกทิศทาง แล้วค่อยๆลอยกลับที่เดิม
+  // (ใช้ spring-back physics เดิมใน update() ผ่าน b.bouncing เหมือนตอนหย่อนผิดช่อง)
+  function checkHeldCollisions() {
+    bubbles.forEach((ob) => {
+      if (ob === held || ob.dead || ob.held) return;
+      const dx = ob.x - held.x, dy = ob.y - held.y;
+      const dist = Math.hypot(dx, dy) || 0.01;
+      const minDist = held.r + ob.r;
+      if (dist < minDist) {
+        const nx = dx / dist, ny = dy / dist;
+        const KNOCK = 3.4;
+        ob.vx += nx * KNOCK;
+        ob.vy += ny * KNOCK;
+        ob.x += nx * (minDist - dist) * 0.5; // กันซ้อนทับค้างชั่วขณะ
+        ob.y += ny * (minDist - dist) * 0.5;
+        ob.bouncing = true;
+      }
+    });
+  }
+
   function onMove(x, y) {
     if (held) {
       held.x = x; held.y = y;
       spawnDragTrail(x, y);
+      checkHeldCollisions();
     }
+  }
+
+  // ---------- AR hand-frame (มือเปิด/กางมือ จากกล้อง — pointer.js ไม่มี concept นี้) ----------
+  const FLICK_MIN_DY = 9;   // px/เฟรม ขั้นต่ำที่นับเป็น "เดาะขึ้น" — ยังไม่ผ่านทดสอบเครื่องจริง
+  const FLICK_RADIUS = 70;  // px รัศมีรอบนิ้วชี้ที่ถือว่ากระทบฟอง
+  const FLICK_GAIN   = 0.35;
+  const FLICK_MAX    = 9;
+  let _handPrev = null; // { x, y, ts } เฟรมมือก่อนหน้า สำหรับคำนวณความเร็วเดาะ
+
+  function onHandFrame(frame) {
+    if (!frame) { _handPrev = null; return; }
+    const { x, y, open, spread, palmUp } = frame;
+
+    // ข้อ 6: ประกายดาวลอยตามนิ้วชี้ตอนกางมือ (ใช้ trail particle เดิมของการลาก)
+    if (spread) spawnDragTrail(x, y);
+
+    // ข้อ 2: หงายมือ + กวาดขึ้นเร็วพอ (มือเปิด ไม่ได้ถือฟองอยู่) → เดาะฟองใกล้เคียงลอยขึ้น
+    // เคลื่อนลง ("ตบลง") ไม่มีผลใดๆ ตามที่ตั้งใจ — เช็คเฉพาะ dy ติดลบ
+    const now = performance.now();
+    if (_handPrev && open && palmUp && !held) {
+      const dt = now - _handPrev.ts;
+      if (dt > 0 && dt < 220) {
+        const dy = y - _handPrev.y; // ลบ = เคลื่อนขึ้นจอ
+        if (dy < -FLICK_MIN_DY) {
+          const power = Math.min(FLICK_MAX, -dy * FLICK_GAIN);
+          bubbles.forEach((b) => {
+            if (b.dead || b.held) return;
+            if (Math.hypot(x - b.x, y - b.y) <= FLICK_RADIUS + b.r) {
+              b.bouncing = true;
+              b.vy -= power;
+              b.vx += (Math.random() - 0.5) * power * 0.5;
+            }
+          });
+        }
+      }
+    }
+    _handPrev = { x, y, ts: now };
   }
   function onRelease(x, y) {
     if (!held) return;
@@ -814,6 +894,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     onPick,
     onMove,
     onRelease,
+    onHandFrame,
     relayout() { layoutBubbles(); },
     stop() {
       running = false;

@@ -77,6 +77,7 @@ const inputHandlers = {
   onPick: game.onPick,
   onMove: game.onMove,
   onRelease: game.onRelease,
+  onHandFrame: game.onHandFrame, // เฉพาะ AR — มือเปิด/กางมือ/หงายมือ (pointer.js ไม่เรียก)
 };
 createPointerInput(scene.fxCanvas, inputHandlers);
 
