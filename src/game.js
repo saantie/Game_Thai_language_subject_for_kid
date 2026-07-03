@@ -493,12 +493,12 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     // updateScore จะถูกเรียกตอนการ์ดถึงป้ายคะแนน (onArrive) ไม่ใช่ตอนนี้
     scene.setCauldronFrame(4, 'reward'); // ควันม่วง — ฉลองอ่านถูก
     scene.witch.play('cheer');
-    audio.playCorrectChime(); // ข้อ 7: เสียง Magic Chime.mp3 จริง
-    spawnFullScreenStars();   // ข้อ 7: ประกายดาวระเบิดเต็มจอ
+    audio.playCorrectChime();             // ข้อ 7: เสียง Magic Chime.mp3 จริง — ให้ดังก่อน
+    setTimeout(spawnFullScreenStars, 180); // แล้วดาวเต็มจอค่อยระเบิดตามจังหวะเสียง (ไม่พร้อมกัน)
     audio.voice('correct', { onText: witchSay });
     setTimeout(() => rewardFlyAnim(
       () => setTimeout(nextRound, 250),
-      () => { audio.sfx('star'); updateScore(points); }
+      () => { updateScore(points); } // ตัด synth 'star' (เสียงตุ๊ดๆ) ออก — มี Magic Chime แล้วพอ
     ), 750);
   }
 
