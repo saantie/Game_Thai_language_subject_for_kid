@@ -187,21 +187,37 @@ export function initScene(root) {
     }
   };
 
+  // cache เลย์เอาต์ (font/measureText) ต่อคำ — เรียกทุกเฟรมตอน IDLE/DRAGGING แต่
+  // word.lead กับขนาดหม้อไม่เปลี่ยนระหว่างรอบ ไม่ต้อง measureText/สร้าง font string ใหม่ทุกเฟรม
+  let _promptCache = null; // { word, cx, rx, fontStr, leadW, slotW, gap, totalW, startX, y }
+
   function drawPrompt(word) {
     const c = scene.cauldron;
     const ctx = fx;
-    const y = c.cy - c.ry * 0.25;
-    const fontSize = Math.max(26, c.rx * 0.32);
+    const cached = _promptCache;
+    const needsRecalc =
+      !cached || cached.word !== word || cached.cx !== c.cx || cached.rx !== c.rx;
+
+    let fontStr, leadW, slotW, gap, totalW, startX, y;
+    if (needsRecalc) {
+      y = c.cy - c.ry * 0.25;
+      const fontSize = Math.max(26, c.rx * 0.32);
+      fontStr = `700 ${fontSize}px 'Sarabun','Segoe UI',sans-serif`;
+      ctx.font = fontStr;
+      leadW = ctx.measureText(word.lead).width;
+      slotW = fontSize * 0.75;
+      gap = fontSize * 0.12;
+      totalW = leadW + gap + slotW;
+      startX = c.cx - totalW / 2;
+      _promptCache = { word, cx: c.cx, rx: c.rx, fontStr, leadW, slotW, gap, totalW, startX, y };
+    } else {
+      ({ fontStr, leadW, slotW, gap, totalW, startX, y } = cached);
+    }
+
     ctx.save();
-    ctx.font = `700 ${fontSize}px 'Sarabun','Segoe UI',sans-serif`;
+    ctx.font = fontStr;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-
-    const leadW = ctx.measureText(word.lead).width;
-    const slotW = fontSize * 0.75;
-    const gap = fontSize * 0.12;
-    const totalW = leadW + gap + slotW;
-    const startX = c.cx - totalW / 2;
 
     // เงาตัวอักษรให้อ่านง่าย
     ctx.shadowColor = 'rgba(0,0,0,0.8)';

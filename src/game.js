@@ -66,8 +66,12 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       const r = Math.max(44, Math.min(W, H) * 0.115);
       const margin = r * 1.4;
       const usableW = W - margin * 2;
+      // cache font string ที่นี่ (ทำครั้งเดียวต่อ layout) แทนสร้าง template ใหม่
+      // ทุกเฟรม×ทุกฟองใน drawBubble() — r เท่ากันทั้งชุดในโหมด spread
+      const bubbleFont = `800 ${Math.max(16, r * 0.92)}px 'Sarabun','Segoe UI',sans-serif`;
       bubbles.forEach((b, i) => {
         b.r = r;
+        b._font = bubbleFont;
         const t = n === 1 ? 0.5 : i / (n - 1);
         b.homeX = margin + usableW * t;
         // เลื่อนลงจาก H*0.2 → H*0.36 เพื่อกัน HUD และกระจายกลางจอ
@@ -83,11 +87,13 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       const cellW = W / cols;
       const cellH = areaH / rows;
       const r = Math.max(24, Math.min(Math.min(cellW, cellH) * 0.44, 54));
+      const bubbleFont = `800 ${Math.max(16, r * 0.92)}px 'Sarabun','Segoe UI',sans-serif`;
 
       bubbles.forEach((b, i) => {
         const col = i % cols;
         const row = Math.floor(i / cols);
         b.r = r;
+        b._font = bubbleFont;
         b.homeX = cellW * (col + 0.5);
         b.homeY = cellH * (row + 0.5) + hudClear; // เริ่มต่ำกว่า HUD
         if (b.x === 0 && b.y === 0) { b.x = b.homeX; b.y = b.homeY; }
@@ -445,6 +451,8 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       p.r = 6 + Math.random() * 9;
       p.hue = 40 + Math.random() * 22;
       p.star = true;
+      p.fillStyle = `hsl(${p.hue},90%,60%)`;   // cache สีไว้ตอน spawn (ดู spawnExplosion)
+      p.shadowStyle = `hsl(${p.hue},100%,70%)`;
       p.decay = 0.038;
       particles.push(p);
     }
@@ -629,6 +637,8 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       p.r = 4 + Math.random() * 8;
       p.hue = 38 + Math.random() * 22;
       p.star = true;
+      p.fillStyle = `hsl(${p.hue},90%,60%)`;   // cache สีไว้ตอน spawn (ดู spawnExplosion)
+      p.shadowStyle = `hsl(${p.hue},100%,70%)`;
       p.decay = 0.048;
       particles.push(p);
     }
@@ -833,10 +843,8 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     fx.restore();
 
     // ตัวอักษรทองกลางฟอง — วาดแยก 2 layer หลัง restore (ไม่หมุนตามภาพ)
-    const fontSize = Math.max(16, b.r * 0.92);
-    const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.003 + b.phase);
     fx.save();
-    fx.font = `800 ${fontSize}px 'Sarabun','Segoe UI',sans-serif`;
+    fx.font = b._font; // cache ไว้ตอน layoutBubbles() — เลี่ยงสร้าง template string ทุกเฟรม×ทุกฟอง
     fx.textAlign = 'center';
     fx.textBaseline = 'middle';
     fx.shadowOffsetX = 0;
@@ -852,10 +860,10 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   function drawParticle(p) {
     fx.save();
     fx.globalAlpha = Math.max(0, p.life);
-    fx.fillStyle = `hsl(${p.hue},90%,60%)`;
+    fx.fillStyle = p.fillStyle; // cache ไว้ตอน spawn — เลี่ยงสร้าง string ใหม่ทุกเฟรม/ทุกอนุภาค
     if (p.star) {
       // ขอบเรืองให้เห็นชัด
-      fx.shadowColor = `hsl(${p.hue},100%,70%)`;
+      fx.shadowColor = p.shadowStyle;
       fx.shadowBlur = p.r * 0.8;
       drawStar(fx, p.x, p.y, p.r, p.r * 0.45, 5);
     } else {
