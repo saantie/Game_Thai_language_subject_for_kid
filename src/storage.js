@@ -20,3 +20,20 @@ export function clearProgress() {
     localStorage.removeItem(KEY);
   } catch (e) {}
 }
+
+// ---- setting: โหมด AR (ปุ่มเปิด/ปิดหน้าแรก) — default เปิด ----
+const AR_KEY = 'witch_ar_enabled';
+
+export function loadArEnabled() {
+  try {
+    return localStorage.getItem(AR_KEY) !== '0';
+  } catch (e) {
+    return true;
+  }
+}
+
+export function saveArEnabled(on) {
+  try {
+    localStorage.setItem(AR_KEY, on ? '1' : '0');
+  } catch (e) {}
+}

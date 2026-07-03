@@ -41,6 +41,22 @@ html, body {
 }
 #camVideo.show { display: block; }
 
+/* ฟิลเตอร์ม่วงโซนล่างจอ (โหมด AR) — บังภาพกล้องไล่เฉดจากทึบที่ขอบล่าง
+   → โปร่งใส 100% ที่ระดับ 25% ของความสูงจอ (ทุกอุปกรณ์ เพราะใช้ % ของ viewport)
+   ให้โซน gameplay (หม้อ/ตัวละคร) เด่นเหนือภาพกล้อง */
+#camShade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 25%;
+  background: linear-gradient(to top, rgba(42, 10, 70, 1) 0%, rgba(42, 10, 70, 0) 100%);
+  z-index: 1; /* อยู่ถัดจาก camVideo ใน DOM — ทับภาพกล้อง แต่ใต้ตัวละคร/หม้อ */
+  display: none;
+  pointer-events: none;
+}
+#camVideo.show + #camShade { display: block; }
+
 /* [1.5] หม้อแม่มด — DOM img, frame switching via JS */
 .cauldron-img {
   position: absolute;   /* absolute ใน sceneRoot (fixed inset:0) = เดียวกับ viewport */
@@ -51,7 +67,7 @@ html, body {
   max-height: 60vh;
   height: auto;
   object-fit: contain;
-  z-index: 1;
+  z-index: 2; /* เหนือแม่มดใจร้าย/เจ้าหญิง (1) — ตัวละครยืนหลังหม้อ */
   pointer-events: none;
   user-select: none;
   filter: drop-shadow(0 8px 28px rgba(80, 30, 200, 0.55));
@@ -117,7 +133,7 @@ html, body {
   position: fixed;
   right: 3%;
   bottom: 0;
-  z-index: 2;
+  z-index: 1; /* ใต้หม้อวิเศษ (2) แต่เหนือภาพกล้อง AR — แม่มดใจร้าย/เจ้าหญิงอยู่หลังหม้อ */
   width: clamp(130px, 22vw, 240px);
   height: auto;
   pointer-events: none;

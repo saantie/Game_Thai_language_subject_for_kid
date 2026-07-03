@@ -348,12 +348,10 @@ export function createGame({ scene, audio, app, dom, onExit }) {
 
   function listen() {
     if (!running || state !== 'READING' || !recog.supported) return;
-    setState('LISTENING');
+    setState('LISTENING'); // → arPause อัตโนมัติใน setState
     dom.micState.textContent = '🔴 กำลังฟัง...';
     dom.micBtn.classList.add('listening');
     audio.duck();
-    // AR mode: หยุด hand inference ระหว่างฟัง — คืน CPU ให้ Speech Recognition
-    if (app.arPause) app.arPause();
     let got = false;
     recog.start(
       (alts) => {
@@ -363,7 +361,6 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       () => {
         dom.micBtn.classList.remove('listening');
         audio.unduck();
-        if (app.arResume) app.arResume();
         if (!got && state === 'LISTENING') {
           dom.micState.textContent = 'ไม่ได้ยินเสียง ลองกดพูดอีกครั้งนะ';
           setState('READING');
@@ -786,7 +783,16 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     scene.witch.play('read');
   }
   function hideVoicebar() { show(dom.voicebar, false); }
-  function setState(s) { state = s; }
+  function setState(s) {
+    state = s;
+    // AR: inference จำเป็นเฉพาะตอนใช้มือ (IDLE/DRAGGING) — ช่วงอ่าน/ฟัง/รางวัล
+    // pause เพื่อลดความร้อนมือถือ และคืน CPU ให้ Speech Recognition ตอน LISTENING
+    if (s === 'IDLE' || s === 'DRAGGING') {
+      if (app.arResume) app.arResume();
+    } else if (app.arPause) {
+      app.arPause();
+    }
+  }
 
   // ---------- wire UI buttons ----------
   dom.micBtn.onclick = listen;

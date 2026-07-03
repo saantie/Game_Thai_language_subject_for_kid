@@ -25,6 +25,8 @@
       <canvas id="bgCanvas"></canvas>
       <!-- [1] ภาพกล้อง AR (mirror) — แสดงเฉพาะเมื่อ AR mode เปิดสำเร็จ -->
       <video id="camVideo" playsinline muted aria-hidden="true"></video>
+      <!-- ฟิลเตอร์ม่วงโซนล่าง บังภาพกล้อง (แสดงคู่กับ camVideo ผ่าน CSS sibling) -->
+      <div id="camShade" aria-hidden="true"></div>
       <!-- [1.5] หม้อแม่มด — DOM img สลับ frame ตาม game state -->
       <img id="cauldronImg" class="cauldron-img" src="public/assets/images/cauldron1.png" alt="" aria-hidden="true" />
       <canvas id="fxCanvas"></canvas>
@@ -111,6 +113,7 @@
           </button>
         </div>
         <button id="installBtn" class="btn-install hidden">📲 ติดตั้งแอป</button>
+        <button id="arToggleBtn" class="btn-install" type="button">📷 โหมด AR: เปิด</button>
         <button id="startAdultBtn" class="btn-link">สำหรับผู้ปกครอง</button>
       </div>
       <div class="app-version">v66</div>

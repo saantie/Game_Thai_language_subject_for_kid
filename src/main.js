@@ -8,7 +8,7 @@ import { createGame } from './game.js';
 import { buildLevelSelect } from './ui/levelSelect.js';
 import { openAdultGate } from './ui/adultPage.js';
 import { MATRA } from './data/matra.js';
-import { loadProgress, saveProgress, clearProgress } from './storage.js';
+import { loadProgress, saveProgress, clearProgress, loadArEnabled, saveArEnabled } from './storage.js';
 
 const MATRA_BY_ID = Object.fromEntries(MATRA.map((m) => [m.id, m]));
 
@@ -24,7 +24,7 @@ fetch('sw.js?_=' + Date.now())
 // ---- app state กลาง (ต้นแบบเก็บใน memory; production ใช้ IndexedDB/Firebase) ----
 const app = {
   progress: loadProgress(), // โหลดจาก localStorage — { matraId: stars }
-  settings: { showSpellHint: false, bgm: true },
+  settings: { showSpellHint: false, bgm: true, arEnabled: loadArEnabled() },
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -109,6 +109,7 @@ function syncArToScreen() {
 }
 
 function initAR() {
+  if (!app.settings.arEnabled) return; // ปิดจากปุ่มหน้าแรก
   if (arInput || _arStarting) return;
   _arStarting = true;
   createHandPinchInput(scene.fxCanvas, inputHandlers, onCameraLost)
@@ -275,12 +276,37 @@ if (/Android/i.test(navigator.userAgent)) {
 // register once ก่อน gesture แรก — ไม่ต้องการ user gesture สำหรับ visibilitychange
 audio.initVisibility();
 
+let _micDone = false;
 $('#startBtn').addEventListener('click', () => {
   audio.unlock();
   // ไมค์ก่อน → กล้องหลัง ใน gesture เดียวกัน (ยิงพร้อมกัน prompt ซ้อน
   // บน Android บางรุ่นอันแรกถูก dismiss) — AR โหลด background ระหว่างเลือกมาตรา
-  audio.requestMicPermission().then(initAR);
+  audio.requestMicPermission().then(() => {
+    _micDone = true;
+    initAR(); // ไม่ทำอะไรถ้าปุ่ม AR ปิดอยู่
+  });
   showScreen('level');
+});
+
+// ---- ปุ่มเปิด/ปิดโหมด AR (หน้าแรก) ----
+const arToggleBtn = $('#arToggleBtn');
+function updateArToggleLabel() {
+  arToggleBtn.textContent = app.settings.arEnabled ? '📷 โหมด AR: เปิด' : '📷 โหมด AR: ปิด';
+  arToggleBtn.style.opacity = app.settings.arEnabled ? '' : '0.6';
+}
+updateArToggleLabel();
+arToggleBtn.addEventListener('click', () => {
+  app.settings.arEnabled = !app.settings.arEnabled;
+  saveArEnabled(app.settings.arEnabled);
+  updateArToggleLabel();
+  if (!app.settings.arEnabled) {
+    // ปิด: หยุดกล้อง/inference ทันที — เกมเล่นต่อด้วย touch
+    if (arInput) { arInput.destroy(); arInput = null; }
+    camVideoEl.classList.remove('show');
+  } else if (_micDone) {
+    initAR(); // เปิดกลับหลังเคยผ่านหน้า start แล้ว — ขอกล้องได้เลย (ไมค์จบไปแล้ว)
+  }
+  // ยังไม่กด "เริ่มเล่น" → แค่จำ flag ไว้ initAR จะทำงานหลัง start ตามลำดับ permission
 });
 
 $('#startAdultBtn').addEventListener('click', () => openAdultGate(app, adultScreen));
