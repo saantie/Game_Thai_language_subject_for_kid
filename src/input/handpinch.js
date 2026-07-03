@@ -6,7 +6,9 @@
 //
 // มาตรการสำหรับมือเด็ก (ดู .claude/skills/setup-ar):
 //   - sticky hand lock  : เด็กหลายคนหน้ากล้อง → ล็อกมือเดียว ไม่สลับกลางทาง
-//   - hysteresis        : กำหลวมค่าแกว่ง → threshold เข้า/ออกคนละค่า
+//   - grip-in / spread-out ไม่สมมาตร: จับด้วยกำมือหลวมๆ (GRIP_ON) แต่ปล่อยได้
+//     เฉพาะกางมือเต็มที่เท่านั้น (SPREAD_FULL) — แค่คลายมือหลวมๆ ระหว่างนั้น
+//     ไม่ทำให้ฟองหลุด [ตามคำขอผู้ใช้ 2026-07-04: "ถ้ามือไม่กางนิ้วออก ห้ามให้ฟองหลุด"]
 //   - grip confirmation : false detection เฟรมเดียว → ต้องกำต่อเนื่องก่อนนับ
 //   - EMA smoothing     : มือสั่น → กรองตำแหน่งก่อนส่งเข้าเกม
 //   - magnet grab       : ส่ง GRAB_SLOP ให้ game.js ขยายรัศมีหยิบ
@@ -21,14 +23,14 @@
 
 // กำมือ: วัดค่าเฉลี่ยระยะ "ปลายนิ้ว 4 นิ้ว (ชี้/กลาง/นาง/ก้อย) → กลางฝ่ามือ"
 // normalize ด้วยขนาดมือ — แบมือค่า ~1.0–1.4, กำมือค่า ~0.3–0.6
-const GRIP_ON  = 0.60; // เริ่มกำเมื่อค่าเฉลี่ยต่ำกว่านี้
-const GRIP_OFF = 0.85; // ปล่อยเมื่อสูงกว่านี้ — ช่องว่างกันฟองหลุดๆ ติดๆ ตอนเด็กกำหลวม
+const GRIP_ON  = 0.60; // เริ่มกำ (หยิบ) เมื่อค่าเฉลี่ยต่ำกว่านี้
 const GRIP_ON_FRAMES = 3; // ต้องกำต่อเนื่อง 3 เฟรม (~125ms @24fps) ก่อนนับเป็นการหยิบ —
                           // false detection เฟรมเดียวเคยยิง pick+release ที่จุดเดิม
                           // = หย่อนฟองลงหม้อเอง เกมเล่นเองเป็นลูป (bug v119)
-const SPREAD_FULL = 1.05; // กางมือเต็มที่ (เกินช่วงแบมือปกติ 1.0–1.4) → ปล่อยฟองทันที
-                          // บายพาส hysteresis/smoothing ปกติ [ยังไม่ผ่านทดสอบเครื่องจริง
-                          // ปรับค่าได้ถ้ารู้สึกไวไป/ช้าไป]
+const SPREAD_FULL = 1.05; // ★ ปล่อยฟองได้เฉพาะกางมือเต็มที่เท่านั้น (เกินช่วงแบมือ
+                          // ปกติ 1.0–1.4) — แค่คลายมือหลวมๆ (norm ระหว่าง GRIP_ON
+                          // กับ SPREAD_FULL) ไม่ทำให้ฟองหลุด กันเด็กมือสั่น/คลายนิ้ว
+                          // โดยไม่ตั้งใจ [ยังไม่ผ่านทดสอบเครื่องจริง ปรับค่าได้]
 const SMOOTH    = 0.4;  // EMA alpha — ตอบสนองไวพอ แต่ตัด jitter ความถี่สูง
 const DEAD_ZONE = 3;    // px หลัง smoothing
 const GRAB_SLOP = 1.6;  // รัศมีหยิบขยายสำหรับ pinch (game.js onPick param ที่ 3)
@@ -181,9 +183,10 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
       sum += Math.hypot(lm[t].x - palm.x, lm[t].y - palm.y);
     }
     const norm = handSize > 0.01 ? sum / 4 / handSize : sum / 4;
-    // hysteresis: threshold เข้า/ออกคนละค่า — ระหว่างกลางคงสถานะเดิม
-    const gripping = isGripping ? norm < GRIP_OFF : norm < GRIP_ON;
-    const spread = norm > SPREAD_FULL; // ข้อ 1/6: กางมือเต็มที่
+    const spread = norm > SPREAD_FULL; // กางมือเต็มที่ (ข้อ 1/6)
+    // จับ: ต้องกำ (norm < GRIP_ON) — ปล่อย: ต้องกางมือเต็มที่เท่านั้น (spread)
+    // แค่คลายมือหลวมๆ ระหว่าง GRIP_ON กับ SPREAD_FULL ไม่ทำให้ฟองหลุด
+    const gripping = isGripping ? !spread : norm < GRIP_ON;
     // ตำแหน่งลาก = กลางฝ่ามือ (กำมือแล้วปลายนิ้วชี้หายไปในกำปั้น ใช้ไม่ได้)
     const { x, y } = toCanvas(palm.x, palm.y, canvasW, canvasH);
     return { gripping, x, y, spread };
@@ -196,7 +199,7 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
     handlers.onRelease && handlers.onRelease(lastX, lastY);
   }
 
-  function updateGripState(gripping, x, y) {
+  function updateGripState(gripping, x, y, spread) {
     // EMA smoothing ก่อนใช้พิกัดทุกครั้ง — ฟองไม่สั่นตามมือเด็ก
     sx += (x - sx) * SMOOTH;
     sy += (y - sy) * SMOOTH;
@@ -213,7 +216,9 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
       }
     } else if (!gripping && isGripping) {
       isGripping = false;
-      handlers.onRelease && handlers.onRelease(sx, sy);
+      // ปล่อยเกิดจากกางมือเต็มที่เสมอ (ข้อ 1) — ใช้ตำแหน่งดิบ x,y แทน sx,sy
+      // ที่ผ่าน smoothing ให้ความรู้สึกปล่อยฉับพลันตรงจุดที่มือกางจริง ไม่หน่วง
+      handlers.onRelease && handlers.onRelease(spread ? x : sx, spread ? y : sy);
     }
     if (!gripping) gripFrames = 0;
     lastX = sx; lastY = sy;
@@ -236,17 +241,9 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
       const hand = selectHand(result);
       if (hand) {
         const { gripping, x, y, spread } = getGripState(hand.lm, canvasW, canvasH);
-
-        if (spread && isGripping) {
-          // ข้อ 1: "กางมือออกให้ฟองหลุดทันที" — ปล่อยที่ตำแหน่งปัจจุบันทันที
-          // บายพาส EMA smoothing/hysteresis ปกติ ให้ความรู้สึกปล่อยฉับพลันตามตั้งใจ
-          isGripping = false;
-          gripFrames = 0;
-          sx = x; sy = y; lastX = x; lastY = y;
-          handlers.onRelease && handlers.onRelease(x, y);
-        } else {
-          updateGripState(gripping, x, y);
-        }
+        // ข้อ 1: จับด้วยกำมือหลวมๆ ได้ แต่ปล่อยได้เฉพาะกางมือเต็มที่เท่านั้น —
+        // gripping คำนวณเงื่อนไขนี้ไว้แล้วใน getGripState, ปล่อยจริงเกิดใน updateGripState
+        updateGripState(gripping, x, y, spread);
 
         // ข้อ 2/6: ส่งเฟรมมือดิบทุกเฟรมที่เจอมือ (ไม่ขึ้นกับ grip state) ให้ game.js
         // ทำ star trail ตอนกางมือ + เดาะฟองลอยขึ้นตอนหงายมือ — pointer.js ไม่มี concept นี้
