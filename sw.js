@@ -1,6 +1,6 @@
 // sw.js — Service Worker: cache-first + stale-while-revalidate + auto-reload on update
 // bump CACHE string ทุกครั้งที่ deploy ใหม่ → browser detect diff → install → reload client
-const CACHE = 'witch-cauldron-v118';
+const CACHE = 'witch-cauldron-v119';
 
 const APP_SHELL = [
   './',
@@ -59,6 +59,13 @@ const APP_SHELL = [
   './public/assets/audio/Magic%20Chime.mp3',
   './public/assets/audio/Swoosh.mp3',
   './public/music/Moonlit%20Broomhop.mp3',
+  // MediaPipe Hand Landmarker (AR mode) — model + WASM ต้องแคช offline
+  // (ตัว vision_bundle.js โหลดจาก CDN — AR ต้องมีเน็ตครั้งแรก, decision 2026-07-02)
+  './public/models/hand_landmarker.task',
+  './public/models/wasm/vision_wasm_internal.js',
+  './public/models/wasm/vision_wasm_internal.wasm',
+  './public/models/wasm/vision_wasm_nosimd_internal.js',
+  './public/models/wasm/vision_wasm_nosimd_internal.wasm',
 ];
 
 self.addEventListener('install', (e) => {

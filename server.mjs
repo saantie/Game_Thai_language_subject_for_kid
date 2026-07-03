@@ -15,6 +15,10 @@ const TYPES = {
   '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
+  // MediaPipe (AR mode) — .wasm ต้องถูก type ไม่งั้น streaming compile fail
+  // ตกไปใช้ compile ช้า (production hosting ต้องตั้ง MIME นี้ด้วย)
+  '.wasm': 'application/wasm',
+  '.task': 'application/octet-stream',
 };
 
 http

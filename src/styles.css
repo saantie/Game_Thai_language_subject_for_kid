@@ -26,6 +26,21 @@ html, body {
 #bgCanvas { position: absolute; inset: 0; z-index: 0; }   /* [0] ฉากป่า static */
 #fxCanvas { position: absolute; inset: 0; z-index: 3; }   /* [3] ฟอง/particle dynamic */
 
+/* [1] ภาพกล้อง AR — mirror แบบกระจกให้ตรงกับพิกัดที่ flip ใน handpinch.js
+   object-fit:cover ต้องตรงกับสูตร map พิกัดใน toCanvas() เสมอ */
+#camVideo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  z-index: 1;
+  display: none;
+  filter: brightness(0.8); /* หรี่ภาพกล้องกันแย่งความเด่นตัวอักษร/ฟอง */
+}
+#camVideo.show { display: block; }
+
 /* [1.5] หม้อแม่มด — DOM img, frame switching via JS */
 .cauldron-img {
   position: absolute;   /* absolute ใน sceneRoot (fixed inset:0) = เดียวกับ viewport */

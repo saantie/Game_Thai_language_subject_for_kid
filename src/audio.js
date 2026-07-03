@@ -77,12 +77,15 @@ export const audio = {
   },
 
   // ขอ mic permission แยกต่างหาก — เรียกหลังเสียงทักทายพูดจบ ไม่ซ้อนทับ TTS
+  // return promise ให้ caller รอก่อนขอ permission กล้อง (AR) — prompt ซ้อนกัน
+  // บน Android บางรุ่นอันแรกถูก dismiss อัตโนมัติ
   requestMicPermission() {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ audio: true })
+      return navigator.mediaDevices.getUserMedia({ audio: true })
         .then((stream) => stream.getTracks().forEach((t) => t.stop()))
         .catch(() => {});
     }
+    return Promise.resolve();
   },
 
   // ---------- SFX ----------

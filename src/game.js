@@ -352,6 +352,8 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     dom.micState.textContent = '🔴 กำลังฟัง...';
     dom.micBtn.classList.add('listening');
     audio.duck();
+    // AR mode: หยุด hand inference ระหว่างฟัง — คืน CPU ให้ Speech Recognition
+    if (app.arPause) app.arPause();
     let got = false;
     recog.start(
       (alts) => {
@@ -361,6 +363,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       () => {
         dom.micBtn.classList.remove('listening');
         audio.unduck();
+        if (app.arResume) app.arResume();
         if (!got && state === 'LISTENING') {
           dom.micState.textContent = 'ไม่ได้ยินเสียง ลองกดพูดอีกครั้งนะ';
           setState('READING');
@@ -540,23 +543,34 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   let _cauldronHintTs = 0; // cooldown กัน spam
 
   // ---------- Input handlers ----------
-  function onPick(x, y) {
+  function onPick(x, y, slop = 1.0) {
+    // hybrid guard: touch กับ pinch ทำงานพร้อมกัน — ถ้า input หนึ่งถือฟองอยู่แล้ว
+    // อีก input ต้องไม่หยิบฟองตัวที่สองทับ (ฟองแรกจะค้าง held=true เป็น orphan)
+    if (held) return;
     if (state !== 'IDLE' && state !== 'DRAGGING') return;
+    // magnet grab: หาฟอง "ใกล้สุด" ในรัศมี b.r * slop (pinch ส่ง 1.6 — นิ้วเด็ก
+    // จีบพลาดฟองบ่อย; pointer ไม่ส่ง = 1.0 พฤติกรรมเดิม) — ต้องใกล้สุดไม่ใช่
+    // ตัวแรกที่โดน เพราะรัศมีขยายอาจซ้อนกันหลายฟอง
+    let best = null;
+    let bestD = Infinity;
     for (let i = bubbles.length - 1; i >= 0; i--) {
       const b = bubbles[i];
       if (b.dead) continue;
-      if (Math.hypot(x - b.x, y - b.y) <= b.r) {
-        held = b;
-        b.held = true;
-        b.pop = 0.6;
-        b.bouncing = false;
-        b.vx = 0;
-        b.vy = 0;
-        setState('DRAGGING');
-        updateWordPill();
-        audio.sfx('pick');
-        return;
-      }
+      const d = Math.hypot(x - b.x, y - b.y);
+      if (d <= b.r * slop && d < bestD) { bestD = d; best = b; }
+    }
+    if (best) {
+      const b = best;
+      held = b;
+      b.held = true;
+      b.pop = 0.6;
+      b.bouncing = false;
+      b.vx = 0;
+      b.vy = 0;
+      setState('DRAGGING');
+      updateWordPill();
+      audio.sfx('pick');
+      return;
     }
     // ไม่ได้จับฟอง — เช็คว่าแตะหม้อหรือเปล่า
     const c = scene.cauldron;

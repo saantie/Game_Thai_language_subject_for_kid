@@ -3,6 +3,7 @@
 import { audio } from './audio.js';
 import { initScene } from './scene.js';
 import { createPointerInput } from './input/pointer.js';
+import { createHandPinchInput } from './input/handpinch.js';
 import { createGame } from './game.js';
 import { buildLevelSelect } from './ui/levelSelect.js';
 import { openAdultGate } from './ui/adultPage.js';
@@ -70,12 +71,54 @@ const game = createGame({
   },
 });
 
-// input layer: pointer (ต้นแบบ) — สลับเป็น handpinch ภายหลังได้โดยไม่แตะ game
-createPointerInput(scene.fxCanvas, {
+// input layer: hybrid — pointer (touch/เมาส์) ทำงานเสมอ, AR (handpinch) ซ้อนทับ
+// เมื่อเปิดกล้องสำเร็จ — เด็กจิ้มจอก็เล่นได้ จีบนิ้วหน้ากล้องก็เล่นได้
+const inputHandlers = {
   onPick: game.onPick,
   onMove: game.onMove,
   onRelease: game.onRelease,
-});
+};
+createPointerInput(scene.fxCanvas, inputHandlers);
+
+let arInput = null;
+let _arStarting = false;
+let _screen = 'start';
+const camVideoEl = $('#camVideo');
+
+// game.js เรียกตอนเข้า/ออก LISTENING — หยุด inference คืน CPU ให้ Speech Recognition
+app.arPause = () => { if (arInput) arInput.pause(); };
+app.arResume = () => { if (arInput && _screen === 'game') arInput.resume(); };
+
+function onCameraLost() {
+  // Android ตัดกล้อง (จอดับ/สลับแอป/สายเข้า) → ปิด AR เรียบร้อย เกมเล่นต่อด้วย touch
+  if (arInput) { arInput.destroy(); arInput = null; }
+  camVideoEl.classList.remove('show');
+  witchSay('กล้องปิดไปแล้วจ้ะ ใช้นิ้วจิ้มจอแทนได้เลยนะ');
+}
+
+// AR ทำงานเฉพาะหน้าเกม — หน้าเมนู pause inference + ซ่อนภาพกล้อง (ประหยัดแบต/CPU)
+function syncArToScreen() {
+  if (!arInput) { camVideoEl.classList.remove('show'); return; }
+  if (_screen === 'game') {
+    arInput.resume();
+    camVideoEl.classList.add('show');
+  } else {
+    arInput.pause();
+    camVideoEl.classList.remove('show');
+  }
+}
+
+function initAR() {
+  if (arInput || _arStarting) return;
+  _arStarting = true;
+  createHandPinchInput(scene.fxCanvas, inputHandlers, onCameraLost)
+    .then((input) => {
+      _arStarting = false;
+      arInput = input; // null = ไม่มีกล้อง/ปฏิเสธ/offline → touch อย่างเดียว ไม่ crash
+      syncArToScreen();
+    })
+    .catch(() => { _arStarting = false; });
+}
 
 scene.onResize(() => game.relayout());
 
@@ -84,6 +127,8 @@ let _inPopstate  = false;
 let _historyInit = false;
 
 function showScreen(which) {
+  _screen = which;
+  syncArToScreen();
   // History API — ทำให้ปุ่ม Back บนมือถือย้อนกลับระหว่างหน้าของแอปแทนที่จะออก
   if (!_inPopstate) {
     if (!_historyInit) {
@@ -232,7 +277,9 @@ audio.initVisibility();
 
 $('#startBtn').addEventListener('click', () => {
   audio.unlock();
-  audio.requestMicPermission();
+  // ไมค์ก่อน → กล้องหลัง ใน gesture เดียวกัน (ยิงพร้อมกัน prompt ซ้อน
+  // บน Android บางรุ่นอันแรกถูก dismiss) — AR โหลด background ระหว่างเลือกมาตรา
+  audio.requestMicPermission().then(initAR);
   showScreen('level');
 });
 
