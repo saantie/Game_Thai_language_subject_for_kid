@@ -105,6 +105,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp - 2;
       p.life = 1; p.r = 3 + Math.random() * 5;
       p.hue = 120 + Math.random() * 80; p.star = false;
+      p.fillStyle = `hsl(${p.hue},90%,60%)`; // cache สีไว้ตอน spawn — ไม่คำนวณ string ซ้ำทุกเฟรมใน drawParticle
       particles.push(p);
     }
   }
@@ -120,6 +121,8 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       p.r = 10 + Math.random() * 14; // ⭐ ใหญ่ขึ้นเห็นชัด
       p.hue = 42 + Math.random() * 18;
       p.star = true;
+      p.fillStyle = `hsl(${p.hue},90%,60%)`;   // cache สีไว้ตอน spawn (ดู spawnExplosion)
+      p.shadowStyle = `hsl(${p.hue},100%,70%)`;
       particles.push(p);
     }
   }
