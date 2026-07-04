@@ -665,8 +665,30 @@ button { font-family: inherit; cursor: pointer; border: none; }
   backdrop-filter: blur(2px);
   isolation: isolate;
 }
-.start-card .start-emoji { font-size: 36px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
-.start-witch-img { width: clamp(200px, 45vw, 320px); height: auto; mix-blend-mode: multiply; }
+.start-card .start-emoji {
+  font-size: 36px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 4px;
+  position: relative; /* จุดอ้างอิงให้แผ่นสว่างด้านหลัง (::before) วางตำแหน่งตรงกลาง */
+}
+/* แผ่นสว่างด้านหลังตัวแม่มด — ให้ mix-blend-mode:multiply ของภาพ (ซึ่งลบพื้นขาวเดิม
+   ของ gif ออกโดยคูณกับพื้นขาว = คงสีเดิม) ทำงานถูกต้อง เดิมไม่มีแผ่นนี้ multiply ไป
+   ทับพื้นม่วงเข้มของหน้าจอโดยตรง ทำให้ภาพทั้งใบมืดคล้ำ (บั๊กที่เจอ) */
+.start-card .start-emoji::before {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 82%; height: 82%;
+  background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,250,255,0.75) 55%, rgba(255,255,255,0) 78%);
+  border-radius: 50%;
+  z-index: 0;
+  pointer-events: none;
+}
+.start-witch-img {
+  width: clamp(200px, 45vw, 320px); height: auto;
+  mix-blend-mode: multiply;
+  position: relative; z-index: 1; /* อยู่เหนือแผ่นสว่าง */
+}
 .start-card h1 { font-size: clamp(30px, 7vw, 52px); margin: 8px 0; }
 .start-card p { opacity: 0.85; margin: 0 0 24px; font-size: clamp(15px, 3vw, 20px); }
 
