@@ -1,5 +1,5 @@
 ---
-description: step-by-step guide implement handpinch.js ด้วย MediaPipe Hand Landmarker — camera permission, sticky hand lock (กันหลายมือ/หลายเด็ก), จับด้วยการกำมือ (fist) + hysteresis + confirmation + smoothing สำหรับมือเด็ก, hand-size normalization, magnet grab + drag guard, hybrid touch+AR, ปุ่มเปิด/ปิด AR หน้าแรก, กู้คืนกล้องอัตโนมัติหลังสลับแอป, pause ตาม state ลดความร้อนมือถือ
+description: step-by-step guide implement handpinch.js ด้วย MediaPipe Hand Landmarker — camera permission, sticky hand lock (กันหลายมือ/หลายเด็ก), จับด้วยการจีบสองนิ้ว (thumb+index) + hysteresis + confirmation ทั้งสองทิศทาง + smoothing สำหรับมือเด็ก, hand-size normalization, magnet grab + drag guard, hybrid touch+AR, ปุ่มเปิด/ปิด AR หน้าแรก, กู้คืนกล้องอัตโนมัติหลังสลับแอป, pause ตาม state ลดความร้อนมือถือ
 ---
 
 # /setup-ar
@@ -7,13 +7,18 @@ description: step-by-step guide implement handpinch.js ด้วย MediaPipe Ha
 Implement `src/input/handpinch.js` ให้ emit `onPick/onMove/onRelease` เหมือน `pointer.js`
 ทำให้ `game.js` ไม่รู้ว่า input มาจากนิ้วจริงหรือเมาส์ (interface เดียวกันตามสเปก §3.5)
 
+**ท่าจับ = จีบสองนิ้ว (thumb+index pinch)** [decision 2026-07-05]: เคยลองเปลี่ยนเป็น
+กำมือ (fist) แล้วเพิ่มฟีเจอร์โยนด้วยแรงเหวี่ยง แต่ทดสอบเครื่องจริงพบว่าทั้งสองท่าทาง
+ต้องตรวจจับละเอียดเกินไป ควบคุมยาก — กลับมาใช้จีบสองนิ้วซึ่งเสถียร/ควบคุมง่ายกว่า
+และตัดฟีเจอร์โยนออก (อย่า implement ท่ากำมือหรือฟีเจอร์โยนอีกโดยไม่ปรึกษาก่อน)
+
 **ออกแบบสำหรับผู้เล่นเด็ก** — คู่มือนี้รวมมาตรการกันบั๊กจากพฤติกรรมเด็กจริง:
 - เด็กหลายคน (หลายมือ) หน้ากล้องพร้อมกัน → sticky hand lock (Step 3ก)
 - จีบนิ้วหลวม/ไม่แน่น → hysteresis สองระดับ (Step 3ข)
-- false detection เฟรมเดียวทำเกม "เล่นเอง" → pinch confirmation 3 เฟรม (Step 5)
-  + drop ต้องลากจริง (Step 5.5) [บทเรียน bug v119]
+- false detection เฟรมเดียวทำเกม "เล่นเอง" → pinch confirmation ทั้งสองทิศทาง
+  (Step 5) + drop ต้องลากจริง (Step 5.5) [บทเรียน bug v119 และ v125]
 - มือสั่น → EMA smoothing (Step 5)
-- จีบไม่โดนฟองพอดี → magnet grab (Step 5.5)
+- จีบไม่โดนฟองพอดี → magnet grab + สแนปติดมือทันทีตอนหยิบ (Step 5.5)
 - เด็กเผลอจิ้มจอ → hybrid: touch ใช้ได้ควบคู่ AR เสมอ (Step 6)
 
 และมาตรการกันบั๊กเชิงระบบ:
@@ -160,9 +165,11 @@ function handSizeOf(lm) {
   return Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y);
 }
 
-// คืน landmarks ของมือที่ควรคุมเกม หรือ null ถ้ามือที่ล็อกหลุดเฟรม
-function selectHand(allHands) {
-  if (allHands.length === 0) {
+// คืน { lm, idx } ของมือที่ควรคุมเกม หรือ null ถ้ามือที่ล็อกหลุดเฟรม — ต้องคืน idx
+// ด้วยเพื่อจับคู่กับ result.handednesses[idx] (ใช้ใน palmUpScore ท้ายไฟล์)
+function selectHand(result) {
+  const hands = result.landmarks;
+  if (!hands || hands.length === 0) {
     if (++lostFrames >= LOST_RESET) lockedWrist = null;
     return null;
   }
@@ -170,51 +177,39 @@ function selectHand(allHands) {
 
   if (lockedWrist) {
     // เลือกมือที่ข้อมือใกล้ตำแหน่งเดิมที่สุด (มือเดียวกับเฟรมก่อน)
-    let best = null, bestD = Infinity;
-    for (const lm of allHands) {
+    let bestIdx = -1, bestD = Infinity;
+    hands.forEach((lm, i) => {
       const d = Math.hypot(lm[0].x - lockedWrist.x, lm[0].y - lockedWrist.y);
-      if (d < bestD) { bestD = d; best = lm; }
-    }
+      if (d < bestD) { bestD = d; bestIdx = i; }
+    });
     // ★ ระหว่างลากฟอง (isPinching) ห้ามสลับไปมืออื่นเด็ดขาด —
     //   ถ้ามือเดิมกระโดดไปไกลผิดปกติ แปลว่ามือที่ล็อกหลุดเฟรม
     //   และ best คือมือของเด็กอีกคน → ถือว่าไม่เจอมือ
     if (isPinching && bestD > 0.35) return null;
-    lockedWrist = { x: best[0].x, y: best[0].y };
-    return best;
+    lockedWrist = { x: hands[bestIdx][0].x, y: hands[bestIdx][0].y };
+    return { lm: hands[bestIdx], idx: bestIdx };
   }
 
   // ยังไม่มี lock → เลือกมือใหญ่สุด (ใกล้กล้องสุด = คนที่กำลังเล่น)
-  let best = allHands[0];
-  for (const lm of allHands) {
-    if (handSizeOf(lm) > handSizeOf(best)) best = lm;
-  }
-  lockedWrist = { x: best[0].x, y: best[0].y };
-  return best;
+  let bestIdx = 0;
+  hands.forEach((lm, i) => { if (handSizeOf(lm) > handSizeOf(hands[bestIdx])) bestIdx = i; });
+  lockedWrist = { x: hands[bestIdx][0].x, y: hands[bestIdx][0].y };
+  return { lm: hands[bestIdx], idx: bestIdx };
 }
 ```
 
-### 3ข) Grip detection + hysteresis + hand-size normalization
-
-> **ท่าจับของโปรดักชัน = "กำมือ" (fist) ไม่ใช่จีบสองนิ้ว** [decision 2026-07-03]:
-> เด็กกำมือได้ง่ายและเสถียรกว่าจีบนิ้วมาก สูตร: ค่าเฉลี่ยระยะปลายนิ้ว 4 นิ้ว
-> (landmark 8,12,16,20) → กลางฝ่ามือ (9) หารด้วย handSize — แบมือ ~1.0–1.4,
-> กำมือ ~0.3–0.6 → `GRIP_ON 0.60 / GRIP_OFF 0.85` และ**ตำแหน่งลากใช้กลางฝ่ามือ**
-> (กำมือแล้วปลายนิ้วชี้หายเข้าไปในกำปั้น) — โครงด้านล่างเป็นตัวอย่างแบบ pinch เดิม
-> หลักการ normalize/hysteresis เหมือนกันทุกประการ ดูโค้ดจริงใน `src/input/handpinch.js`
+### 3ข) Pinch detection + hysteresis + hand-size normalization
 
 นี่คือจุดที่สเปกเตือนไว้โดยเฉพาะ:
 
 ```js
 // landmark index:  4 = นิ้วโป้งปลาย, 8 = นิ้วชี้ปลาย, 0 = ข้อมือ, 9 = กลางฝ่ามือ
 const PINCH_ON  = 0.30;   // เริ่มจีบเมื่อ normDist ต่ำกว่านี้
-const PINCH_OFF = 0.45;   // ปล่อยเมื่อ normDist สูงกว่านี้ — ช่องว่าง 0.30–0.45
+const PINCH_OFF = 0.45;   // เลิกจีบเมื่อ normDist สูงกว่านี้ — ช่องว่าง 0.30–0.45
                           // กันเด็กจีบหลวมแล้วฟองหลุด ๆ ติด ๆ กลางทาง (rapid pick/release)
 
-function getPinchState(landmarks, canvasW, canvasH, wasPinching) {
-  const thumb = landmarks[4];
-  const index = landmarks[8];
-  const wrist = landmarks[0];
-  const mid   = landmarks[9];
+function getPinchState(lm, canvasW, canvasH) {
+  const thumb = lm[4], index = lm[8], wrist = lm[0], mid = lm[9];
 
   // raw distance นิ้วโป้ง-ชี้ (normalized 0–1 ใน MediaPipe space)
   const rawDist = Math.hypot(thumb.x - index.x, thumb.y - index.y);
@@ -224,12 +219,10 @@ function getPinchState(landmarks, canvasW, canvasH, wasPinching) {
   const normDist = handSize > 0.01 ? rawDist / handSize : rawDist;
 
   // hysteresis: threshold เข้า/ออกคนละค่า — ระหว่างกลางคงสถานะเดิม
-  const pinching = wasPinching ? normDist < PINCH_OFF : normDist < PINCH_ON;
+  const pinching = isPinching ? normDist < PINCH_OFF : normDist < PINCH_ON;
 
-  // พิกัดตำแหน่งนิ้วชี้ในหน่วย canvas px (mirror ด้านซ้าย-ขวาเพราะกล้อง selfie)
-  const x = (1 - index.x) * canvasW;
-  const y = index.y * canvasH;
-
+  // ตำแหน่งลาก = ปลายนิ้วชี้ (ตรงกับที่เด็กมองว่า "นิ้วอยู่ตรงไหน" ตอนจีบ)
+  const { x, y } = toCanvas(index.x, index.y, canvasW, canvasH); // ดูสูตร cover ที่ Step 6
   return { pinching, x, y };
 }
 ```
@@ -256,8 +249,8 @@ let running = true;
 let paused = false;
 let lastVideoTime = -1;
 
-function detectLoop(landmarker, videoEl, fxCanvas, handlers) {
-  if (!running) return;                        // destroy() แล้ว → จบ ไม่ schedule ต่อ
+function detectLoop(gen) {
+  if (!running || gen !== loopGen) return;     // destroy() แล้ว → จบ ไม่ schedule ต่อ
 
   if (!paused && !videoEl.paused && videoEl.currentTime !== lastVideoTime) {
     lastVideoTime = videoEl.currentTime;
@@ -269,27 +262,24 @@ function detectLoop(landmarker, videoEl, fxCanvas, handlers) {
     // detectForVideo ทำงานบน main thread แต่ใช้เวลา ~5–15ms/frame
     const result = landmarker.detectForVideo(videoEl, performance.now());
 
-    const hand = selectHand(result.landmarks);   // sticky lock จาก Step 3ก
+    const hand = selectHand(result);             // sticky lock จาก Step 3ก
     if (hand) {
-      const { pinching, x, y } = getPinchState(hand, canvasW, canvasH, isPinching);
-      updatePinchState(pinching, x, y, handlers);
+      const { pinching, x, y } = getPinchState(hand.lm, canvasW, canvasH);
+      updatePinchState(pinching, x, y);
     } else {
       // ไม่เห็นมือ (หรือมือที่ล็อกหลุดเฟรม) → release ทันที
       // [decision เคาะแล้ว 2026-07-02: ไม่ใช้ grace period — ฟองลอยกลับที่เดิม
       //  ซึ่ง game.js จัดการให้อยู่แล้วเมื่อ release นอกหม้อ]
-      if (isPinching) {
-        isPinching = false;
-        handlers.onRelease && handlers.onRelease(lastX, lastY);
-      }
+      forceRelease();
     }
   }
 
   // ใช้ requestVideoFrameCallback แทน rAF ถ้า browser รองรับ
   // (sync กับ video frame จริง ลด redundant inference)
   if ('requestVideoFrameCallback' in videoEl) {
-    videoEl.requestVideoFrameCallback(() => detectLoop(landmarker, videoEl, fxCanvas, handlers));
+    videoEl.requestVideoFrameCallback(() => detectLoop(gen));
   } else {
-    requestAnimationFrame(() => detectLoop(landmarker, videoEl, fxCanvas, handlers));
+    requestAnimationFrame(() => detectLoop(gen));
   }
 }
 ```
@@ -302,22 +292,24 @@ function detectLoop(landmarker, videoEl, fxCanvas, handlers) {
 
 ```js
 let isPinching = false;
-let pinchFrames = 0;           // นับเฟรมจีบต่อเนื่อง
+let pinchOnFrames = 0;         // นับเฟรมจีบต่อเนื่อง — กัน phantom pick เฟรมเดียว
+let pinchOffFrames = 0;        // นับเฟรมเลิกจีบต่อเนื่อง — กัน phantom release เฟรมเดียว
 let lastX = 0, lastY = 0;
 let sx = 0, sy = 0;            // ตำแหน่งหลัง smoothing
 const SMOOTH = 0.4;            // EMA alpha — 0.4 ตอบสนองไวพอ แต่ตัด jitter ความถี่สูง
 const DEAD_ZONE = 3;           // px หลัง smoothing แล้ว
-const GRAB_SLOP = 1.6;         // รัศมีหยิบขยายสำหรับ pinch (magnet grab, Step 5.5)
-const PINCH_ON_FRAMES = 3;     // ★ ต้องจีบต่อเนื่อง 3 เฟรมก่อนนับ — ดูคำเตือนล่างสุด
+const GRAB_SLOP = 2.2;         // รัศมีหยิบขยายสำหรับ pinch (magnet grab, Step 5.5)
+const PINCH_ON_FRAMES  = 3;    // ★ ต้องจีบต่อเนื่อง 3 เฟรมก่อนนับ — ดูคำเตือนล่างสุด
+const PINCH_OFF_FRAMES = 4;    // ★ ต้องเลิกจีบต่อเนื่อง 4 เฟรมก่อนปล่อยจริง — ดูคำเตือน
 
-function updatePinchState(pinching, x, y, handlers) {
+function updatePinchState(pinching, x, y) {
   // EMA smoothing ก่อนใช้พิกัดทุกครั้ง
   sx += (x - sx) * SMOOTH;
   sy += (y - sy) * SMOOTH;
 
   if (pinching && !isPinching) {
-    // ยืนยันจีบต่อเนื่องก่อนนับ — ตัด phantom pinch จาก false detection
-    if (++pinchFrames < PINCH_ON_FRAMES) { lastX = sx; lastY = sy; return; }
+    // ยืนยันจีบต่อเนื่องก่อนนับ — ตัด phantom pick จาก false detection
+    if (++pinchOnFrames < PINCH_ON_FRAMES) { lastX = sx; lastY = sy; return; }
     isPinching = true;
     sx = x; sy = y;            // reset filter ตอนเริ่มจีบ กันตำแหน่งค้างจากรอบก่อน
     handlers.onPick && handlers.onPick(sx, sy, GRAB_SLOP);   // ★ ส่ง slop เป็น param ที่ 3
@@ -326,18 +318,29 @@ function updatePinchState(pinching, x, y, handlers) {
       handlers.onMove && handlers.onMove(sx, sy);
     }
   } else if (!pinching && isPinching) {
+    // ยืนยันเลิกจีบต่อเนื่องก่อนปล่อยจริง — ตัด phantom release จาก landmark
+    // เพี้ยนแวบเดียว (พบจริงตอนใช้ท่ากำมือ: มือเอียง/คว่ำตอนเอื้อมลงใกล้หม้อ
+    // ทำให้ normDist พุ่งผิดๆ จากมุมกล้อง ไม่ใช่ปล่อยจริง — ปัญหาเดียวกันเกิดกับ
+    // จีบได้ จึงคงมาตรการนี้ไว้แม้กลับมาใช้จีบแล้ว)
+    if (++pinchOffFrames < PINCH_OFF_FRAMES) { lastX = sx; lastY = sy; return; }
     isPinching = false;
     handlers.onRelease && handlers.onRelease(sx, sy);
   }
-  if (!pinching) pinchFrames = 0;
+  if (pinching) pinchOffFrames = 0;   // ยังจีบอยู่ปกติ → รีเซ็ตนับเลิกจีบ
+  if (!pinching) pinchOnFrames = 0;   // ยังไม่จีบ (หรือจีบไม่ต่อเนื่องพอ) → รีเซ็ตนับจีบ
   lastX = sx; lastY = sy;
 }
 ```
 
-**⚠️ ห้ามตัด pinch confirmation ออก** (ตอนออกแบบครั้งแรกเคยตัดเพราะกลัวหน่วง —
-ผิดพลาด): false detection ของ MediaPipe เฟรมเดียวจะยิง pick+release ที่จุดเดิมทันที
-ถ้าฟองลอยซ้อน drop zone ของหม้อ = หย่อนเอง → เกมเข้ารอบอ่าน-เปิดไมค์-จบรอบวนเอง
-ไม่หยุด "แม่มดพูดรัว ไมค์เด้งรัว" (bug จริง v119) — 3 เฟรม @24fps = ~125ms เด็กไม่รู้สึก
+**⚠️ ห้ามตัด pinch confirmation ออกทั้งสองทิศทาง** (ตอนออกแบบครั้งแรกเคยตัดฝั่งจับ
+เพราะกลัวหน่วง — ผิดพลาด, ภายหลังพบว่าฝั่งปล่อยก็ต้องมี confirmation เช่นกัน):
+- **ฝั่งจับ:** false detection ของ MediaPipe เฟรมเดียวจะยิง pick+release ที่จุดเดิมทันที
+  ถ้าฟองลอยซ้อน drop zone ของหม้อ = หย่อนเอง → เกมเข้ารอบอ่าน-เปิดไมค์-จบรอบวนเอง
+  ไม่หยุด "แม่มดพูดรัว ไมค์เด้งรัว" (bug จริง v119)
+- **ฝั่งปล่อย:** มือเอียง/คว่ำตอนเอื้อมลงใกล้หม้อทำให้ landmark เพี้ยนแวบเดียว
+  normDist พุ่งเกิน PINCH_OFF ผิดๆ (ไม่ใช่เลิกจีบจริง) ฟองหลุดเองผิดจังหวะ (บทเรียน
+  จากตอนทดลองใช้ท่ากำมือ v125 — ปัญหาเดียวกันเกิดกับจีบได้)
+- 3–4 เฟรม @24fps = ~125–165ms เด็กไม่รู้สึกหน่วง
 
 **ทำไมส่ง slop เป็น parameter ไม่ใช่ flag โหมด:** touch กับ pinch ทำงานพร้อมกัน
 (hybrid, Step 6) — flag เดียวแบบ `app.inputIsHand` แยกไม่ออกว่า event นี้มาจากแหล่งไหน
@@ -348,18 +351,19 @@ pointer.js ไม่ต้องแก้อะไร (ไม่ส่ง param 
 ## Step 5.5 — Magnet grab ใน game.js (จุดเดียวที่ต้องแก้นอก handpinch.js)
 
 นิ้วเด็ก + ความคลาดของ landmark ทำให้จีบพลาดฟองที่ตั้งใจหยิบบ่อย
-`onPick()` ใน `game.js` (~บรรทัด 543) ปัจจุบันวนหา "ฟองแรกที่โดน":
+`onPick()` ใน `game.js` (~บรรทัด 617) ปัจจุบันวนหา "ฟองแรกที่โดน":
 
 ```js
 // เดิม — first hit ภายใน b.r พอดี
 if (Math.hypot(x - b.x, y - b.y) <= b.r) { held = b; ... return; }
 ```
 
-เปลี่ยนเป็น **หาฟองที่ใกล้ที่สุด** ภายในรัศมีขยาย พร้อม guard กัน input สองแหล่งชนกัน:
+เปลี่ยนเป็น **หาฟองที่ใกล้ที่สุด** ภายในรัศมีขยาย พร้อม guard กัน input สองแหล่งชนกัน
+และ **สแนปฟองไปจุดจีบทันที** (แม่เหล็กติดนิ้วจริง ไม่ใช่แค่ขยายรัศมีหยิบ):
 
 ```js
 function onPick(x, y, slop = 1.0) {          // pointer ไม่ส่ง slop → 1.0 พฤติกรรมเดิม
-  if (held) return;                          // ★ hybrid guard: pinch ถือฟองอยู่แล้ว
+  if (held) return;                          // ★ hybrid guard: จีบถือฟองอยู่แล้ว
                                              //   เด็กแตะจอ (หรือกลับกัน) ต้องไม่หยิบ
                                              //   ฟองตัวที่สองทับ — ไม่งั้นฟองแรกค้าง
                                              //   สถานะ held=true เป็น orphan
@@ -372,11 +376,17 @@ function onPick(x, y, slop = 1.0) {          // pointer ไม่ส่ง slop 
     const d = Math.hypot(x - b.x, y - b.y);
     if (d <= b.r * slop && d < bestD) { bestD = d; best = b; }
   }
-  if (best) { held = best; /* ... โค้ดหยิบเดิม: pop, setState, sfx ... */ }
+  if (best) {
+    held = best;
+    held.x = x; held.y = y;   // ★ แม่เหล็กดูดติดนิ้วทันที — ไม่รอ onMove ขยับก่อน
+                               //   (เดิมฟองค้างตำแหน่งเก่าจนกว่าจะขยับเกิน dead zone
+                               //   รู้สึกเหมือนไม่ติดนิ้ว — บทเรียนทดสอบเครื่องจริง)
+    /* ... โค้ดหยิบเดิม: pop, setState, sfx ... */
+  }
 }
 ```
 
-ต้องเลือก "ใกล้สุด" ไม่ใช่ "ตัวแรกที่โดน" — เมื่อ slop 1.6 รัศมีอาจซ้อนกันหลายฟอง
+ต้องเลือก "ใกล้สุด" ไม่ใช่ "ตัวแรกที่โดน" — เมื่อ slop 2.2 รัศมีอาจซ้อนกันหลายฟอง
 first-hit จะหยิบฟองผิดตัว
 
 **Drag guard ใน `onRelease` (ชั้นป้องกันที่สองของ bug v119):** จุดหยิบต้องถูกจำไว้
@@ -389,6 +399,12 @@ const overMouth = dragged && Math.hypot(x - c.cx, (y - c.cy) / 1.1) <= c.rx;
 ```
 
 เด็กลากจริงเคลื่อนที่ไกลกว่านี้เสมอ — ไม่กระทบการเล่นปกติ (ยืนยันด้วย Playwright test)
+
+**⚠️ อย่าเพิ่มฟีเจอร์ "โยนด้วยแรงเหวี่ยง"** (เคยลองแล้วถอดออก 2026-07-05) — การเก็บ
+ความเร็วลากมาคำนวณ trajectory แล้วเช็คว่าจะ "ลอยเข้า" โซนหม้อ ฟังดูดีในทฤษฎีแต่รู้สึก
+ควบคุมยากในทางปฏิบัติ (ทดสอบเครื่องจริงแล้วผู้ใช้ขอถอดออก) — ถ้ามีคนขอฟีเจอร์ทำนอง
+นี้อีก ให้ทวนกับผู้ใช้ก่อนว่าเจตนาคืออะไรจริงๆ อาจแก้ที่ magnet grab radius/threshold
+แทนจะตรงจุดกว่า
 
 ---
 
@@ -406,13 +422,12 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
     return null;
   }
 
-  detectLoop(landmarker, videoEl, fxCanvas, handlers);
+  detectLoop(loopGen);
 
   return {
     pause()  { paused = true;
                // ถ้ากำลังลากฟองอยู่ ปล่อยก่อน — กันฟองค้างมือระหว่างรอบฟังเสียง
-               if (isPinching) { isPinching = false;
-                 handlers.onRelease && handlers.onRelease(lastX, lastY); } },
+               forceRelease(); },
     resume() { paused = false; },
     destroy() {
       running = false;                         // ★ หยุด loop ก่อน close
@@ -452,19 +467,46 @@ function setState(s) {
 
 **Mirror + coordinate mapping — ระวัง 2 จุด:**
 
-1. สูตร `(1 - index.x) * canvasW` ใน Step 3ข ใช้ได้เมื่อ **ไม่แสดง** ภาพกล้อง
+1. สูตร mirror อย่างเดียว (`(1 - index.x) * canvasW`) ใช้ได้เมื่อ **ไม่แสดง** ภาพกล้อง
    (camVideo ซ่อน ใช้แค่ tracking) — แต่ถ้าเปิด `#camVideo` เป็น AR overlay ด้วย
    `object-fit: cover` พิกัดนิ้วบนจอจะเพี้ยนตามส่วนที่ถูก crop ต้อง map ผ่าน
-   สูตร cover เดียวกับที่ browser scale video:
+   สูตร cover เดียวกับที่ browser scale video (ฟังก์ชัน `toCanvas` ที่ Step 3ข ใช้จริง):
    ```js
-   // map normalized video coord → screen px เมื่อ camVideo แสดงแบบ cover
-   const scale = Math.max(canvasW / vidW, canvasH / vidH);
-   const dw = vidW * scale, dh = vidH * scale;
-   const x = (1 - nx) * dw - (dw - canvasW) / 2;
-   const y = ny * dh - (dh - canvasH) / 2;
+   function toCanvas(nx, ny, canvasW, canvasH) {
+     const vidW = videoEl.videoWidth || 640, vidH = videoEl.videoHeight || 480;
+     const scale = Math.max(canvasW / vidW, canvasH / vidH);
+     const dw = vidW * scale, dh = vidH * scale;
+     return {
+       x: (1 - nx) * dw - (dw - canvasW) / 2,   // mirror ซ้าย-ขวาในตัว (1-nx)
+       y: ny * dh - (dh - canvasH) / 2,
+     };
+   }
    ```
 2. `#camVideo` ต้องใส่ CSS `transform: scaleX(-1)` (mirror แบบกระจก) ให้ภาพตรงกับ
    พิกัดที่ flip แล้ว — ไม่งั้นเด็กขยับมือขวา ตัวชี้ไปซ้าย
+
+---
+
+## ท่าทางส่วนขยาย (bonus, ไม่ผูกกับการหยิบ/ปล่อยฟองหลัก)
+
+`onHandFrame(frame)` — handler เสริม (นอกเหนือจาก onPick/onMove/onRelease) ที่
+handpinch.js เรียก**ทุกเฟรม**ที่เจอมือ (ไม่ขึ้นกับ pinch state) ส่ง
+`{ x, y, open, spread, palmUp }` ของนิ้วชี้ — `pointer.js` ไม่มี concept นี้ (ไม่เรียก)
+เพราะเป็นฟีเจอร์เฉพาะกล้อง AR ปัจจุบัน `open` และ `spread` เป็นค่าเดียวกัน (`!isPinching`)
+คือ true เมื่อมือเปิดอยู่ไม่ได้จีบ — เก็บเป็นสอง field แยกไว้เผื่ออนาคตอยากแยกเงื่อนไข:
+
+- **ประกายดาวลอยตามนิ้วชี้ตอนมือเปิด** — game.js เรียก `spawnDragTrail(x,y)` เมื่อ
+  `spread` เป็น true
+- **หงายมือ + กวาดขึ้น → เดาะฟองใกล้เคียงลอยขึ้น** — ใช้ `palmUpScore()` (cross
+  product 2D ของ wrist→index_mcp กับ wrist→pinky_mcp, กลับเครื่องหมายตาม handedness)
+  ตรวจทิศฝ่ามือ ร่วมกับความเร็วเคลื่อนที่ขึ้นของนิ้วชี้ (คำนวณใน game.js) → ดันฟอง
+  ใกล้เคียงลอยขึ้น เคลื่อนลงไม่มีผล (ตั้งใจให้ตบลงไม่ได้)
+- ทั้งสองอย่างเป็น**ของเสริม** ไม่กระทบการหยิบ/ปล่อยหลัก — ถ้าทำให้ debug ยากขึ้นหรือ
+  ผู้ใช้อยากตัดออก ลบได้โดยไม่กระทบ pinch mechanic
+
+**⚠️ ท่าหงายมือยังไม่ผ่านทดสอบเครื่องจริง** — `palmUpScore()` ใช้ 2D cross product
+ประมาณทิศฝ่ามือ ไม่ใช่ 3D orientation เต็มรูปแบบ ถ้าทดสอบแล้วเดาะไม่ขึ้น/ทิศกลับด้าน
+ให้ negate ค่าที่ return ใน `palmUpScore()` — เป็นค่าคงที่จุดเดียว แก้ง่าย
 
 ---
 
@@ -477,11 +519,12 @@ function setState(s) {
 - [ ] 2 คนยื่นมือหน้ากล้องพร้อมกัน → ตัวชี้ต้องไม่กระโดดสลับมือ (sticky lock ทำงาน)
 - [ ] จีบหลวม ๆ ค้างไว้แล้วลาก → ฟองต้องไม่หลุดกลางทาง (hysteresis ทำงาน)
 - [ ] มือสั่นขณะถือฟอง → ฟองต้องไม่สั่นตาม (smoothing ทำงาน)
-- [ ] จีบเยื้องข้างฟองเล็กน้อย → ต้องยังหยิบได้ และหยิบตัวที่ใกล้สุด (magnet grab)
+- [ ] จีบเยื้องข้างฟองเล็กน้อย → ต้องยังหยิบได้ และหยิบตัวที่ใกล้สุด สแนปติดนิ้วทันที
+      (magnet grab)
 - [ ] ยืนใกล้กล้อง (เด็กเล็ก) และไกลกล้อง (PC webcam) → pinch ต้องยังทำงานทั้งคู่
       (hand-size normalization)
 - [ ] ลากฟองแล้วเอามือออกนอกเฟรม → ฟองลอยกลับที่เดิม ไม่ค้างกลางจอ
-- [ ] จิ้มจอขณะ AR เปิดอยู่ → touch ต้องหยิบฟองได้ปกติ และถ้า pinch ถือฟองอยู่
+- [ ] จิ้มจอขณะ AR เปิดอยู่ → touch ต้องหยิบฟองได้ปกติ และถ้าจีบถือฟองอยู่
       การจิ้มต้องไม่แย่งหยิบฟองตัวที่สอง (hybrid guard)
 - [ ] หมุนจอแนวตั้ง↔แนวนอนกลางเกม → จีบนิ้วแล้วตำแหน่งยังตรง
 - [ ] สลับแอปอื่นแล้วกลับมา → **กล้องกลับมาเอง เล่น AR ต่อได้** ไม่ใช่ภาพค้าง
@@ -489,54 +532,6 @@ function setState(s) {
 - [ ] เปิดเกมแบบ offline → เกมเล่นได้ปกติด้วย touch, ไม่ crash, ไม่ค้างจอโหลด AR
 - [ ] ระหว่างรอบอ่าน/ฟังเสียง/รางวัล → inference หยุดจริง (CPU ลด, ไม่มี onPick หลุดมา)
 - [ ] เล่นต่อเนื่อง 10 นาทีบนมือถือจริง → เครื่องอุ่นได้แต่ต้องไม่ร้อนจน throttle/fps ตก
-      (ถ้ายังร้อน: เช็คว่า pause ตาม state ทำงานจริง แล้วค่อยพิจารณาลด inference
-      เหลือเฟรมเว้นเฟรม — แลกกับ pinch confirmation ช้าลงเป็น ~250ms)
 - [ ] ปล่อยฟองโดยไม่ลาก (จีบ+ปล่อยจุดเดิม) บนฟองที่ลอยใกล้หม้อ → ต้องไม่หย่อนลงหม้อ
-
-## เพิ่มเติม (v129) — แม่เหล็กจับฟอง + โยนลงหม้อด้วยแรงเหวี่ยง
-
-หลังทดสอบเครื่องจริงรอบ 2: "ฟองสบู่ยังจับยาก" แก้ต่อจาก v125 อีกขั้น:
-
-- **`GRIP_ON` 0.70 → 0.80** — กำหลวมๆ ก็จับติดง่ายขึ้นอีก (ยังมีช่องว่าง 0.25 ก่อนถึง
-  `SPREAD_FULL=1.05` ที่ใช้ปล่อย ไม่ชนกัน)
-- **`GRAB_SLOP` 1.6 → 2.2** — รัศมีแม่เหล็กหยิบฟองกว้างขึ้นอีก (game.js `onPick`)
-- **แม่เหล็กดูดติดมือทันที** — `onPick()` สแนป `b.x/b.y` ไปที่จุดกำทันที (เดิมฟองค้าง
-  ตำแหน่งเก่าจนกว่า `onMove` จะขยับเกิน dead zone ก่อนถึงจะเริ่มตามมือ รู้สึกเหมือน
-  ไม่ติดมือ)
-- **โยนลงหม้อด้วยแรงเหวี่ยง** — `onMove()` เก็บ `throwVx/throwVy` (EMA ของ delta
-  แต่ละเฟรม) ระหว่างลาก; `onRelease()` ถ้าปล่อยไม่ตรงโซนหม้อพอดีแต่มีความเร็วเกิน
-  `THROW_MIN_SPEED=12` px/เฟรม จะจำลองแนวถลาแบบมีแรงเสียดทาน (`THROW_DECAY=0.85`,
-  `THROW_STEPS=14`) เช็คว่าจะ "ลอยเข้า" โซนหม้อไหม ถ้าใช่นับเป็นโยนสำเร็จ — ใช้ได้
-  ทั้ง touch/pointer และ AR grip เพราะ track ผ่าน onMove/onRelease ตัวเดียวกัน
-
-⚠️ ค่าคงที่ทั้งหมดในหัวข้อนี้ยังไม่ผ่านทดสอบเครื่องจริงรอบใหม่ (ปรับจากอาการที่รายงาน
-ไม่ใช่ผ่านการวัดบนอุปกรณ์จริงโดยตรง) — ถ้าจับยัง/ไวไปให้บอกได้ ปรับทีละค่าง่าย
-
-## เพิ่มเติม (v123) — ท่าทางส่วนขยาย
-
-หลัง implement กำมือพื้นฐานแล้ว มีท่าทางเสริมเพิ่มใน `handpinch.js`:
-
-- **กางมือเต็มที่ (`SPREAD_FULL = 1.05`)** — เป็นเงื่อนไข**เดียว**ที่ปล่อยฟองได้
-  [เปลี่ยน 2026-07-04 ตามคำขอ "ถ้ามือไม่กางนิ้วออก ห้ามให้ฟองหลุด"]: จับด้วยกำมือ
-  หลวมๆ ได้ (`GRIP_ON`) แต่แค่คลายมือระหว่าง `GRIP_ON`–`SPREAD_FULL` ไม่ทำให้หลุด
-  ต้องกางมือเต็มที่เท่านั้น ปล่อยที่ตำแหน่งดิบทันที (ไม่รอ smoothing) ให้ความรู้สึก
-  ฉับพลันตรงจุดที่กางมือจริง (ดู `updateGripState`/`getGripState` ใน handpinch.js)
-- **บทเรียนทดสอบเครื่องจริง (2026-07-04)** — พบ 2 ปัญหา:
-  1. "จับฟองยาก" — มือเด็กกำไม่แน่นสนิท (นิ้วป้อม/กำไม่สุด) ค่า norm จริงมักไม่ถึง
-     0.60 → ผ่อน `GRIP_ON` เป็น **0.70**
-  2. "เลื่อนมือถือฟองลงใกล้หม้อแล้วฟองหลุดเอง" — สาเหตุคือมือเอียง/คว่ำตอนเอื้อมลง
-     มุมกล้องมองนิ้วไม่ชัด ทำให้ landmark เพี้ยนแวบเดียว อ่าน norm พุ่งเกิน
-     `SPREAD_FULL` ผิดๆ (ไม่ใช่กางมือจริง) แล้วปล่อยทันที (เดิมไม่มี confirmation
-     ฝั่งปล่อยเลย) → เพิ่ม **`SPREAD_OFF_FRAMES = 4`** (ต้องกางมือต่อเนื่อง ~165ms
-     ก่อนปล่อยจริง) สมมาตรกับ `GRIP_ON_FRAMES` ฝั่งจับ — ดูโค้ดใน `updateGripState`
-- **หงายมือ + เดาะขึ้น** — ใช้ `palmUpScore()` (cross product 2D ของ wrist→index_mcp
-  กับ wrist→pinky_mcp, กลับเครื่องหมายตาม handedness) ตรวจทิศฝ่ามือ ร่วมกับความเร็ว
-  เคลื่อนที่ขึ้นของนิ้วชี้ (คำนวณใน game.js ผ่าน `onHandFrame`) → ดันฟองใกล้เคียงลอยขึ้น
-  เคลื่อนลงไม่มีผล (ตั้งใจให้ตบลงไม่ได้)
-- **`onHandFrame(frame)`** — handler ใหม่ (นอกเหนือจาก onPick/onMove/onRelease) ที่
-  handpinch.js เรียกทุกเฟรมที่เจอมือ (ไม่ขึ้นกับ grip state) ส่ง `{x,y,open,spread,palmUp}`
-  ของนิ้วชี้ — `pointer.js` ไม่มี concept นี้ (ไม่เรียก) เพราะเป็นฟีเจอร์เฉพาะกล้อง AR
-
-**⚠️ ท่าหงายมือยังไม่ผ่านทดสอบเครื่องจริง** — `palmUpScore()` ใช้ 2D cross product
-ประมาณทิศฝ่ามือ ไม่ใช่ 3D orientation เต็มรูปแบบ ถ้าทดสอบแล้วเดาะไม่ขึ้น/ทิศกลับด้าน
-ให้ negate ค่าที่ return ใน `palmUpScore()` — เป็นค่าคงที่จุดเดียว แก้ง่าย
+- [ ] เอื้อมมือถือฟองลงต่ำใกล้หม้อ (มือเอียง/คว่ำธรรมชาติ) → ฟองต้องไม่หลุดเองกลางทาง
+      (pinch-off confirmation ทำงาน — นี่คือบั๊กจริงที่เจอตอนใช้ท่ากำมือ)

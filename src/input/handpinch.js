@@ -2,14 +2,17 @@
 // ยิง event เดียวกับ pointer.js: onPick(x,y,slop) / onMove(x,y) / onRelease(x,y)
 // เกมไม่รู้ว่า input มาจากนิ้วจริงหรือเมาส์ (สเปก §3.5)
 //
-// ท่าจับ = "กำมือ" (fist) — ง่ายกว่าจีบสองนิ้วสำหรับเด็ก: กำ = หยิบ, แบ = ปล่อย
+// ท่าจับ = "จีบสองนิ้ว" (thumb+index pinch)
+// [decision 2026-07-05: เคยลองเปลี่ยนเป็นกำมือ (fist) แล้วเพิ่มฟีเจอร์โยนด้วยแรงเหวี่ยง
+//  แต่ทดสอบเครื่องจริงพบว่าท่าทางทั้งสองต้องตรวจจับละเอียดเกินไป ควบคุมยาก — กลับมา
+//  ใช้จีบสองนิ้วซึ่งเสถียร/ควบคุมง่ายกว่า และตัดฟีเจอร์โยนออก]
 //
 // มาตรการสำหรับมือเด็ก (ดู .claude/skills/setup-ar):
 //   - sticky hand lock  : เด็กหลายคนหน้ากล้อง → ล็อกมือเดียว ไม่สลับกลางทาง
-//   - grip-in / spread-out ไม่สมมาตร: จับด้วยกำมือหลวมๆ (GRIP_ON) แต่ปล่อยได้
-//     เฉพาะกางมือเต็มที่เท่านั้น (SPREAD_FULL) — แค่คลายมือหลวมๆ ระหว่างนั้น
-//     ไม่ทำให้ฟองหลุด [ตามคำขอผู้ใช้ 2026-07-04: "ถ้ามือไม่กางนิ้วออก ห้ามให้ฟองหลุด"]
-//   - grip confirmation : false detection เฟรมเดียว → ต้องกำต่อเนื่องก่อนนับ
+//   - hysteresis        : จีบหลวมค่าแกว่ง → threshold เข้า/ออกคนละค่า
+//   - pinch confirmation: false detection เฟรมเดียว → ต้องจีบ/ปล่อยต่อเนื่องก่อนนับ
+//     (ทั้งสองทิศทาง — กันทั้ง phantom pick และ phantom release จาก landmark เพี้ยน
+//     แวบเดียวตอนมือเอียงมุมกล้อง เช่นตอนเอื้อมลงใกล้หม้อ)
 //   - EMA smoothing     : มือสั่น → กรองตำแหน่งก่อนส่งเข้าเกม
 //   - magnet grab       : ส่ง GRAB_SLOP ให้ game.js ขยายรัศมีหยิบ
 //   - hand-size normalize: เด็กยืนใกล้/ไกลกล้อง → ระยะนิ้วหารด้วยขนาดมือ
@@ -21,31 +24,20 @@
 //   - watchdog          : requestVideoFrameCallback ตายเงียบเมื่อ video หยุด
 //                         → ตรวจ loop stall ทุก 1 วิ แล้ว restart chain
 
-// กำมือ: วัดค่าเฉลี่ยระยะ "ปลายนิ้ว 4 นิ้ว (ชี้/กลาง/นาง/ก้อย) → กลางฝ่ามือ"
-// normalize ด้วยขนาดมือ — แบมือค่า ~1.0–1.4, กำมือค่า ~0.3–0.6
-// [ปรับ 2026-07-04 จากทดสอบเครื่องจริง: "จับฟองยาก" — มือเด็กมักกำไม่แน่นสนิท
-// (นิ้วป้อม/กำไม่สุด) ค่าจริงมักอยู่แถว 0.65–0.8 ไม่ถึง 0.60 เดิม → ผ่อนเกณฑ์ขึ้น]
-// [ปรับอีกครั้ง 2026-07-04: ยังจับยากอยู่ — ผ่อนเพิ่มเป็น 0.80 (กำหลวมๆ ก็จับติด)
-// ยังมีช่องว่างพอสมควรก่อนถึง SPREAD_FULL=1.05 ที่ใช้ปล่อยฟอง ไม่ชนกัน]
-const GRIP_ON  = 0.80; // เริ่มกำ (หยิบ) เมื่อค่าเฉลี่ยต่ำกว่านี้
-const GRIP_ON_FRAMES = 3; // ต้องกำต่อเนื่อง 3 เฟรม (~125ms @24fps) ก่อนนับเป็นการหยิบ —
-                          // false detection เฟรมเดียวเคยยิง pick+release ที่จุดเดิม
-                          // = หย่อนฟองลงหม้อเอง เกมเล่นเองเป็นลูป (bug v119)
-const SPREAD_FULL = 1.05; // ★ ปล่อยฟองได้เฉพาะกางมือเต็มที่เท่านั้น (เกินช่วงแบมือ
-                          // ปกติ 1.0–1.4) — แค่คลายมือหลวมๆ (norm ระหว่าง GRIP_ON
-                          // กับ SPREAD_FULL) ไม่ทำให้ฟองหลุด กันเด็กมือสั่น/คลายนิ้ว
-                          // โดยไม่ตั้งใจ [ยังไม่ผ่านทดสอบเครื่องจริง ปรับค่าได้]
-const SPREAD_OFF_FRAMES = 4; // [เพิ่ม 2026-07-04] ต้องกางมือเต็มที่ต่อเนื่อง 4 เฟรม
-                          // (~165ms) ก่อนปล่อยจริง — ทดสอบเครื่องจริงพบ: เลื่อนมือที่
-                          // ถือฟองลงต่ำใกล้หม้อแล้วฟองหลุดเอง ต้นเหตุคือมือเอียง/คว่ำ
-                          // ตอนเอื้อมลง มุมกล้องมองเห็นนิ้วไม่ชัด ทำให้ landmark เพี้ยน
-                          // แวบเดียวอ่านค่าเกิน SPREAD_FULL ผิดพลาด (norm พุ่งจาก
-                          // perspective ไม่ใช่มือกางจริง) — ต้องกางต่อเนื่องหลายเฟรม
-                          // ถึงจะนับเป็นการปล่อยจริง กันหลุดจากมือเอียงชั่วขณะ
+// จีบสองนิ้ว: distance(นิ้วโป้ง, นิ้วชี้) normalize ด้วยขนาดมือ (กัน scale variance)
+const PINCH_ON  = 0.30;  // เริ่มจีบเมื่อ normDist ต่ำกว่านี้
+const PINCH_OFF = 0.45;  // เลิกจีบเมื่อสูงกว่านี้ — hysteresis กันฟองหลุดๆ ติดๆ ตอนจีบหลวม
+const PINCH_ON_FRAMES  = 3; // ต้องจีบต่อเนื่อง 3 เฟรม (~125ms @24fps) ก่อนนับเป็นการหยิบ —
+                            // false detection เฟรมเดียวเคยยิง pick+release ที่จุดเดิม
+                            // = หย่อนฟองลงหม้อเอง เกมเล่นเองเป็นลูป (bug v119)
+const PINCH_OFF_FRAMES = 4; // ต้องเลิกจีบต่อเนื่อง 4 เฟรม (~165ms) ก่อนปล่อยจริง — กัน
+                            // landmark เพี้ยนแวบเดียวตอนมือเอียง/คว่ำใกล้หม้อ (บทเรียน
+                            // จากตอนใช้ท่ากำมือ — ปัญหาเดียวกันเกิดกับจีบได้เช่นกัน)
 const SMOOTH    = 0.4;  // EMA alpha — ตอบสนองไวพอ แต่ตัด jitter ความถี่สูง
 const DEAD_ZONE = 3;    // px หลัง smoothing
-const GRAB_SLOP = 2.2;  // รัศมีหยิบขยายสำหรับ pinch (game.js onPick param ที่ 3) —
-                        // แม่เหล็กดูดฟองเข้าหามือตอนกำ [ผ่อนจาก 1.6 — จับยาก 2026-07-04]
+const GRAB_SLOP = 2.2;  // รัศมีหยิบขยายสำหรับ pinch (game.js onPick param ที่ 3) — แม่เหล็ก
+                        // ดูดฟองเข้าหานิ้วตอนจีบ (กันจีบพลาดฟองบ่อยจากนิ้วเด็ก+ความคลาด
+                        // ของ landmark)
 const LOST_RESET = 15;  // ไม่เจอมือติดต่อกัน ~0.5 วิ → ปลด hand lock
 
 const CAM_CONSTRAINTS = {
@@ -111,9 +103,9 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
   let paused = false;
   let recovering = false;
   let lastVideoTime = -1;
-  let isGripping = false;
-  let gripFrames = 0;          // นับเฟรมกำมือต่อเนื่อง — กัน phantom grip เฟรมเดียว
-  let spreadFrames = 0;        // นับเฟรมกางมือต่อเนื่อง — กัน phantom release เฟรมเดียว
+  let isPinching = false;
+  let pinchOnFrames = 0;       // นับเฟรมจีบต่อเนื่อง — กัน phantom pick เฟรมเดียว
+  let pinchOffFrames = 0;      // นับเฟรมเลิกจีบต่อเนื่อง — กัน phantom release เฟรมเดียว
   let lastX = 0, lastY = 0;
   let sx = 0, sy = 0;          // ตำแหน่งหลัง EMA smoothing
   let lockedWrist = null;      // ข้อมือของมือที่ล็อก จากเฟรมก่อน
@@ -127,7 +119,7 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
 
   // sticky hand lock — คืน { lm, idx } ของมือที่คุมเกม หรือ null ถ้ามือที่ล็อกหลุดเฟรม
   // ต้องคืน idx ด้วย (ไม่ใช่แค่ landmarks) เพื่อจับคู่กับ result.handednesses[idx]
-  // สำหรับคำนวณทิศฝ่ามือ (ข้อ 2/6 — ดู palmUpScore)
+  // สำหรับคำนวณทิศฝ่ามือ (ดู palmUpScore)
   function selectHand(result) {
     const hands = result.landmarks;
     if (!hands || hands.length === 0) {
@@ -144,7 +136,7 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
       });
       // ระหว่างลากฟองห้ามสลับมือเด็ดขาด — มือเดิมกระโดดไกลผิดปกติ = มือที่ล็อก
       // หลุดเฟรมและ best คือมือของเด็กอีกคน → ถือว่าไม่เจอมือ
-      if (isGripping && bestD > 0.35) return null;
+      if (isPinching && bestD > 0.35) return null;
       lockedWrist = { x: hands[bestIdx][0].x, y: hands[bestIdx][0].y };
       return { lm: hands[bestIdx], idx: bestIdx };
     }
@@ -156,9 +148,9 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
     return { lm: hands[bestIdx], idx: bestIdx };
   }
 
-  // ทิศฝ่ามือ (ข้อ 2/6 "หงายมือ"): cross product 2D ของเวกเตอร์ wrist→index_mcp(5)
-  // และ wrist→pinky_mcp(17) บอกทิศที่ฝ่ามือหันเทียบกล้อง (แนวคิดเดียวกับ backface
-  // culling ใน 2D) กลับเครื่องหมายกันมือซ้าย/ขวา (เป็นภาพกระจกกัน)
+  // ทิศฝ่ามือ ("หงายมือ" สำหรับเดาะฟองลอยขึ้น/ประกายดาว): cross product 2D ของเวกเตอร์
+  // wrist→index_mcp(5) และ wrist→pinky_mcp(17) บอกทิศที่ฝ่ามือหันเทียบกล้อง (แนวคิด
+  // เดียวกับ backface culling ใน 2D) กลับเครื่องหมายกันมือซ้าย/ขวา (เป็นภาพกระจกกัน)
   // [ยังไม่ผ่านทดสอบเครื่องจริง — ถ้าเดาะแล้วฟองไม่ลอยขึ้น/ทิศกลับด้าน ให้ negate ค่านี้]
   function palmUpScore(lm, handLabel) {
     const wrist = lm[0], idxMcp = lm[5], pinkyMcp = lm[17];
@@ -184,62 +176,54 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
     };
   }
 
-  // grip (กำมือ) detection + hysteresis + hand-size normalization
+  // pinch detection + hysteresis + hand-size normalization
   // ห้ามใช้ raw distance โดยไม่ normalize — เด็กยืนใกล้กล้องกว่าผู้ใหญ่ threshold ผิดเสมอ
-  // landmark: 0=ข้อมือ, 9=กลางฝ่ามือ, ปลายนิ้ว 8=ชี้ 12=กลาง 16=นาง 20=ก้อย
-  function getGripState(lm, canvasW, canvasH) {
-    const wrist = lm[0], palm = lm[9];
-    const handSize = Math.hypot(wrist.x - palm.x, wrist.y - palm.y);
-    // ค่าเฉลี่ยระยะปลายนิ้ว→กลางฝ่ามือ (ไม่รวมนิ้วโป้ง — โป้งขยับน้อยตอนกำ)
-    let sum = 0;
-    for (const t of [8, 12, 16, 20]) {
-      sum += Math.hypot(lm[t].x - palm.x, lm[t].y - palm.y);
-    }
-    const norm = handSize > 0.01 ? sum / 4 / handSize : sum / 4;
-    const spread = norm > SPREAD_FULL; // กางมือเต็มที่ (ข้อ 1/6)
-    // จับ: ต้องกำ (norm < GRIP_ON) — ปล่อย: ต้องกางมือเต็มที่เท่านั้น (spread)
-    // แค่คลายมือหลวมๆ ระหว่าง GRIP_ON กับ SPREAD_FULL ไม่ทำให้ฟองหลุด
-    const gripping = isGripping ? !spread : norm < GRIP_ON;
-    // ตำแหน่งลาก = กลางฝ่ามือ (กำมือแล้วปลายนิ้วชี้หายไปในกำปั้น ใช้ไม่ได้)
-    const { x, y } = toCanvas(palm.x, palm.y, canvasW, canvasH);
-    return { gripping, x, y, spread };
+  // landmark: 4=ปลายนิ้วโป้ง 8=ปลายนิ้วชี้ 0=ข้อมือ 9=กลางฝ่ามือ
+  function getPinchState(lm, canvasW, canvasH) {
+    const thumb = lm[4], index = lm[8], wrist = lm[0], mid = lm[9];
+    const rawDist = Math.hypot(thumb.x - index.x, thumb.y - index.y);
+    const handSize = Math.hypot(wrist.x - mid.x, wrist.y - mid.y);
+    const normDist = handSize > 0.01 ? rawDist / handSize : rawDist;
+    // hysteresis: threshold เข้า/ออกคนละค่า — ระหว่างกลางคงสถานะเดิม
+    const pinching = isPinching ? normDist < PINCH_OFF : normDist < PINCH_ON;
+    // ตำแหน่งลาก = ปลายนิ้วชี้ (ตรงกับที่เด็กมองว่า "นิ้วอยู่ตรงไหน" ตอนจีบ)
+    const { x, y } = toCanvas(index.x, index.y, canvasW, canvasH);
+    return { pinching, x, y };
   }
 
   function forceRelease() {
-    gripFrames = 0;
-    spreadFrames = 0;
-    if (!isGripping) return;
-    isGripping = false;
+    pinchOnFrames = 0;
+    pinchOffFrames = 0;
+    if (!isPinching) return;
+    isPinching = false;
     handlers.onRelease && handlers.onRelease(lastX, lastY);
   }
 
-  function updateGripState(gripping, x, y, spread) {
+  function updatePinchState(pinching, x, y) {
     // EMA smoothing ก่อนใช้พิกัดทุกครั้ง — ฟองไม่สั่นตามมือเด็ก
     sx += (x - sx) * SMOOTH;
     sy += (y - sy) * SMOOTH;
 
-    if (gripping && !isGripping) {
-      // ยืนยันกำต่อเนื่องก่อนนับ — ตัด phantom grip จาก false detection
-      if (++gripFrames < GRIP_ON_FRAMES) { lastX = sx; lastY = sy; return; }
-      isGripping = true;
-      sx = x; sy = y; // reset filter ตอนเริ่มกำ กันตำแหน่งค้างจากรอบก่อน
+    if (pinching && !isPinching) {
+      // ยืนยันจีบต่อเนื่องก่อนนับ — ตัด phantom pick จาก false detection
+      if (++pinchOnFrames < PINCH_ON_FRAMES) { lastX = sx; lastY = sy; return; }
+      isPinching = true;
+      sx = x; sy = y; // reset filter ตอนเริ่มจีบ กันตำแหน่งค้างจากรอบก่อน
       handlers.onPick && handlers.onPick(sx, sy, GRAB_SLOP);
-    } else if (gripping && isGripping) {
+    } else if (pinching && isPinching) {
       if (Math.hypot(sx - lastX, sy - lastY) > DEAD_ZONE) {
         handlers.onMove && handlers.onMove(sx, sy);
       }
-    } else if (!gripping && isGripping) {
-      // ยืนยันกางมือต่อเนื่องก่อนปล่อยจริง — ตัด phantom spread จาก landmark
-      // เพี้ยนแวบเดียว (พบจริง: มือเอียง/คว่ำตอนเอื้อมลงใกล้หม้อ ทำให้ norm พุ่งเกิน
-      // SPREAD_FULL ผิดๆ จากมุมกล้อง ไม่ใช่กางมือจริง)
-      if (++spreadFrames < SPREAD_OFF_FRAMES) { lastX = sx; lastY = sy; return; }
-      isGripping = false;
-      // ปล่อยเกิดจากกางมือเต็มที่เสมอ (ข้อ 1) — ใช้ตำแหน่งดิบ x,y แทน sx,sy
-      // ที่ผ่าน smoothing ให้ความรู้สึกปล่อยฉับพลันตรงจุดที่มือกางจริง ไม่หน่วง
-      handlers.onRelease && handlers.onRelease(spread ? x : sx, spread ? y : sy);
+    } else if (!pinching && isPinching) {
+      // ยืนยันเลิกจีบต่อเนื่องก่อนปล่อยจริง — ตัด phantom release จาก landmark
+      // เพี้ยนแวบเดียว (พบจริงตอนใช้ท่ากำมือ: มือเอียง/คว่ำตอนเอื้อมลงใกล้หม้อ
+      // ทำให้ normDist พุ่งผิดๆ จากมุมกล้อง ไม่ใช่ปล่อยจริง)
+      if (++pinchOffFrames < PINCH_OFF_FRAMES) { lastX = sx; lastY = sy; return; }
+      isPinching = false;
+      handlers.onRelease && handlers.onRelease(sx, sy);
     }
-    if (gripping) spreadFrames = 0;  // ยังถือฟองอยู่ปกติ (ไม่กางมือ) → รีเซ็ตนับกางมือ
-    if (!gripping) gripFrames = 0;   // ยังไม่กำ (หรือกำไม่ต่อเนื่องพอ) → รีเซ็ตนับกำมือ
+    if (pinching) pinchOffFrames = 0;   // ยังจีบอยู่ปกติ → รีเซ็ตนับเลิกจีบ
+    if (!pinching) pinchOnFrames = 0;   // ยังไม่จีบ (หรือจีบไม่ต่อเนื่องพอ) → รีเซ็ตนับจีบ
     lastX = sx; lastY = sy;
   }
 
@@ -259,18 +243,15 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
 
       const hand = selectHand(result);
       if (hand) {
-        const { gripping, x, y, spread } = getGripState(hand.lm, canvasW, canvasH);
-        // ข้อ 1: จับด้วยกำมือหลวมๆ ได้ แต่ปล่อยได้เฉพาะกางมือเต็มที่เท่านั้น —
-        // gripping คำนวณเงื่อนไขนี้ไว้แล้วใน getGripState, ปล่อยจริงเกิดใน updateGripState
-        updateGripState(gripping, x, y, spread);
+        const { pinching, x, y } = getPinchState(hand.lm, canvasW, canvasH);
+        updatePinchState(pinching, x, y);
 
-        // ข้อ 2/6: ส่งเฟรมมือดิบทุกเฟรมที่เจอมือ (ไม่ขึ้นกับ grip state) ให้ game.js
-        // ทำ star trail ตอนกางมือ + เดาะฟองลอยขึ้นตอนหงายมือ — pointer.js ไม่มี concept นี้
+        // ส่งเฟรมมือดิบทุกเฟรมที่เจอมือ (ไม่ขึ้นกับ pinch state) ให้ game.js ทำ
+        // star trail ตอนมือเปิด + เดาะฟองลอยขึ้นตอนหงายมือ — pointer.js ไม่มี concept นี้
         const handLabel = result.handednesses?.[hand.idx]?.[0]?.categoryName;
-        const idxTip = toCanvas(hand.lm[8].x, hand.lm[8].y, canvasW, canvasH);
         const palmUp = palmUpScore(hand.lm, handLabel) > 0;
         handlers.onHandFrame && handlers.onHandFrame({
-          x: idxTip.x, y: idxTip.y, open: !isGripping, spread, palmUp,
+          x, y, open: !isPinching, spread: !isPinching, palmUp,
         });
       } else {
         // ไม่เห็นมือ (หรือมือที่ล็อกหลุดเฟรม) → release ทันที
