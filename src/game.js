@@ -135,14 +135,34 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     }
   }
 
-  // ประกายดาวระเบิดเต็มจอตอนอ่านถูก (ข้อ 7) — กระจายจุดกำเนิดหลายจุดทั่วจอ
-  // แทนการระเบิดจุดเดียวที่หม้อ ใช้ spawnStars เดิมซ้ำหลายจุด (ยังพูล particle เดิม)
+  // ดาวระเบิดแบบประหยัดทรัพยากร — ตัด shadowBlur (glow) ออก เพราะเป็นต้นทุนแพงสุด
+  // ต่ออนุภาคบน canvas (บังคับ browser ทำ blur pass) ชดเชยด้วยขนาดใหญ่ขึ้น +
+  // กระจายมุมสม่ำเสมอ (แทนสุ่มล้วน) ให้ยังดูเป็น "ดาวกระจาย" ชัดแม้ประหยัดกว่าเดิมมาก
+  function spawnCelebrationBurst(cx, cy) {
+    const COUNT = 16;
+    for (let i = 0; i < COUNT; i++) {
+      const p = particlePool.pop() || {};
+      const a = (i / COUNT) * Math.PI * 2 + Math.random() * 0.3;
+      const sp = 2 + Math.random() * 6;
+      p.x = cx; p.y = cy;
+      p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp - 3;
+      p.life = 1;
+      p.r = 12 + Math.random() * 12; // ใหญ่ขึ้นชดเชยที่ตัด glow ออก
+      p.hue = 42 + Math.random() * 18;
+      p.star = true;
+      p.noGlow = true; // ★ ข้าม shadowBlur ใน drawParticle — ประหยัดสุด
+      p.fillStyle = `hsl(${p.hue},95%,62%)`;
+      particles.push(p);
+    }
+  }
+
+  // ประกายดาวระเบิดเต็มจอตอนอ่านถูก (ข้อ 7) — กระจายจุดกำเนิดทั่วจอ
+  // 4 จุด × 16 อนุภาค = 64 (เดิม 6×32=192) ลดลง ~67% + ไม่มี glow ต่ออนุภาค
   function spawnFullScreenStars() {
     const points = [
-      [0.10, 0.22], [0.50, 0.14], [0.90, 0.22],
-      [0.18, 0.62], [0.50, 0.52], [0.82, 0.62],
+      [0.15, 0.25], [0.50, 0.15], [0.85, 0.25], [0.50, 0.60],
     ];
-    points.forEach(([fx, fy]) => spawnStars(scene.W * fx, scene.H * fy));
+    points.forEach(([fx, fy]) => spawnCelebrationBurst(scene.W * fx, scene.H * fy));
   }
 
   function scoreToEvilWishStage(s) {
@@ -908,9 +928,12 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     fx.globalAlpha = Math.max(0, p.life);
     fx.fillStyle = p.fillStyle; // cache ไว้ตอน spawn — เลี่ยงสร้าง string ใหม่ทุกเฟรม/ทุกอนุภาค
     if (p.star) {
-      // ขอบเรืองให้เห็นชัด
-      fx.shadowColor = p.shadowStyle;
-      fx.shadowBlur = p.r * 0.8;
+      // ขอบเรืองให้เห็นชัด — ข้ามได้ถ้า noGlow (shadowBlur แพงสุดต่ออนุภาคบน canvas,
+      // ใช้กับ burst ที่มีอนุภาคเยอะๆ พร้อมกันเท่านั้น ดู spawnCelebrationBurst)
+      if (!p.noGlow) {
+        fx.shadowColor = p.shadowStyle;
+        fx.shadowBlur = p.r * 0.8;
+      }
       drawStar(fx, p.x, p.y, p.r, p.r * 0.45, 5);
     } else {
       fx.beginPath();

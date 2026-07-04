@@ -187,19 +187,16 @@ export const audio = {
     }
   },
 
-  // เสียงประกอบตัวเลขคะแนนสะสมวิ่งขึ้น (หน้าสรุปดาว) — ไล่เสียงถี่ๆ ขึ้นเรื่อยๆ
-  // คล้ายเสียงนับแต้มเกมคลาสสิก แล้วปิดท้ายด้วยกริ๊งไล่โน้ตตอนตัวเลขนิ่ง (settle)
+  // เสียงประกอบตัวเลขคะแนนสะสมวิ่งขึ้น (หน้าสรุปดาว) — ไล่โน้ตขึ้นแบบอาร์เปจจิโอ
+  // (pentatonic, triangle wave — โทนเดียวกับ _arp/_ting ที่ใช้ทั่วเกม) แทน pitch
+  // sweep ด้วย square wave เดิม (ฟังดู 8-bit/ตุ๊ดๆ) ปิดท้ายด้วยกริ๊งตอนตัวเลขนิ่ง (settle)
   // rollDurMs ควรตรงกับ dur ใน game.js _rollScore (520ms) ให้เสียงจบพอดีตอนเลขหยุด
   playCountUpSound(rollDurMs = 520) {
     if (!ctx) return;
     const t = ctx.currentTime;
     const dur = rollDurMs / 1000;
-    const TICKS = 14;
-    for (let i = 0; i < TICKS; i++) {
-      const dt = t + (i / TICKS) * dur;
-      const freq = 500 + (i / TICKS) * 900; // ไล่ 500Hz → 1400Hz
-      this._blip(freq, (dur / TICKS) * 1.4, 'square', dt);
-    }
+    const notes = [523, 587, 659, 784, 880, 1047, 1175, 1319, 1568]; // C5 pentatonic ไล่ขึ้น ~1.5 ออกเทฟ
+    this._arp(notes, dur / notes.length, t);
     this._arp([1047, 1319, 1568, 2093], 0.07, t + dur);
   },
 
