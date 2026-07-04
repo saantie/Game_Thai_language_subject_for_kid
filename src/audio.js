@@ -46,6 +46,64 @@ if ('speechSynthesis' in window) {
   window.speechSynthesis.onvoiceschanged = pickThaiVoice;
 }
 
+// ---------- AudioBufferCache ----------
+// เดิม _playMp3/chime/swoosh ใช้ new Audio(path) ทุกครั้งที่เล่น → fetch+decode ซ้ำ
+// ทุกครั้ง + สร้าง object ใหม่ให้ GC ถี่ๆ (ไฟล์เสียงพากย์/สะกดคำถูกเล่นซ้ำบ่อยมาก
+// ตลอดเกม) แก้ด้วย decode ครั้งเดียวเก็บเป็น AudioBuffer แล้วเล่นซ้ำผ่าน
+// AudioBufferSourceNode (ราคาถูกกว่ามาก ไม่ fetch/decode ซ้ำ) — LRU จำกัด ~60 ไฟล์
+// (งบ RAM ~10MB สำหรับคลิปสั้นๆ) กันแคชบวมไม่มีที่สิ้นสุดเมื่อมีเสียงครบ 216 ไฟล์
+const BUFFER_CACHE_MAX = 60;
+const bufferCache = new Map();   // path -> AudioBuffer (Map คง insertion order → ใช้ทำ LRU)
+const pendingDecode = new Map(); // path -> Promise<AudioBuffer> กัน fetch/decode ซ้ำซ้อนถ้าเรียกทับกัน
+
+function getAudioBuffer(path) {
+  if (bufferCache.has(path)) {
+    // LRU touch: ย้าย key ไปท้ายสุดของ Map (delete แล้ว set ใหม่)
+    const buf = bufferCache.get(path);
+    bufferCache.delete(path);
+    bufferCache.set(path, buf);
+    return Promise.resolve(buf);
+  }
+  if (pendingDecode.has(path)) return pendingDecode.get(path);
+
+  const p = fetch(path)
+    .then((res) => {
+      if (!res.ok) throw new Error('fetch failed: ' + path);
+      return res.arrayBuffer();
+    })
+    .then((ab) => ctx.decodeAudioData(ab))
+    .then((buf) => {
+      pendingDecode.delete(path);
+      bufferCache.set(path, buf);
+      if (bufferCache.size > BUFFER_CACHE_MAX) {
+        bufferCache.delete(bufferCache.keys().next().value); // ตัดตัวเก่าสุด (LRU)
+      }
+      return buf;
+    })
+    .catch((err) => {
+      pendingDecode.delete(path);
+      throw err;
+    });
+  pendingDecode.set(path, p);
+  return p;
+}
+
+// เล่น AudioBuffer ที่แคชไว้ (หรือ decode แล้วแคช) ผ่าน AudioBufferSourceNode
+// คืน Promise resolve เมื่อเล่นจบ, reject ถ้า fetch/decode ล้มเหลว — ไม่ duck/unduck
+// เอง (ตัวเรียกจัดการเอง) ให้ chime/swoosh เรียกตรงได้โดยไม่ต้องหรี่ BGM เหมือนเดิม
+function playBuffer(path, volume = 1) {
+  if (!ctx) return Promise.reject(new Error('no audio context'));
+  return getAudioBuffer(path).then((buf) => new Promise((resolve) => {
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain();
+    g.gain.value = volume;
+    src.connect(g).connect(master);
+    src.onended = resolve;
+    src.start();
+  }));
+}
+
 export const audio = {
   ready: false,
 
@@ -89,10 +147,10 @@ export const audio = {
   },
 
   // ข้อ 7: เสียงยืนยันอ่านถูก — ไฟล์จริง Magic Chime.mp3 (ไม่ใช่ synth 'star')
+  // เล่นผ่าน AudioBufferCache (decode ครั้งเดียว) — ไฟล์นี้ถูกเล่นซ้ำทุกครั้งที่ตอบถูก
   playCorrectChime() {
-    const a = new Audio('public/assets/audio/Magic%20Chime.mp3');
-    a.volume = 0.85;
-    a.play().catch(() => this.sfx('star')); // เล่นไม่ได้ (เช่น autoplay policy) → synth fallback
+    playBuffer('public/assets/audio/Magic%20Chime.mp3', 0.85)
+      .catch(() => this.sfx('star')); // decode/fetch ล้มเหลว → synth fallback
   },
 
   // ---------- SFX ----------
@@ -107,9 +165,9 @@ export const audio = {
         this._blip(880, 0.07, 'sine', t);
         break;
       case 'boom': {
-        const sw = new Audio('public/assets/audio/Swoosh.mp3');
-        sw.volume = 0.75;
-        sw.play().catch(() => this._boom(ctx.currentTime));
+        // เล่นผ่าน AudioBufferCache — ไฟล์นี้เล่นซ้ำทุกครั้งที่หย่อนฟองถูกลงหม้อ
+        playBuffer('public/assets/audio/Swoosh.mp3', 0.75)
+          .catch(() => this._boom(ctx.currentTime));
         break;
       }
       case 'star':
@@ -326,11 +384,14 @@ export const audio = {
   },
 
   // ---------- MP3 player (core) ----------
-  // เล่นไฟล์ MP3 ด้วย HTMLAudioElement; ถ้าโหลดไม่ได้ → เรียก fallback()
-  _playMp3(path, fallback, onEnd) {
+  // เล่นไฟล์ MP3 ผ่าน AudioBufferCache (decode ครั้งเดียว, เล่นซ้ำด้วย
+  // AudioBufferSourceNode) แทน new Audio(path) เดิม — signature เหมือนเดิมทุกประการ
+  // (path, fallback, onEnd) ผู้เรียกเดิม (voice/playSpellReveal) ไม่ต้องแก้อะไร
+  // volume เป็น param เสริมท้าย (optional, default 1) ไม่กระทบผู้เรียกเดิมที่ไม่ส่งมา
+  // ถ้าโหลด/decode ไม่ได้ (เช่นไฟล์ยังไม่มี) → เรียก fallback()
+  _playMp3(path, fallback, onEnd, volume = 1) {
+    if (!ctx) { if (fallback) fallback(); else onEnd && onEnd(); return; }
     this.duck();
-    const el = new Audio(path);
-    // settled flag ป้องกัน onerror + play().catch() ยิง fallback/onEnd 2 ครั้ง
     let settled = false;
     const resolve = (isError) => {
       if (settled) return;
@@ -339,9 +400,24 @@ export const audio = {
       if (isError) { if (fallback) fallback(); else onEnd && onEnd(); }
       else          { onEnd && onEnd(); }
     };
-    el.onended = () => resolve(false);
-    el.onerror = () => resolve(true);
-    el.play().catch(() => resolve(true));
+    playBuffer(path, volume).then(() => resolve(false)).catch(() => resolve(true));
+  },
+
+  // preload เสียงสะกด/คำเต็มของ "มาตราที่กำลังจะเล่น" เท่านั้น (~15-20 ไฟล์ต่อมาตรา
+  // ไม่ใช่ทั้ง 216 ไฟล์ทุกมาตรารวมกัน) — เรียกตอนเริ่มมาตรา (ระหว่างวิดีโอนำ/หน้าพูด
+  // ของแม่มดซึ่งมีเวลาว่างอยู่แล้ว) เพื่อ decode ล่วงหน้าเข้า BufferCache กันสะดุด
+  // ตอน playSpellReveal ทำงานจริง — ไฟล์ที่ยังไม่มี (อัดเสียงไม่ครบ) แค่ no-op เงียบๆ
+  preloadMatra(matra) {
+    if (!ctx || !matra || !matra.words) return;
+    const paths = new Set();
+    matra.words.forEach((w) => {
+      if (!w.spell) return;
+      w.spell.forEach((syll, i) => {
+        const folder = i === w.spell.length - 1 ? 'word' : 'spell';
+        paths.add(`public/assets/audio/${folder}/${encodeURIComponent(syll)}.mp3`);
+      });
+    });
+    paths.forEach((p) => { getAudioBuffer(p).catch(() => {}); });
   },
 
   // ---------- Voice (MP3 ก่อน, fallback TTS) ----------

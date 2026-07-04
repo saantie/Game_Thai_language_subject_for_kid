@@ -1,6 +1,6 @@
 // sw.js — Service Worker: cache-first + stale-while-revalidate + auto-reload on update
 // bump CACHE string ทุกครั้งที่ deploy ใหม่ → browser detect diff → install → reload client
-const CACHE = 'witch-cauldron-v130';
+const CACHE = 'witch-cauldron-v131';
 
 const APP_SHELL = [
   './',
@@ -94,7 +94,29 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
-  const isSameOrigin = new URL(req.url).origin === self.location.origin;
+  const url = new URL(req.url);
+  const isSameOrigin = url.origin === self.location.origin;
+
+  // เสียงพากย์/สะกดคำ/คำเต็ม (voice, spell, word) เป็นไฟล์ immutable — อัดเสร็จแล้ว
+  // ไม่แก้อีก (ต่างจาก code/asset อื่นที่เปลี่ยนได้ทุก deploy) ใช้ cache-first ล้วนๆ
+  // ไม่ revalidate ทุกครั้งที่เล่น (ไฟล์พวกนี้ถูกเล่นซ้ำบ่อยมากตลอดเกม) — ไม่ precache
+  // ทั้ง 216 ไฟล์ตอน install (ตั้งใจ) แคชแบบ runtime ตามจริงที่ถูกเล่นเท่านั้น
+  if (isSameOrigin && /\/public\/assets\/audio\/(voice|spell|word)\//.test(url.pathname)) {
+    e.respondWith(
+      caches.open(CACHE).then((cache) =>
+        cache.match(req).then((cached) => {
+          if (cached) return cached; // มีแล้ว → ใช้เลย ไม่ยิง network ซ้ำ
+          return fetch(req)
+            .then((res) => {
+              if (res.ok) cache.put(req, res.clone());
+              return res;
+            })
+            .catch(() => null); // ยังไม่มีไฟล์/offline → เงียบๆ ให้ audio.js fallback TTS
+        })
+      )
+    );
+    return;
+  }
 
   e.respondWith(
     caches.open(CACHE).then((cache) =>

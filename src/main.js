@@ -264,6 +264,9 @@ function playIntroVideo(src, onDone) {
 
 function startMatraById(id) {
   const matra = MATRA_BY_ID[id];
+  // decode เสียงสะกด/คำเต็มของมาตรานี้ล่วงหน้าเข้า BufferCache ระหว่างวิดีโอนำ/
+  // หน้าพูดของแม่มด (มีเวลาว่างอยู่แล้ว) — กันสะดุดตอนเฉลยสะกดคำระหว่างเล่นจริง
+  audio.preloadMatra(matra);
   const startGame = () => {
     showScreen('game');
     if (app.settings.bgm) audio.setBgmEnabled(true);
