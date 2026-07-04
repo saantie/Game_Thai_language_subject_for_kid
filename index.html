@@ -60,6 +60,16 @@
       </div>
     </header>
 
+    <!-- คะแนนสะสม (ข้ามทุกมาตรา) — fixed มุมขวาบนทุกหน้ายกเว้นหน้าเริ่ม
+         เป็นเป้าหมายที่หน้าสรุปดาวบินไปหาตอนกดกลับเลือกมาตรา -->
+    <div id="totalScoreBadge" class="hud-pill total-badge hidden">
+      <span class="pill-label">คะแนนสะสม</span>
+      <div class="score-display">
+        <span class="score-icon">🏆</span>
+        <span id="totalScoreValue" class="pill-value">0</span>
+      </div>
+    </div>
+
     <!-- voicebar: ด่านอ่านออกเสียง -->
     <div id="voicebar" class="voicebar hidden">
       <div class="vb-prompt">&#x2728; อ่านคำนี้ให้แม่มดฟัง</div>
@@ -131,10 +141,14 @@
 
     <!-- ผลคะแนนหลังจบมาตรา -->
     <div id="resultScreen" class="screen result hidden">
-      <div class="result-card">
+      <div class="result-card" id="resultCard">
         <div class="result-emoji"><img id="resultCharImg" class="result-witch-img" src="" alt="" /></div>
         <div id="resultStars" class="result-stars"></div>
         <div id="resultMsg" class="result-msg"></div>
+        <div class="result-total">
+          <span class="result-total-label">คะแนนสะสม</span>
+          <span id="resultTotalValue" class="result-total-value">0</span>
+        </div>
         <button id="resultBtn" class="btn-primary big">&#x1F3E0; กลับเลือกมาตรา</button>
       </div>
     </div>

@@ -8,7 +8,11 @@ import { createGame } from './game.js';
 import { buildLevelSelect } from './ui/levelSelect.js';
 import { openAdultGate } from './ui/adultPage.js';
 import { MATRA } from './data/matra.js';
-import { loadProgress, saveProgress, clearProgress, loadArEnabled, saveArEnabled } from './storage.js';
+import {
+  loadProgress, saveProgress, clearProgress,
+  loadArEnabled, saveArEnabled,
+  loadTotalScore, saveTotalScore,
+} from './storage.js';
 
 const MATRA_BY_ID = Object.fromEntries(MATRA.map((m) => [m.id, m]));
 
@@ -25,6 +29,7 @@ fetch('sw.js?_=' + Date.now())
 const app = {
   progress: loadProgress(), // โหลดจาก localStorage — { matraId: stars }
   settings: { showSpellHint: false, bgm: true, arEnabled: loadArEnabled() },
+  totalScore: loadTotalScore(), // คะแนนสะสมข้ามทุกมาตรา — game.js อัปเดตสดระหว่างเล่น
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -56,7 +61,13 @@ const dom = {
   resultMsg: $('#resultMsg'),
   resultBtn: $('#resultBtn'),
   resultCharImg: $('#resultCharImg'),
+  resultCard: $('#resultCard'),
+  resultTotalValue: $('#resultTotalValue'),
+  totalBadge: $('#totalScoreBadge'),
+  totalBadgeValue: $('#totalScoreValue'),
 };
+
+dom.totalBadgeValue.textContent = app.totalScore; // ค่าเริ่มต้นก่อนเข้าเกมรอบแรก
 
 const scene = initScene(sceneRoot);
 
@@ -144,6 +155,7 @@ function showScreen(which) {
   levelScreen.classList.toggle('hidden', which !== 'level');
   magicOrbs.classList.toggle('hidden', which !== 'level');
   resetBtn.classList.toggle('hidden', which !== 'level');
+  dom.totalBadge.classList.toggle('hidden', which === 'start'); // โชว์ทุกหน้ายกเว้นหน้าเริ่ม
   adultScreen.classList.add('hidden'); // ปิด adult overlay เสมอ
   dom.hud.classList.toggle('hidden', which !== 'game');
   dom.voicebar.classList.add('hidden');
@@ -369,6 +381,9 @@ resetBtn.addEventListener('click', () => {
   if (window.confirm('ล้างคะแนนและมาตราที่เล่นไปทั้งหมด?')) {
     clearProgress();
     app.progress = {};
+    app.totalScore = 0;
+    saveTotalScore(0);
+    dom.totalBadgeValue.textContent = 0;
     buildLevelSelect($('#levelGrid'), app, (id) => startMatraById(id));
   }
 });

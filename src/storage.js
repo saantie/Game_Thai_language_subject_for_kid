@@ -37,3 +37,20 @@ export function saveArEnabled(on) {
     localStorage.setItem(AR_KEY, on ? '1' : '0');
   } catch (e) {}
 }
+
+// ---- คะแนนสะสม (ข้ามทุกมาตราตลอดการเล่น) ----
+const TOTAL_SCORE_KEY = 'witch_total_score';
+
+export function loadTotalScore() {
+  try {
+    return parseInt(localStorage.getItem(TOTAL_SCORE_KEY), 10) || 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+export function saveTotalScore(n) {
+  try {
+    localStorage.setItem(TOTAL_SCORE_KEY, String(n));
+  } catch (e) {}
+}

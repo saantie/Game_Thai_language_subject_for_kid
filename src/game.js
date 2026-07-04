@@ -7,6 +7,7 @@
 //   READING → LISTENING → EVALUATING → REWARD | RETRY | REVEAL
 
 import { createRecognizer, matchWord } from './input/speech.js';
+import { saveTotalScore } from './storage.js';
 
 const TWO_PART = 'TWO_PART';
 
@@ -29,6 +30,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   let readAttempts = 0;
   let afterReveal = false;
   let score = 0;
+  let totalScoreAtStart = 0; // snapshot app.totalScore ก่อนเริ่มรอบ — ใช้ roll คะแนนสะสมบนหน้าสรุปดาว
 
   let state = 'IDLE';
   let bubbles = [];
@@ -158,6 +160,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     roundIndex = 0;
     perfectCount = 0;
     score = 0;
+    totalScoreAtStart = app.totalScore;
     updateScore();
     scene.initCharacter(m.character);
     dom.hudName.textContent = m.name;
@@ -218,7 +221,14 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   function updateScore(points) {
     if (points > 0) {
       const from = score - points;
-      _rollScore(from, score);
+      _rollScore(dom.hudScore, from, score);
+
+      // คะแนนสะสม (ข้ามทุกมาตราตลอดการเล่น) — อัปเดตสดคู่กับคะแนนรอบนี้ + persist ทันที
+      const totalFrom = app.totalScore;
+      app.totalScore = totalFrom + points;
+      saveTotalScore(app.totalScore);
+      if (dom.totalBadgeValue) _rollScore(dom.totalBadgeValue, totalFrom, app.totalScore);
+
       _burstScoreIcon();
       _spawnScoreSparks();
       if (scorePillEl) {
@@ -234,21 +244,21 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     }
   }
 
-  function _rollScore(from, to) {
+  function _rollScore(el, from, to) {
     const dur = 520;
     const start = performance.now();
     const tick = () => {
       const t = Math.min(1, (performance.now() - start) / dur);
       const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
-      dom.hudScore.textContent = Math.round(from + (to - from) * ease);
+      el.textContent = Math.round(from + (to - from) * ease);
       if (t < 1) {
         requestAnimationFrame(tick);
       } else {
-        dom.hudScore.textContent = to;
+        el.textContent = to;
         // settle: slide ขึ้นมาเหมือน slot machine
-        dom.hudScore.classList.remove('settle');
-        void dom.hudScore.offsetWidth;
-        dom.hudScore.classList.add('settle');
+        el.classList.remove('settle');
+        void el.offsetWidth;
+        el.classList.add('settle');
       }
     };
     requestAnimationFrame(tick);
@@ -561,9 +571,36 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       dom.resultMsg.textContent = msg;
       if (dom.resultCharImg) dom.resultCharImg.src = scene.getCharacterSrc();
       show(dom.resultScreen, true);
+      // ตัวเลขคะแนนสะสมวิ่งขึ้นจากยอดก่อนเริ่มรอบ → ยอดปัจจุบัน (โชว์ผลรวมที่เพิ่งได้ทั้งรอบ)
+      if (dom.resultTotalValue) _rollScore(dom.resultTotalValue, totalScoreAtStart, app.totalScore);
+
       dom.resultBtn.onclick = () => {
-        show(dom.resultScreen, false);
-        onExit && onExit({ matraId: matra.id, stars });
+        const card = dom.resultCard, badge = dom.totalBadge;
+        const finish = () => {
+          show(dom.resultScreen, false);
+          onExit && onExit({ matraId: matra.id, stars });
+        };
+        if (!card || !badge) { finish(); return; } // fallback กันพัง ถ้าไม่มี element
+
+        // หน้าสรุปดาวหุบ+ลอยไปหาป้ายคะแนนสะสม → ป้ายกระพริบรับ → แล้วค่อยเปิดหน้าเลือกมาตรา
+        const FLY_DUR = 650, BLINK_DUR = 450;
+        const cardRect = card.getBoundingClientRect();
+        const badgeRect = badge.getBoundingClientRect();
+        const dx = (badgeRect.left + badgeRect.width / 2) - (cardRect.left + cardRect.width / 2);
+        const dy = (badgeRect.top + badgeRect.height / 2) - (cardRect.top + cardRect.height / 2);
+        card.style.setProperty('--rc-fly-x', `${dx}px`);
+        card.style.setProperty('--rc-fly-y', `${dy}px`);
+        card.classList.add('fly-to-total');
+        setTimeout(() => {
+          card.classList.remove('fly-to-total');
+          badge.classList.remove('blink');
+          void badge.offsetWidth;
+          badge.classList.add('blink');
+          setTimeout(() => {
+            badge.classList.remove('blink');
+            finish();
+          }, BLINK_DUR);
+        }, FLY_DUR);
       };
     };
 

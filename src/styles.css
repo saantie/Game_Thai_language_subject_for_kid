@@ -1,5 +1,5 @@
 :root {
-  --accent: #7affc0;
+  --accent: #ffd84d; /* เหลืองทอง (เดิม #7affc0 เขียวมิ้นท์) */
   --accent-2: #b388ff;
   --purple: #8a5cff;
   --purple-deep: #5a3aa8;
@@ -532,12 +532,12 @@ html, body {
 /* ---- buttons ---- */
 button { font-family: inherit; cursor: pointer; border: none; }
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent), #57d6a0);
-  color: #062018; font-weight: 800; border-radius: 16px;
+  background: linear-gradient(135deg, var(--accent), #ffb84d);
+  color: #2a1800; font-weight: 800; border-radius: 16px;
   padding: 14px 28px; font-size: 20px;
-  box-shadow: 0 6px 0 #2f9d72;
+  box-shadow: 0 6px 0 #a86a1f;
 }
-.btn-primary:active { transform: translateY(3px); box-shadow: 0 3px 0 #2f9d72; }
+.btn-primary:active { transform: translateY(3px); box-shadow: 0 3px 0 #a86a1f; }
 .btn-primary.big { font-size: clamp(18px, 4.5vw, 26px); padding: clamp(12px, 3vh, 18px) clamp(24px, 7vw, 44px); }
 .btn-link { background: none; color: #cdbcff; text-decoration: underline; margin-top: 14px; font-size: 15px; }
 .app-version { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); font-size: 11px; color: rgba(180,160,220,0.45); letter-spacing: 0.05em; pointer-events: none; }
@@ -653,7 +653,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
 .btn-ok, .btn-retry {
   border-radius: 12px; padding: 10px 16px; font-size: 16px; font-weight: 700; color: #fff;
 }
-.btn-ok { background: #2f9d72; }
+.btn-ok { background: #d4a017; }
 .btn-retry { background: #c47a2f; }
 
 /* ---- screens (overlay) ---- */
@@ -688,7 +688,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
   background:
     linear-gradient(rgba(10,4,30,0.42), rgba(10,4,30,0.42)),
     url('../public/assets/images/book.png') center / cover no-repeat;
-  border: 2px solid rgba(122, 255, 192, 0.35);
+  border: 2px solid rgba(255, 216, 77, 0.35);
   border-radius: 18px; padding: 18px 12px; color: #fff;
   transition: transform 0.12s, filter 0.15s;
 }
@@ -763,7 +763,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
   display: flex; flex-direction: column; align-items: center;
   gap: clamp(10px, 2.5vh, 18px);
   background: rgba(255, 255, 255, 0.07);
-  border: 2px solid rgba(122, 255, 192, 0.35);
+  border: 2px solid rgba(255, 216, 77, 0.35);
   border-radius: 28px;
   padding: clamp(20px, 5vh, 40px) clamp(18px, 5vw, 36px);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
@@ -782,8 +782,47 @@ button { font-family: inherit; cursor: pointer; border: none; }
   font-size: clamp(22px, 5vw, 34px);
   font-weight: 800;
   color: var(--accent);
-  text-shadow: 0 0 12px rgba(122, 255, 192, 0.4);
+  text-shadow: 0 0 12px rgba(255, 216, 77, 0.4);
 }
+.result-total {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.result-total-label {
+  font-size: clamp(12px, 2.2vw, 15px); font-weight: 700; opacity: 0.85;
+  letter-spacing: 0.5px;
+}
+.result-total-value {
+  font-size: clamp(28px, 7vw, 44px); font-weight: 800;
+  color: var(--accent);
+  text-shadow: 0 0 16px rgba(255, 216, 77, 0.55);
+}
+.result-total-value.settle { animation: digitSettle 0.45s cubic-bezier(.22,1.5,.6,1); }
+
+/* คะแนนสะสม fixed มุมขวาบน — เป้าหมายที่ .result-card บินไปหาตอนกดกลับเลือกมาตรา */
+.total-badge {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  z-index: 50; /* เหนือ .screen (6) และ .hud (4) — ลอยเหนือทุกหน้าที่ไม่ใช่หน้าเริ่ม */
+}
+.total-badge .pill-value { color: var(--accent); }
+
+@keyframes flyToTotal {
+  0%   { transform: scale(1);   opacity: 1; }
+  28%  { transform: scale(0.7); opacity: 1; filter: brightness(1.4); }
+  100% { transform: translate(var(--rc-fly-x), var(--rc-fly-y)) scale(0.05); opacity: 0; }
+}
+.result-card.fly-to-total {
+  animation: flyToTotal 0.65s cubic-bezier(.4,0,.6,1) forwards;
+  pointer-events: none;
+}
+@keyframes totalBadgeBlink {
+  0%, 100% { transform: scale(1);    filter: brightness(1); }
+  25%      { transform: scale(1.35); filter: brightness(2.2) drop-shadow(0 0 14px gold); }
+  50%      { transform: scale(1.05); filter: brightness(1.6); }
+  75%      { transform: scale(1.25); filter: brightness(2.0); }
+}
+.total-badge.blink { animation: totalBadgeBlink 0.45s ease-in-out; }
 
 /* ---- adult page ---- */
 .adult { display: none; align-items: flex-start; }
@@ -1014,7 +1053,8 @@ button { font-family: inherit; cursor: pointer; border: none; }
 @media (prefers-reduced-motion: reduce) {
   .vs, .voicebar:not(.hidden), .vb-word.reveal,
   .witch, .btn-mic.listening, .btn-mic.ar-dwelling,
-  .glass-ball-img, .gb-shine, .gb-spark, .gb-outer-glow { animation: none !important; }
+  .glass-ball-img, .gb-shine, .gb-spark, .gb-outer-glow,
+  .result-card.fly-to-total, .total-badge.blink { animation: none !important; }
 }
 
 /* ---- วิดีโอ overlay ---- */
