@@ -636,10 +636,16 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       b.held = true;
       b.grabX = x; // จุดเริ่มหยิบ — onRelease ใช้เช็คว่า "ลากจริง" ก่อนรับลงหม้อ
       b.grabY = y;
+      // แม่เหล็กดูดติดมือทันที — สแนปฟองมาที่จุดกำเลย ไม่รอขยับก่อนถึงจะตามมือ
+      // (เดิมฟองค้างตำแหน่งเดิมจนกว่า onMove ขยับเกิน dead zone รู้สึกเหมือนไม่ติดมือ)
+      b.x = x;
+      b.y = y;
       b.pop = 0.6;
       b.bouncing = false;
       b.vx = 0;
       b.vy = 0;
+      b.throwVx = 0; // ความเร็วลาก (สำหรับข้อ 4: โยนลงหม้อด้วยแรงเหวี่ยง) เริ่มนิ่งตอนหยิบ
+      b.throwVy = 0;
       setState('DRAGGING');
       updateWordPill();
       audio.sfx('pick');
@@ -703,6 +709,10 @@ export function createGame({ scene, audio, app, dom, onExit }) {
 
   function onMove(x, y) {
     if (held) {
+      // ข้อ 4: เก็บความเร็วลาก (EMA) ไว้คำนวณแรงเหวี่ยงตอนปล่อย — ให้ "โยน" ฟองลงหม้อได้
+      // แม้ปล่อยมือก่อนถึงปากหม้อจริง ถ้าทิศ+ความเร็วพุ่งเข้าโซนหม้อพอดี
+      held.throwVx = (held.throwVx || 0) * 0.6 + (x - held.x) * 0.4;
+      held.throwVy = (held.throwVy || 0) * 0.6 + (y - held.y) * 0.4;
       held.x = x; held.y = y;
       spawnDragTrail(x, y);
       checkHeldCollisions();
@@ -783,6 +793,25 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     }
     _handPrev = { x, y, ts: now };
   }
+  const THROW_MIN_SPEED = 12; // px/เฟรม ขั้นต่ำที่นับเป็น "เหวี่ยงโยน" ไม่ใช่แค่ลากช้าๆ
+  const THROW_DECAY = 0.85;   // อัตราหน่วงความเร็วต่อ step จำลอง (เหมือนแรงเสียดทาน)
+  const THROW_STEPS = 14;     // จำนวน step ที่ยิงดูแนวถลาไปข้างหน้า
+
+  // ข้อ 4: เช็คว่าฟองที่ถูกเหวี่ยงปล่อย (มีความเร็วสะสมจาก onMove) จะ "ลอยเข้า"
+  // โซนหม้อไหม แม้ตำแหน่งปล่อยจริงจะไม่ทับโซนหม้อพอดี — จำลองแนวถลาแบบมีแรงเสียดทาน
+  // (คล้าย spring/bounce physics ที่มีอยู่แล้ว) ไม่ใช่เส้นตรงไม่มีที่สิ้นสุด กันโยนพลาด
+  // ไกลๆ แล้วนับผ่านเพราะบังเอิญเล็งทิศถูก
+  function throwHitsCauldron(x, y, vx, vy, c) {
+    if (Math.hypot(vx, vy) < THROW_MIN_SPEED) return false;
+    let px = x, py = y, svx = vx, svy = vy;
+    for (let s = 0; s < THROW_STEPS; s++) {
+      px += svx; py += svy;
+      svx *= THROW_DECAY; svy *= THROW_DECAY;
+      if (Math.hypot(px - c.cx, (py - c.cy) / 1.1) <= c.rx) return true;
+    }
+    return false;
+  }
+
   function onRelease(x, y) {
     if (!held) return;
     const b = held;
@@ -792,7 +821,11 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     // แต่ต้อง "ลากจริง" ด้วย — phantom pinch จาก AR หยิบ+ปล่อยที่จุดเดิมทันที
     // ถ้าฟองลอยซ้อน zone หม้ออยู่แล้วจะกลายเป็นหย่อนเอง เกมเล่นเองเป็นลูป (bug v119)
     const dragged = Math.hypot(x - (b.grabX ?? x), y - (b.grabY ?? y)) > Math.max(24, b.r * 0.6);
-    const overMouth = dragged && Math.hypot(x - c.cx, (y - c.cy) / 1.1) <= c.rx;
+    let overMouth = dragged && Math.hypot(x - c.cx, (y - c.cy) / 1.1) <= c.rx;
+    // ข้อ 4: ปล่อยไม่ตรงหม้อ แต่เหวี่ยงด้วยแรงพอ+ทิศพุ่งเข้าหม้อ → นับเป็นโยนลงสำเร็จ
+    if (!overMouth && dragged) {
+      overMouth = throwHitsCauldron(x, y, b.throwVx || 0, b.throwVy || 0, c);
+    }
     if (overMouth) {
       dropInCauldron(b);
     } else {
