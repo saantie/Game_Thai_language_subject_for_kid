@@ -28,6 +28,9 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   let currentWord = null;
   let perfectCount = 0;
   let readAttempts = 0;
+  let micMissCount = 0; // จำนวนครั้งที่ไมค์ตัดจบโดยไม่ได้ยิน (ต่อรอบพูด) — auto เปิดใหม่
+                        // ให้ไม่เกิน MIC_AUTO_RETRY_MAX ครั้ง กัน loop ไม่รู้จบถ้ามือถือ
+                        // permission หลุด/mic เสียจริง
   let afterReveal = false;
   let score = 0;
   let totalScoreAtStart = 0; // snapshot app.totalScore ก่อนเริ่มรอบ — ใช้ roll คะแนนสะสมบนหน้าสรุปดาว
@@ -375,6 +378,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   function startReadingRound() {
     setState('READING');
     blend = null;
+    micMissCount = 0; // คำใหม่ — เริ่มนับรอบไมค์ตัดใหม่
     scene.setCauldronFrame(3); // ควันเขียว + ดาว — คำผสมเสร็จ รอฟัง
     dom.wordBig.textContent = currentWord.display;
     // trigger reveal animation ทุกรอบ (reflow บังคับ restart)
@@ -395,6 +399,9 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     });
   }
 
+  const MIC_AUTO_RETRY_MAX = 2; // เปิดไมค์ใหม่อัตโนมัติ (พร้อมเสียง "เอาใหม่ค่ะ") ได้
+                                // สูงสุดกี่ครั้งต่อคำ ก่อนต้องให้เด็กกดปุ่มเอง
+
   function listen() {
     if (!running || state !== 'READING' || !recog.supported) return;
     setState('LISTENING'); // → arPause อัตโนมัติใน setState
@@ -414,8 +421,22 @@ export function createGame({ scene, audio, app, dom, onExit }) {
         dom.micBtn.classList.remove('listening');
         audio.unduck();
         if (!got && state === 'LISTENING') {
-          dom.micState.textContent = 'ไม่ได้ยินเสียง ลองกดพูดอีกครั้งนะ';
           setState('READING');
+          // ไมค์ตัดจบโดยไม่ทันได้ยิน (เด็กพูดไม่ทัน/เริ่มช้า) — แม่มดบอก "เอาใหม่ค่ะ"
+          // แล้วเปิดไมค์ให้อัตโนมัติ ไม่ต้องให้เด็กกดปุ่มเอง จำกัดไว้ไม่เกิน
+          // MIC_AUTO_RETRY_MAX ครั้งต่อคำ กัน loop ไม่รู้จบถ้า mic เสีย/permission หลุดจริง
+          if (micMissCount < MIC_AUTO_RETRY_MAX) {
+            micMissCount++;
+            dom.micState.textContent = 'ไม่ได้ยินเสียง เอาใหม่นะจ๊ะ';
+            audio.voice('mic_retry', {
+              onText: witchSay,
+              onEnd: () => {
+                if (state === 'READING' && recog.supported) listen();
+              },
+            });
+          } else {
+            dom.micState.textContent = 'ไม่ได้ยินเสียง ลองกดพูดอีกครั้งนะ';
+          }
         }
       }
     );
@@ -445,6 +466,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
         revealSpelling();
       } else {
         setState('READING');
+        micMissCount = 0; // ตอบผิดรอบใหม่ — เริ่มนับรอบไมค์ตัดใหม่เช่นกัน
         dom.micState.textContent += ' — ลองอ่านอีกครั้งนะจ๊ะ';
         // เปิดไมค์อัตโนมัติรอบ retry — ต้องรอแม่มดพูดจบจริง (onEnd) ห้ามใช้ timer
         // คงที่: TTS พูดยาวกว่า timer แล้วไมค์จะได้ยินเสียงแม่มดเอง → ประเมินผิด
