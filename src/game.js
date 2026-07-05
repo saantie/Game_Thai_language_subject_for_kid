@@ -401,24 +401,23 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     dom.micState.textContent = '🔴 กำลังฟัง...';
     dom.micBtn.classList.add('listening');
     audio.duck();
-    // ฟังต่อเนื่อง session เดียวสูงสุด 8 วิ (speech.js ใช้ continuous:true) — ไม่ restart
-    // กลางคันเหมือนเดิม (เคย setTimeout(attempt,150) สร้าง recognizer ใหม่ทุกครั้งที่
-    // เงียบสั้นๆ ตัดเสียงพูดต่อเนื่องของเด็กเป็นท่อนๆ ถอดเสียงได้ไม่ครบคำ)
+    // Web Speech API แบบมาตรฐาน (non-continuous, เรียก start() ครั้งเดียว) — เคยลอง
+    // retry-loop กับ continuous:true มาแล้วทั้งคู่แย่กว่าเดิมตอนทดสอบเครื่องจริง
+    // (ดูรายละเอียดใน speech.js) อย่าเพิ่มกลับมาโดยไม่ทดสอบมือถือจริงก่อน
+    let got = false;
     recog.start(
       (alts) => {
-        dom.micBtn.classList.remove('listening');
-        audio.unduck();
+        got = true;
         evaluate(matchWord(alts, currentWord.display), alts[0]);
       },
       () => {
         dom.micBtn.classList.remove('listening');
         audio.unduck();
-        if (state === 'LISTENING') {
+        if (!got && state === 'LISTENING') {
           dom.micState.textContent = 'ไม่ได้ยินเสียง ลองกดพูดอีกครั้งนะ';
           setState('READING');
         }
-      },
-      { maxMs: 8000 }
+      }
     );
   }
 
