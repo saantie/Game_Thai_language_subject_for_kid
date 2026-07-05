@@ -401,33 +401,25 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     dom.micState.textContent = '🔴 กำลังฟัง...';
     dom.micBtn.classList.add('listening');
     audio.duck();
-    let got = false;
-    const listenStartTs = performance.now();
-    const isFirstAttempt = readAttempts === 0;
-    const MIN_LISTEN_MS = 5000; // ข้อ 4: รอบแรกให้เวลาฟังอย่างน้อย 5 วิ ก่อนสรุปว่าไม่ได้ยิน
-    const attempt = () => {
-      recog.start(
-        (alts) => {
-          got = true;
-          evaluate(matchWord(alts, currentWord.display), alts[0]);
-        },
-        () => {
-          // เบราว์เซอร์บางตัวตัดฟังเร็วถ้าเงียบ — รอบแรกยังไม่ครบ 5 วิ ให้ฟังต่อ
-          if (!got && isFirstAttempt && state === 'LISTENING' &&
-              performance.now() - listenStartTs < MIN_LISTEN_MS) {
-            setTimeout(attempt, 150);
-            return;
-          }
-          dom.micBtn.classList.remove('listening');
-          audio.unduck();
-          if (!got && state === 'LISTENING') {
-            dom.micState.textContent = 'ไม่ได้ยินเสียง ลองกดพูดอีกครั้งนะ';
-            setState('READING');
-          }
+    // ฟังต่อเนื่อง session เดียวสูงสุด 8 วิ (speech.js ใช้ continuous:true) — ไม่ restart
+    // กลางคันเหมือนเดิม (เคย setTimeout(attempt,150) สร้าง recognizer ใหม่ทุกครั้งที่
+    // เงียบสั้นๆ ตัดเสียงพูดต่อเนื่องของเด็กเป็นท่อนๆ ถอดเสียงได้ไม่ครบคำ)
+    recog.start(
+      (alts) => {
+        dom.micBtn.classList.remove('listening');
+        audio.unduck();
+        evaluate(matchWord(alts, currentWord.display), alts[0]);
+      },
+      () => {
+        dom.micBtn.classList.remove('listening');
+        audio.unduck();
+        if (state === 'LISTENING') {
+          dom.micState.textContent = 'ไม่ได้ยินเสียง ลองกดพูดอีกครั้งนะ';
+          setState('READING');
         }
-      );
-    };
-    attempt();
+      },
+      { maxMs: 8000 }
+    );
   }
 
   function evaluate(correct, heard) {
