@@ -28,7 +28,7 @@ fetch('sw.js?_=' + Date.now())
 // ---- app state กลาง (ต้นแบบเก็บใน memory; production ใช้ IndexedDB/Firebase) ----
 const app = {
   progress: loadProgress(), // โหลดจาก localStorage — { matraId: stars }
-  settings: { showSpellHint: false, bgm: true, arEnabled: loadArEnabled() },
+  settings: { showSpellHint: false, bgm: true, arEnabled: loadArEnabled(), androidConfirmButtons: false },
   totalScore: loadTotalScore(), // คะแนนสะสมข้ามทุกมาตรา — game.js อัปเดตสดระหว่างเล่น
 };
 
@@ -204,6 +204,10 @@ function showIntroSpeech(onDone) {
   });
 }
 
+// วิดีโอนำเรื่องหน้าแรก + หน้าม่วงแม่มดน้อยชวนมาปราบแม่มดใจร้าย — เล่นครั้งเดียว
+// หลังกดปุ่ม "เริ่มเล่น" ก่อนเข้าหน้าเลือกมาตรา (ย้ายมาจากเดิมที่ผูกกับมาตรา kaka)
+const INTRO_VIDEO_SRC = 'public/video/Movie%201.mp4';
+
 const FADE_MS = 650; // ความเร็ว fade to black
 
 function playIntroVideo(src, onDone) {
@@ -265,23 +269,12 @@ function playIntroVideo(src, onDone) {
 
 function startMatraById(id) {
   const matra = MATRA_BY_ID[id];
-  // decode เสียงสะกด/คำเต็มของมาตรานี้ล่วงหน้าเข้า BufferCache ระหว่างวิดีโอนำ/
-  // หน้าพูดของแม่มด (มีเวลาว่างอยู่แล้ว) — กันสะดุดตอนเฉลยสะกดคำระหว่างเล่นจริง
+  // decode เสียงสะกด/คำเต็มของมาตรานี้ล่วงหน้าเข้า BufferCache ระหว่างที่หน้าเลือก
+  // มาตรากำลังสลับไปหน้าเกม (มีเวลาว่างอยู่แล้ว) — กันสะดุดตอนเฉลยสะกดคำระหว่างเล่นจริง
   audio.preloadMatra(matra);
-  const startGame = () => {
-    showScreen('game');
-    if (app.settings.bgm) audio.setBgmEnabled(true);
-    game.startMatra(matra);
-  };
-  const launch = matra.video
-    ? () => showIntroSpeech(startGame)   // วิดีโอจบ → หน้าม่วงพูด → เกม
-    : startGame;                          // ไม่มีวิดีโอ → เกมทันที
-  if (matra.video) {
-    audio.stopLevelBgm();
-    playIntroVideo(matra.video, launch);
-  } else {
-    launch();
-  }
+  showScreen('game');
+  if (app.settings.bgm) audio.setBgmEnabled(true);
+  game.startMatra(matra);
 }
 
 // ---- wiring buttons ----
@@ -297,12 +290,14 @@ let _micDone = false;
 $('#startBtn').addEventListener('click', () => {
   audio.unlock();
   // ไมค์ก่อน → กล้องหลัง ใน gesture เดียวกัน (ยิงพร้อมกัน prompt ซ้อน
-  // บน Android บางรุ่นอันแรกถูก dismiss) — AR โหลด background ระหว่างเลือกมาตรา
+  // บน Android บางรุ่นอันแรกถูก dismiss) — AR โหลด background ระหว่างดูวิดีโอนำ/เลือกมาตรา
   audio.requestMicPermission().then(() => {
     _micDone = true;
     initAR(); // ไม่ทำอะไรถ้าปุ่ม AR ปิดอยู่
   });
-  showScreen('level');
+  audio.stopLevelBgm();
+  // วิดีโอนำ → หน้าม่วงแม่มดน้อยชวนปราบแม่มดใจร้าย → หน้าเลือกมาตรา
+  playIntroVideo(INTRO_VIDEO_SRC, () => showIntroSpeech(() => showScreen('level')));
 });
 
 // ---- ปุ่มเปิด/ปิดโหมด AR (หน้าแรก) ----
