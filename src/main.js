@@ -49,6 +49,7 @@ const dom = {
   hudWord: $('#hudWord'),
   voicebar: $('#voicebar'),
   wordBig: $('#wordBig'),
+  vbPoints: $('#vbPoints'),
   micBtn: $('#micBtn'),
   micState: $('#micState'),
   okBtn: $('#okBtn'),

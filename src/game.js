@@ -287,6 +287,44 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     requestAnimationFrame(tick);
   }
 
+  // นับคะแนนแบบ "หลักหน่วยวิ่งก่อน แล้วค่อยหลักถัดไป" (odometer-style cascade) —
+  // ต่างจาก _rollScore ที่ทุกหลักขยับพร้อมกัน ใช้เฉพาะหน้าสรุปดาว (ป้ายเล็กใน
+  // HUD/บนการ์ดยังใช้ _rollScore เดิม) — คืน duration รวมให้ผู้เรียก sync เสียงได้
+  function _rollScoreDigits(el, from, to) {
+    const toStr = String(Math.max(0, Math.round(to)));
+    const fromStr = String(Math.max(0, Math.round(from))).padStart(toStr.length, '0');
+    const digitCount = toStr.length;
+    const DIGIT_DUR = 260; // ระยะเวลาที่แต่ละหลักวิ่ง
+    const STAGGER = 90;    // หน่วงต่อหลักถัดไป (หลักหน่วย=0ms, หลักสิบ=+90ms, ...)
+    const totalDur = (digitCount - 1) * STAGGER + DIGIT_DUR;
+    const start = performance.now();
+
+    const tick = () => {
+      const now = performance.now();
+      let out = '';
+      for (let i = 0; i < digitCount; i++) {
+        const posFromRight = digitCount - 1 - i; // 0 = หลักหน่วย (ขวาสุด) วิ่งก่อน
+        const digitFrom = +fromStr[i];
+        const digitTo = +toStr[i];
+        let t = (now - start - posFromRight * STAGGER) / DIGIT_DUR;
+        t = Math.max(0, Math.min(1, t));
+        const ease = 1 - Math.pow(1 - t, 3);
+        out += Math.round(digitFrom + (digitTo - digitFrom) * ease);
+      }
+      el.textContent = out;
+      if (now - start < totalDur) {
+        requestAnimationFrame(tick);
+      } else {
+        el.textContent = toStr;
+        el.classList.remove('settle');
+        void el.offsetWidth;
+        el.classList.add('settle');
+      }
+    };
+    requestAnimationFrame(tick);
+    return totalDur;
+  }
+
   function _burstScoreIcon() {
     if (!scoreIconEl) return;
     scoreIconEl.classList.remove('burst');
@@ -381,12 +419,16 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     micMissCount = 0; // คำใหม่ — เริ่มนับรอบไมค์ตัดใหม่
     scene.setCauldronFrame(3); // ควันเขียว + ดาว — คำผสมเสร็จ รอฟัง
     dom.wordBig.textContent = currentWord.display;
-    // trigger reveal animation ทุกรอบ (reflow บังคับ restart)
-    dom.wordBig.classList.remove('reveal');
+    dom.wordBig.classList.remove('reveal'); // เอา class ออกตอนยังซ่อนอยู่ (ยังไม่ animate)
+    if (dom.vbPoints) dom.vbPoints.classList.remove('show'); // ล้างป้ายคะแนนรอบก่อน
+    renderSpellHint();
+    showVoicebar(); // โชว์การ์ดก่อน — display เปลี่ยนจาก none เป็นจริงแล้ว
+    // reflow บังคับ restart animation ต้องทำ "หลัง" โชว์การ์ดแล้วเท่านั้น — ทำตอน
+    // ancestor ยัง display:none อยู่ offsetWidth จะอ่านค่าไม่จริง ทำให้ animation
+    // restart ไม่ติด เฟรมแรกที่วาดจึงโชว์คำแบบ "จบ animation แล้ว" แวบหนึ่งก่อนจะ
+    // เด้งกลับมาเล่น animation จริง (บั๊ก "ภาพแว๊บ" ที่เจอ)
     void dom.wordBig.offsetWidth;
     dom.wordBig.classList.add('reveal');
-    renderSpellHint();
-    showVoicebar();
     dom.micBtn.disabled = !recog.supported;
     dom.micState.textContent = recog.supported ? 'รอฟังเสียงสักครู่...' : 'กดปุ่มด้านล่างเพื่อยืนยัน';
 
@@ -550,6 +592,14 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     audio.playCorrectChime();             // ข้อ 7: เสียง Magic Chime.mp3 จริง — ให้ดังก่อน
     setTimeout(spawnFullScreenStars, 180); // แล้วดาวเต็มจอค่อยระเบิดตามจังหวะเสียง (ไม่พร้อมกัน)
     audio.voice('correct', { onText: witchSay });
+    // โชว์คะแนนที่ได้ (+100/+50) ทับมุมการ์ด ก่อนการ์ดจะหุบลอยไปป้ายคะแนน (750ms
+    // ด้านล่าง) — เห็นชัดว่าตอบถูกครั้งนี้ได้กี่แต้ม ไม่ใช่รู้แค่ตอนตัวเลขที่ป้ายขยับ
+    if (dom.vbPoints) {
+      dom.vbPoints.textContent = `+${points}`;
+      dom.vbPoints.classList.remove('show');
+      void dom.vbPoints.offsetWidth;
+      dom.vbPoints.classList.add('show');
+    }
     setTimeout(() => rewardFlyAnim(
       () => setTimeout(nextRound, 250),
       () => { updateScore(points); } // ตัด synth 'star' (เสียงตุ๊ดๆ) ออก — มี Magic Chime แล้วพอ
@@ -604,10 +654,11 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       if (dom.resultCharImg) dom.resultCharImg.src = scene.getCharacterSrc();
       show(dom.resultScreen, true);
       // ตัวเลขคะแนนสะสมวิ่งขึ้นจากยอดก่อนเริ่มรอบ → ยอดปัจจุบัน (โชว์ผลรวมที่เพิ่งได้ทั้งรอบ)
-      // พร้อมเสียงไล่ระดับให้ดูตื่นเต้น (ข้อ 3)
+      // พร้อมเสียงไล่ระดับให้ดูตื่นเต้น (ข้อ 3) — หลักหน่วยวิ่งก่อนแล้วค่อยหลักถัดไป
+      // (odometer-style) ต่างจาก roll ปกติที่ทุกหลักขยับพร้อมกัน
       if (dom.resultTotalValue) {
-        _rollScore(dom.resultTotalValue, totalScoreAtStart, app.totalScore);
-        audio.playCountUpSound(520);
+        const dur = _rollScoreDigits(dom.resultTotalValue, totalScoreAtStart, app.totalScore);
+        audio.playCountUpSound(dur);
       }
 
       dom.resultBtn.onclick = () => {

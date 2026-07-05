@@ -514,6 +514,27 @@ html, body {
 }
 .vb-word.reveal { animation: wordReveal .68s cubic-bezier(.34,1.4,.64,1) both; }
 
+/* คะแนนที่ได้ (+100/+50) — โผล่ทับมุมบนขวาของคำ ตอนตอบถูก ก่อนการ์ดจะหุบลอยไป
+   ป้ายคะแนน (ข้อ 2) ใช้ gradient ทองเดียวกับธีมเกม */
+.vb-points {
+  position: absolute;
+  top: -4px; right: 0;
+  font-size: clamp(24px, 6vw, 40px);
+  font-weight: 800;
+  background: linear-gradient(135deg, #fff2b0, var(--accent) 45%, #c9860c 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 12px rgba(255, 216, 77, 0.6));
+  opacity: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.vb-points.show { animation: pointsPopIn 0.4s cubic-bezier(.34,1.56,.64,1) forwards; }
+@keyframes pointsPopIn {
+  0%   { opacity: 0; transform: scale(0.4) translateY(14px); }
+  60%  { opacity: 1; transform: scale(1.15) translateY(-4px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
 .vb-hint {
   font-size: clamp(15px,2.8vw,20px); color: #ffe08a;
   margin: 28px 0 8px; display: block; /* แสดงเสมอ */
@@ -1084,6 +1105,9 @@ button { font-family: inherit; cursor: pointer; border: none; }
   .witch, .btn-mic.listening, .btn-mic.ar-dwelling,
   .glass-ball-img, .gb-shine, .gb-spark, .gb-outer-glow,
   .result-card.fly-to-total, .total-badge.blink { animation: none !important; }
+  /* .vb-points เริ่มที่ opacity:0 โดยตั้งใจ (popup) — ปิด animation เฉยๆ จะค้างไม่โชว์
+     เลย ต้องบังคับ opacity:1 คู่กันด้วยเมื่อ .show ถูกเพิ่ม */
+  .vb-points.show { animation: none !important; opacity: 1; }
 }
 
 /* ---- วิดีโอ overlay ---- */
