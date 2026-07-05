@@ -848,10 +848,12 @@ button { font-family: inherit; cursor: pointer; border: none; }
 }
 .result-total-value.settle { animation: digitSettle 0.45s cubic-bezier(.22,1.5,.6,1); }
 
-/* คะแนนสะสม fixed มุมขวาบน — เป้าหมายที่ .result-card บินไปหาตอนกดกลับเลือกมาตรา */
+/* คะแนนสะสม fixed มุมขวาบน — เป้าหมายที่ .result-card บินไปหาตอนกดกลับเลือกมาตรา
+   top เว้นลงมาพ้น .hud (มี word-pill ชิดขอบขวาเดียวกัน — เดิมทับกันพอดี เห็นเป็น
+   เสี้ยวสีส้มโผล่ที่มุมโค้งของป้ายนี้) */
 .total-badge {
   position: fixed;
-  top: max(12px, env(safe-area-inset-top, 0px));
+  top: calc(max(12px, env(safe-area-inset-top, 0px)) + 66px);
   right: max(12px, env(safe-area-inset-right, 0px));
   z-index: 50; /* เหนือ .screen (6) และ .hud (4) — ลอยเหนือทุกหน้าที่ไม่ใช่หน้าเริ่ม */
 }
