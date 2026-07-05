@@ -514,18 +514,18 @@ html, body {
 }
 .vb-word.reveal { animation: wordReveal .68s cubic-bezier(.34,1.4,.64,1) both; }
 
-/* คะแนนที่ได้ (+100/+50) — โผล่ทับมุมบนขวาของคำ ตอนตอบถูก ก่อนการ์ดจะหุบลอยไป
-   ป้ายคะแนน (ข้อ 2) ใช้ gradient ทองเดียวกับธีมเกม */
+/* คะแนนที่ได้ (+100/+50) — โผล่กลางจอใต้คำ ตอนตอบถูก ก่อนการ์ดจะหุบลอยไปป้ายคะแนน
+   (ข้อ 2) ใช้ gradient ทองเดียวกับธีมเกม — เป็น flow element ปกติ (ไม่ absolute)
+   จึงอยู่กึ่งกลางอัตโนมัติตาม .voicebar (align-items:center) ซึ่งตัวบาร์เองก็อยู่
+   กึ่งกลางจอ (left:50%+translateX(-50%)) */
 .vb-points {
-  position: absolute;
-  top: -4px; right: 0;
-  font-size: clamp(24px, 6vw, 40px);
+  font-size: clamp(40px, 10vw, 70px);
   font-weight: 800;
+  margin: -4px 0 10px;
   background: linear-gradient(135deg, #fff2b0, var(--accent) 45%, #c9860c 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 0 12px rgba(255, 216, 77, 0.6));
+  filter: drop-shadow(0 0 18px rgba(255, 216, 77, 0.7));
   opacity: 0;
-  z-index: 2;
   pointer-events: none;
 }
 .vb-points.show { animation: pointsPopIn 0.4s cubic-bezier(.34,1.56,.64,1) forwards; }
