@@ -159,13 +159,20 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     }
   }
 
-  // ประกายดาวระเบิดเต็มจอตอนอ่านถูก (ข้อ 7) — กระจายจุดกำเนิดทั่วจอ
-  // 4 จุด × 16 อนุภาค = 64 (เดิม 6×32=192) ลดลง ~67% + ไม่มี glow ต่ออนุภาค
-  function spawnFullScreenStars() {
+  // ประกายดาวระเบิดรอบการ์ดอ่านคำตอนอ่านถูก (ข้อ 7) — กระจายจุดกำเนิดรอบ
+  // #voicebar แทนทั่วจอ (เดิมกระจายทั่วจอ ดูไม่เชื่อมโยงกับการ์ดที่กำลังโชว์)
+  // 4 จุด × 16 อนุภาค = 64 (เดิม 6×32=192) + ไม่มี glow ต่ออนุภาค
+  function spawnRewardStars() {
+    const r = dom.voicebar.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const pad = 24; // เว้นออกจากขอบการ์ดเล็กน้อย ดูเป็น "ข้าง" การ์ด ไม่ทับตัวหนังสือ
     const points = [
-      [0.15, 0.25], [0.50, 0.15], [0.85, 0.25], [0.50, 0.60],
+      [r.left - pad, r.top + r.height * 0.3],
+      [cx, r.top - pad],
+      [r.right + pad, r.top + r.height * 0.3],
+      [cx, r.bottom - r.height * 0.1],
     ];
-    points.forEach(([fx, fy]) => spawnCelebrationBurst(scene.W * fx, scene.H * fy));
+    points.forEach(([x, y]) => spawnCelebrationBurst(x, y));
   }
 
   function scoreToEvilWishStage(s) {
@@ -590,7 +597,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     scene.setCauldronFrame(4, 'reward'); // ควันม่วง — ฉลองอ่านถูก
     scene.witch.play('cheer');
     audio.playCorrectChime();             // ข้อ 7: เสียง Magic Chime.mp3 จริง — ให้ดังก่อน
-    setTimeout(spawnFullScreenStars, 180); // แล้วดาวเต็มจอค่อยระเบิดตามจังหวะเสียง (ไม่พร้อมกัน)
+    setTimeout(spawnRewardStars, 180); // แล้วดาวรอบการ์ดค่อยระเบิดตามจังหวะเสียง (ไม่พร้อมกัน)
     audio.voice('correct', { onText: witchSay });
     // โชว์คะแนนที่ได้ (+100/+50) ทับมุมการ์ด ก่อนการ์ดจะหุบลอยไปป้ายคะแนน (750ms
     // ด้านล่าง) — เห็นชัดว่าตอบถูกครั้งนี้ได้กี่แต้ม ไม่ใช่รู้แค่ตอนตัวเลขที่ป้ายขยับ
