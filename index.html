@@ -154,6 +154,23 @@
       </div>
     </div>
 
+    <!-- ห้องฝึกไพ่เวทมนตร์ก่อนเข้าหม้อ — อุ่นเครื่อง เล่นครั้งแรกที่ปลดล็อกมาตรานั้นเท่านั้น -->
+    <div id="mahjongScreen" class="screen mahjong hidden">
+      <button id="mahjongBackBtn" class="btn-back" title="กลับ">
+        <img src="public/assets/images/Arrow.png" alt="กลับ" class="back-arrow-img" />
+      </button>
+      <h2 id="mahjongTitle">&#x2728; จับคู่ไพ่คำ</h2>
+      <div id="mahjongTray" class="mj-tray">
+        <div class="mj-tray-slot"></div>
+        <div class="mj-tray-slot"></div>
+        <div class="mj-tray-slot"></div>
+        <div class="mj-tray-slot"></div>
+        <div class="mj-tray-slot"></div>
+      </div>
+      <div id="mahjongBoard" class="mj-board"></div>
+      <button id="mahjongShuffleBtn" class="btn-primary mj-shuffle-btn">&#x1F500; สลับป้าย</button>
+    </div>
+
     <!-- วิดีโอนำเรื่องหน้าแรก — เล่นครั้งเดียวหลังกดปุ่ม "เริ่มเล่น" ก่อนเข้าหน้าเลือกมาตรา -->
     <div id="videoOverlay" class="video-overlay hidden" aria-hidden="true">
       <video id="introVideo" playsinline webkit-playsinline preload="metadata"></video>

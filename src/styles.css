@@ -1100,7 +1100,8 @@ button { font-family: inherit; cursor: pointer; border: none; }
   .vs, .voicebar:not(.hidden), .vb-word.reveal,
   .witch, .btn-mic.listening,
   .glass-ball-img, .gb-shine, .gb-spark, .gb-outer-glow,
-  .result-card.fly-to-total, .total-badge.blink { animation: none !important; }
+  .result-card.fly-to-total, .total-badge.blink,
+  .mj-tray.shake, .mj-shuffle-btn.pulse { animation: none !important; }
   /* .vb-points เริ่มที่ opacity:0 โดยตั้งใจ (popup) — ปิด animation เฉยๆ จะค้างไม่โชว์
      เลย ต้องบังคับ opacity:1 คู่กันด้วยเมื่อ .show ถูกเพิ่ม */
   .vb-points.show { animation: none !important; opacity: 1; }
@@ -1165,3 +1166,66 @@ button { font-family: inherit; cursor: pointer; border: none; }
   letter-spacing: 0.5px;
   backdrop-filter: blur(4px);
 }
+
+/* ================================================================
+   มินิเกม "ไพ่นกกระจอกจับคู่คำไทย" — ด่านอุ่นเครื่องก่อนเกมหยิบฟอง
+   ================================================================ */
+.screen.mahjong {
+  justify-content: flex-start;
+  padding-top: max(72px, env(safe-area-inset-top, 72px));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+#mahjongBackBtn {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top, 12px));
+  left: max(12px, env(safe-area-inset-left, 12px));
+}
+#mahjongTitle { margin: 0 0 14px; font-size: clamp(20px, 4vw, 30px); }
+
+.mj-tray { display: flex; gap: 10px; margin-bottom: 22px; }
+.mj-tray-slot {
+  width: 74px; height: 92px;
+  border: 2px dashed rgba(255, 216, 77, 0.35);
+  border-radius: 12px;
+  background: rgba(10, 4, 30, 0.35);
+}
+.mj-tray.shake { animation: mjTrayShake 0.32s ease; }
+@keyframes mjTrayShake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-8px); }
+  75%      { transform: translateX(8px); }
+}
+
+.mj-board { position: relative; margin: 0 auto 20px; }
+.mj-tile {
+  position: absolute;
+  width: 74px; height: 92px;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    linear-gradient(rgba(10,4,30,0.42), rgba(10,4,30,0.42)),
+    url('../public/assets/images/book.png') center / cover no-repeat;
+  border: 2px solid rgba(255, 216, 77, 0.35);
+  border-radius: 12px;
+  color: #fff;
+  font: 800 22px 'Sarabun', 'Segoe UI', sans-serif;
+  text-align: center;
+  padding: 4px;
+  filter: saturate(0.55) brightness(0.72);
+  cursor: not-allowed;
+  transition: left 0.35s cubic-bezier(.34,1.4,.64,1), top 0.35s cubic-bezier(.34,1.4,.64,1),
+              opacity 0.3s, transform 0.3s;
+}
+/* ไพ่หยิบได้ — เรืองแสงทองด้วย --accent ให้เห็นชัดว่าแตะได้ */
+.mj-tile.free {
+  filter: none;
+  cursor: pointer;
+  border-color: rgba(255, 216, 77, 0.9);
+  box-shadow: 0 0 14px rgba(255, 216, 77, 0.55);
+}
+.mj-tile.flying { z-index: 1500 !important; }
+.mj-tile.matched { opacity: 0; transform: scale(1.3) rotate(6deg); pointer-events: none; }
+
+.mj-shuffle-btn { margin-top: 6px; }
+/* ถาดเต็มไม่มีคู่ — ไฮไลต์ปุ่มสลับป้าย reuse keyframe pillBump เดิม (ดู .hud-pill.bump) */
+.mj-shuffle-btn.pulse { animation: pillBump 0.6s ease-in-out infinite; }

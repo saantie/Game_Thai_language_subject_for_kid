@@ -54,3 +54,20 @@ export function saveTotalScore(n) {
     localStorage.setItem(TOTAL_SCORE_KEY, String(n));
   } catch (e) {}
 }
+
+// ---- ด่านอุ่นเครื่องไพ่จับคู่ — เคยเห็นมาตราไหนแล้วบ้าง (โชว์แค่ครั้งแรก) ----
+const MAHJONG_SEEN_KEY = 'witch_mahjong_seen';
+
+export function loadMahjongSeen() {
+  try {
+    return JSON.parse(localStorage.getItem(MAHJONG_SEEN_KEY) || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+
+export function saveMahjongSeen(seenMap) {
+  try {
+    localStorage.setItem(MAHJONG_SEEN_KEY, JSON.stringify(seenMap));
+  } catch (e) {}
+}

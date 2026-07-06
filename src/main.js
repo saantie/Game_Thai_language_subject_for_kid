@@ -5,6 +5,7 @@ import { initScene } from './scene.js';
 import { createPointerInput } from './input/pointer.js';
 import { createHandPinchInput } from './input/handpinch.js';
 import { createGame } from './game.js';
+import { createMahjongWarmup } from './mahjong.js';
 import { buildLevelSelect } from './ui/levelSelect.js';
 import { openAdultGate } from './ui/adultPage.js';
 import { MATRA } from './data/matra.js';
@@ -12,6 +13,7 @@ import {
   loadProgress, saveProgress, clearProgress,
   loadArEnabled, saveArEnabled,
   loadTotalScore, saveTotalScore,
+  loadMahjongSeen, saveMahjongSeen,
 } from './storage.js';
 
 const MATRA_BY_ID = Object.fromEntries(MATRA.map((m) => [m.id, m]));
@@ -30,19 +32,39 @@ const app = {
   progress: loadProgress(), // โหลดจาก localStorage — { matraId: stars }
   settings: { showSpellHint: false, bgm: true, arEnabled: loadArEnabled(), androidConfirmButtons: false },
   totalScore: loadTotalScore(), // คะแนนสะสมข้ามทุกมาตรา — game.js อัปเดตสดระหว่างเล่น
+  mahjongSeen: loadMahjongSeen(), // { matraId: true } — ด่านอุ่นเครื่องไพ่โชว์แค่ครั้งแรก
 };
+
+// ผู้เล่นเก่าที่มีดาวอยู่แล้วก่อนฟีเจอร์นี้มา ไม่ควรต้องมาเจอด่านอุ่นเครื่องผุดขึ้น
+// ทีหลังทุกมาตราที่เคยผ่าน — เช็คทุกครั้งที่บูต (เบา แค่ไล่ key ที่มีอยู่) ไม่ใช่
+// migration one-shot กันข้อมูลไม่ตรงกันเองถ้า localStorage ถูกแก้มือ
+(function ensureMahjongSeenInvariant() {
+  let dirty = false;
+  Object.keys(app.progress).forEach((id) => {
+    if ((app.progress[id] | 0) >= 1 && !app.mahjongSeen[id]) {
+      app.mahjongSeen[id] = true;
+      dirty = true;
+    }
+  });
+  if (dirty) saveMahjongSeen(app.mahjongSeen);
+}());
 
 const $ = (sel) => document.querySelector(sel);
 
 const startScreen = $('#startScreen');
 const levelScreen = $('#levelScreen');
 const adultScreen = $('#adultScreen');
+const mahjongScreen = $('#mahjongScreen');
 const sceneRoot = $('#sceneRoot');
 const magicOrbs = $('#magicOrbs');
 const resetBtn = $('#resetProgressBtn');
 
 const dom = {
   hud: $('#hud'),
+  mahjongTitle: $('#mahjongTitle'),
+  mahjongBoard: $('#mahjongBoard'),
+  mahjongTray: $('#mahjongTray'),
+  mahjongShuffleBtn: $('#mahjongShuffleBtn'),
   hudName: $('#hudName'),
   hudProgress: $('#hudProgress'),
   hudScore: $('#hudScore'),
@@ -83,15 +105,36 @@ const game = createGame({
   },
 });
 
+const mahjongWarmup = createMahjongWarmup({
+  scene,
+  audio,
+  app,
+  dom,
+  onComplete: (matraId) => {
+    app.mahjongSeen[matraId] = true;
+    saveMahjongSeen(app.mahjongSeen);
+    mahjongWarmup.stop();
+    enterBubbleGame(MATRA_BY_ID[matraId]);
+  },
+});
+
 // input layer: hybrid — pointer (touch/เมาส์) ทำงานเสมอ, AR (handpinch) ซ้อนทับ
 // เมื่อเปิดกล้องสำเร็จ — เด็กจิ้มจอก็เล่นได้ จีบนิ้วหน้ากล้องก็เล่นได้
+// route ตาม _screen ตอนเรียกจริง (ไม่ต้อง rewiring ตอนสลับหน้า) — onHandFrame
+// ห้าม forward เข้า game ตอนอยู่หน้า mahjong เพราะ game.js's loop หยุดอยู่
+// (ยังไม่ startMatra) particle จาก spawnDragTrail จะค้างไม่ถูกวาด/ล้างจนกว่า
+// เกมหยิบฟองจะเริ่มจริงแล้วจู่ๆ ก็ระเบิดค้างเก่าออกมา
 const inputHandlers = {
-  onPick: game.onPick,
-  onMove: game.onMove,
-  onRelease: game.onRelease,
-  onHandFrame: game.onHandFrame, // เฉพาะ AR — มือเปิด/กางมือ/หงายมือ (pointer.js ไม่เรียก)
+  onPick:      (x, y, slop) => (_screen === 'mahjong' ? mahjongWarmup.onPick(x, y, slop) : game.onPick(x, y, slop)),
+  onMove:      (x, y) => (_screen === 'mahjong' ? mahjongWarmup.onMove(x, y) : game.onMove(x, y)),
+  onRelease:   (x, y) => (_screen === 'mahjong' ? mahjongWarmup.onRelease(x, y) : game.onRelease(x, y)),
+  onHandFrame: (frame) => { if (_screen !== 'mahjong') game.onHandFrame(frame); },
 };
 createPointerInput(scene.fxCanvas, inputHandlers);
+// มินิเกมไพ่วาดเป็น DOM แยกจาก fxCanvas (ไม่ใช่ canvas) — ต้องมี listener ของ
+// ตัวเองบน #mahjongScreen ด้วย ไม่งั้นคลิก/แตะไพ่จะไม่มีทางไปถึง fxCanvas เลย
+// (ปลอดภัย ไม่ชนกับหน้าอื่น เพราะ .hidden = display:none จึงไม่รับ event ตอนไม่ active)
+createPointerInput(mahjongScreen, inputHandlers);
 
 let arInput = null;
 let _arStarting = false;
@@ -99,8 +142,9 @@ let _screen = 'start';
 const camVideoEl = $('#camVideo');
 
 // game.js เรียกตอนเข้า/ออก LISTENING — หยุด inference คืน CPU ให้ Speech Recognition
+// รวม 'mahjong' ด้วย เพราะ pinch เป็น input หลักของด่านอุ่นเครื่องไพ่เช่นกัน
 app.arPause = () => { if (arInput) arInput.pause(); };
-app.arResume = () => { if (arInput && _screen === 'game') arInput.resume(); };
+app.arResume = () => { if (arInput && (_screen === 'game' || _screen === 'mahjong')) arInput.resume(); };
 
 function onCameraLost() {
   // Android ตัดกล้อง (จอดับ/สลับแอป/สายเข้า) → ปิด AR เรียบร้อย เกมเล่นต่อด้วย touch
@@ -109,10 +153,10 @@ function onCameraLost() {
   witchSay('กล้องปิดไปแล้วจ้ะ ใช้นิ้วจิ้มจอแทนได้เลยนะ');
 }
 
-// AR ทำงานเฉพาะหน้าเกม — หน้าเมนู pause inference + ซ่อนภาพกล้อง (ประหยัดแบต/CPU)
+// AR ทำงานเฉพาะหน้าเกม/มินิเกมไพ่ — หน้าเมนู pause inference + ซ่อนภาพกล้อง (ประหยัดแบต/CPU)
 function syncArToScreen() {
   if (!arInput) { camVideoEl.classList.remove('show'); return; }
-  if (_screen === 'game') {
+  if (_screen === 'game' || _screen === 'mahjong') {
     arInput.resume();
     camVideoEl.classList.add('show');
   } else {
@@ -135,6 +179,7 @@ function initAR() {
 }
 
 scene.onResize(() => game.relayout());
+scene.onResize(() => mahjongWarmup.relayout());
 
 // ---- screen switching ----
 let _inPopstate  = false;
@@ -154,6 +199,7 @@ function showScreen(which) {
   }
   startScreen.classList.toggle('hidden', which !== 'start');
   levelScreen.classList.toggle('hidden', which !== 'level');
+  mahjongScreen.classList.toggle('hidden', which !== 'mahjong');
   magicOrbs.classList.toggle('hidden', which !== 'level');
   resetBtn.classList.toggle('hidden', which !== 'level');
   dom.totalBadge.classList.toggle('hidden', which === 'start'); // โชว์ทุกหน้ายกเว้นหน้าเริ่ม
@@ -169,6 +215,8 @@ function showScreen(which) {
     audio.stopLevelBgm();
   } else if (which === 'start') {
     audio.stopLevelBgm();
+  } else if (which === 'mahjong') {
+    audio.stopLevelBgm(); // ด่านอุ่นเครื่องไพ่ยังไม่มีเพลงประกอบเฉพาะ — เงียบเหมือนหน้าเลือกมาตรา
   }
 }
 
@@ -178,8 +226,9 @@ window.addEventListener('popstate', (e) => {
   if (!to) return; // entry ก่อนแอปโหลด — ปล่อยให้ browser จัดการ (ออกแอป)
   _inPopstate = true;
   game.stop();
-  if (to === 'game') {
-    // game state ไม่สามารถ resume — เปลี่ยน entry นี้เป็น level แทน
+  mahjongWarmup.stop(); // no-op เฉยๆ ถ้าไม่ใช่โมดูลที่กำลัง active
+  if (to === 'game' || to === 'mahjong') {
+    // game/mahjong state ไม่สามารถ resume — เปลี่ยน entry นี้เป็น level แทน
     history.replaceState({ screen: 'level' }, '');
     showScreen('level');
   } else {
@@ -272,6 +321,16 @@ function startMatraById(id) {
   // decode เสียงสะกด/คำเต็มของมาตรานี้ล่วงหน้าเข้า BufferCache ระหว่างที่หน้าเลือก
   // มาตรากำลังสลับไปหน้าเกม (มีเวลาว่างอยู่แล้ว) — กันสะดุดตอนเฉลยสะกดคำระหว่างเล่นจริง
   audio.preloadMatra(matra);
+  if (!app.mahjongSeen[id]) {
+    // ครั้งแรกที่ปลดล็อกมาตรานี้ — ด่านอุ่นเครื่องไพ่ก่อน แล้วค่อยเข้าเกมหยิบฟอง
+    showScreen('mahjong');
+    mahjongWarmup.startMatra(matra, MATRA.indexOf(matra), MATRA.length);
+  } else {
+    enterBubbleGame(matra);
+  }
+}
+
+function enterBubbleGame(matra) {
   showScreen('game');
   if (app.settings.bgm) audio.setBgmEnabled(true);
   game.startMatra(matra);
@@ -369,6 +428,13 @@ $('#backBtn').addEventListener('click', () => {
   showScreen('level');
 });
 
+$('#mahjongBackBtn').addEventListener('click', () => {
+  mahjongWarmup.stop();
+  showScreen('level');
+});
+
+$('#mahjongShuffleBtn').addEventListener('click', () => mahjongWarmup.shuffle());
+
 function witchSay(text) {
   dom.toast.textContent = text;
   dom.toast.classList.add('show');
@@ -382,6 +448,8 @@ resetBtn.addEventListener('click', () => {
     app.progress = {};
     app.totalScore = 0;
     saveTotalScore(0);
+    app.mahjongSeen = {};
+    saveMahjongSeen({});
     dom.totalBadgeValue.textContent = 0;
     buildLevelSelect($('#levelGrid'), app, (id) => startMatraById(id));
   }

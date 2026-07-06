@@ -8,6 +8,7 @@
 
 import { createRecognizer, matchWord } from './input/speech.js';
 import { saveTotalScore } from './storage.js';
+import { createParticleSystem } from './particles.js';
 
 const TWO_PART = 'TWO_PART';
 
@@ -20,6 +21,7 @@ const BUBBLE_IMGS = Array.from({ length: 5 }, (_, i) => {
 
 export function createGame({ scene, audio, app, dom, onExit }) {
   const fx = scene.fx;
+  const particleFx = createParticleSystem(fx);
   const recog = createRecognizer();
 
   let matra = null;
@@ -38,8 +40,6 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   let state = 'IDLE';
   let bubbles = [];
   let held = null;
-  let particles = [];
-  const particlePool = [];
   let blend = null;       // { text, t0 }
   let running = false;
   let rafId = 0;
@@ -106,58 +106,8 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     }
   }
 
-  // ---------- Particles (object pool) ----------
-  function spawnExplosion(cx, cy) {
-    for (let i = 0; i < 26; i++) {
-      const p = particlePool.pop() || {};
-      const a = Math.random() * Math.PI * 2;
-      const sp = 2 + Math.random() * 6;
-      p.x = cx; p.y = cy;
-      p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp - 2;
-      p.life = 1; p.r = 3 + Math.random() * 5;
-      p.hue = 120 + Math.random() * 80; p.star = false;
-      p.fillStyle = `hsl(${p.hue},90%,60%)`; // cache สีไว้ตอน spawn — ไม่คำนวณ string ซ้ำทุกเฟรมใน drawParticle
-      particles.push(p);
-    }
-  }
-
-  function spawnStars(cx, cy) {
-    for (let i = 0; i < 32; i++) {
-      const p = particlePool.pop() || {};
-      const a = Math.random() * Math.PI * 2;
-      const sp = 1.5 + Math.random() * 7;
-      p.x = cx; p.y = cy;
-      p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp - 4;
-      p.life = 1;
-      p.r = 10 + Math.random() * 14; // ⭐ ใหญ่ขึ้นเห็นชัด
-      p.hue = 42 + Math.random() * 18;
-      p.star = true;
-      p.fillStyle = `hsl(${p.hue},90%,60%)`;   // cache สีไว้ตอน spawn (ดู spawnExplosion)
-      p.shadowStyle = `hsl(${p.hue},100%,70%)`;
-      particles.push(p);
-    }
-  }
-
-  // ดาวระเบิดแบบประหยัดทรัพยากร — ตัด shadowBlur (glow) ออก เพราะเป็นต้นทุนแพงสุด
-  // ต่ออนุภาคบน canvas (บังคับ browser ทำ blur pass) ชดเชยด้วยขนาดใหญ่ขึ้น +
-  // กระจายมุมสม่ำเสมอ (แทนสุ่มล้วน) ให้ยังดูเป็น "ดาวกระจาย" ชัดแม้ประหยัดกว่าเดิมมาก
-  function spawnCelebrationBurst(cx, cy) {
-    const COUNT = 16;
-    for (let i = 0; i < COUNT; i++) {
-      const p = particlePool.pop() || {};
-      const a = (i / COUNT) * Math.PI * 2 + Math.random() * 0.3;
-      const sp = 2 + Math.random() * 6;
-      p.x = cx; p.y = cy;
-      p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp - 3;
-      p.life = 1;
-      p.r = 12 + Math.random() * 12; // ใหญ่ขึ้นชดเชยที่ตัด glow ออก
-      p.hue = 42 + Math.random() * 18;
-      p.star = true;
-      p.noGlow = true; // ★ ข้าม shadowBlur ใน drawParticle — ประหยัดสุด
-      p.fillStyle = `hsl(${p.hue},95%,62%)`;
-      particles.push(p);
-    }
-  }
+  // ---------- Particles (object pool ย้ายไป src/particles.js ให้ใช้ร่วมกับ
+  // มินิเกมไพ่จับคู่ได้ — เหลือแค่ effect เฉพาะของเกมหยิบฟองไว้ที่นี่) ----------
 
   // ประกายดาวระเบิดรอบการ์ดอ่านคำตอนอ่านถูก (ข้อ 7) — กระจายจุดกำเนิดรอบ
   // #voicebar แทนทั่วจอ (เดิมกระจายทั่วจอ ดูไม่เชื่อมโยงกับการ์ดที่กำลังโชว์)
@@ -172,7 +122,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       [r.right + pad, r.top + r.height * 0.3],
       [cx, r.bottom - r.height * 0.1],
     ];
-    points.forEach(([x, y]) => spawnCelebrationBurst(x, y));
+    points.forEach(([x, y]) => particleFx.spawnCelebrationBurst(x, y));
   }
 
   function scoreToEvilWishStage(s) {
@@ -411,7 +361,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     setState('DROPPED');
     updateWordPill();
     audio.sfx('boom');
-    spawnExplosion(scene.cauldron.cx, scene.cauldron.cy - scene.cauldron.ry * 0.2);
+    particleFx.spawnExplosion(scene.cauldron.cx, scene.cauldron.cy - scene.cauldron.ry * 0.2);
     blend = { text: currentWord.display, t0: performance.now() };
     // animation: BOOM flash → brew → reading
     scene.setCauldronFrame(5, 'flash'); // ลำแสงฟ้า — ปฏิกิริยาเวทมนตร์
@@ -532,7 +482,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
 
   function spawnFlyStars(cx, cy) {
     for (let i = 0; i < 3; i++) {
-      const p = particlePool.pop() || {};
+      const p = particleFx.acquire();
       const a = Math.random() * Math.PI * 2;
       const sp = 0.5 + Math.random() * 2.5;
       p.x = cx + (Math.random() - 0.5) * 18;
@@ -546,7 +496,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       p.fillStyle = `hsl(${p.hue},90%,60%)`;   // cache สีไว้ตอน spawn (ดู spawnExplosion)
       p.shadowStyle = `hsl(${p.hue},100%,70%)`;
       p.decay = 0.038;
-      particles.push(p);
+      particleFx.add(p);
     }
   }
 
@@ -763,7 +713,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     _trailFrame++;
     if (_trailFrame % 2 !== 0) return;
     for (let i = 0; i < 3; i++) {
-      const p = particlePool.pop() || {};
+      const p = particleFx.acquire();
       const a = Math.random() * Math.PI * 2;
       const sp = 0.4 + Math.random() * 2.2;
       p.x = x + (Math.random() - 0.5) * 22;
@@ -777,7 +727,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       p.fillStyle = `hsl(${p.hue},90%,60%)`;   // cache สีไว้ตอน spawn (ดู spawnExplosion)
       p.shadowStyle = `hsl(${p.hue},100%,70%)`;
       p.decay = 0.048;
-      particles.push(p);
+      particleFx.add(p);
     }
   }
 
@@ -871,7 +821,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     rafId = requestAnimationFrame(loop);
     // IDLE + ไม่มี particles → throttle 30fps (ฟองแค่ bob เบาๆ ไม่ต้อง 60fps)
     const now = performance.now();
-    const isQuiet = state === 'IDLE' && particles.length === 0 && !blend;
+    const isQuiet = state === 'IDLE' && particleFx.count === 0 && !blend;
     if (isQuiet && now - _lastTick < 33) return;
     _lastTick = now;
     update();
@@ -904,12 +854,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       b.rot += b.rotSpeed; // หมุนต่อเนื่องทุกเฟรม
       if (b.pop > 0) b.pop = Math.max(0, b.pop - 0.05);
     });
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      p.x += p.vx; p.y += p.vy; p.vy += 0.22;
-      p.life -= p.decay || 0.018;
-      if (p.life <= 0) { particles.splice(i, 1); particlePool.push(p); }
-    }
+    particleFx.update();
   }
 
   function render() {
@@ -917,7 +862,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     const promptWord = matra && matra.mode !== TWO_PART ? currentWord : null;
     scene.drawCauldron(state === 'IDLE' || state === 'DRAGGING' ? promptWord : null);
     bubbles.forEach((b) => !b.dead && drawBubble(b));
-    particles.forEach(drawParticle);
+    particleFx.draw();
     if (blend) drawBlend();
   }
 
@@ -953,26 +898,6 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     fx.fillStyle = '#FFF0A0';
     fx.fillText(b.letter, b.x, b.y);
     fx.shadowBlur = 0;
-    fx.restore();
-  }
-
-  function drawParticle(p) {
-    fx.save();
-    fx.globalAlpha = Math.max(0, p.life);
-    fx.fillStyle = p.fillStyle; // cache ไว้ตอน spawn — เลี่ยงสร้าง string ใหม่ทุกเฟรม/ทุกอนุภาค
-    if (p.star) {
-      // ขอบเรืองให้เห็นชัด — ข้ามได้ถ้า noGlow (shadowBlur แพงสุดต่ออนุภาคบน canvas,
-      // ใช้กับ burst ที่มีอนุภาคเยอะๆ พร้อมกันเท่านั้น ดู spawnCelebrationBurst)
-      if (!p.noGlow) {
-        fx.shadowColor = p.shadowStyle;
-        fx.shadowBlur = p.r * 0.8;
-      }
-      drawStar(fx, p.x, p.y, p.r, p.r * 0.45, 5);
-    } else {
-      fx.beginPath();
-      fx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      fx.fill();
-    }
     fx.restore();
   }
 
@@ -1093,14 +1018,4 @@ function renderResultStars(container, filled, total) {
     }
     container.appendChild(svg);
   }
-}
-function drawStar(ctx, cx, cy, outer, inner, points) {
-  ctx.beginPath();
-  for (let i = 0; i < points * 2; i++) {
-    const r = i % 2 === 0 ? outer : inner;
-    const a = (i * Math.PI) / points - Math.PI / 2;
-    ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
-  }
-  ctx.closePath();
-  ctx.fill();
 }

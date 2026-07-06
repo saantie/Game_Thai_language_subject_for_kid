@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ไพ่เวทมนตร์อักษรไทย — Thai Word Mahjong</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#16281f;
+    --bg-mid:#25452f;
+    --bg-glow:#3a6b4a;
+    --twilight:#5b4b8a;
+    --twilight-2:#7a63b8;
+    --gold:#e8b84b;
+    --gold-soft:#f3d488;
+    --parchment:#f4ecd4;
+    --parchment-edge:#e0cf9e;
+    --ink:#3c2e20;
+    --ink-soft:#6b5a44;
+    --miss:#e08a76;
+    --success:#7fbf8f;
+    --panel:rgba(20,38,28,0.72);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    font-family:'Sarabun',sans-serif;
+    color:#f4ecd4;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(122,99,184,0.35), transparent 55%),
+      radial-gradient(ellipse at 85% 10%, rgba(232,184,75,0.12), transparent 45%),
+      linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-mid) 55%, #1c3324 100%);
+    overflow-x:hidden;
+    position:relative;
+  }
+  body::before{
+    content:'';
+    position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      radial-gradient(2px 2px at 10% 15%, #fff8, transparent),
+      radial-gradient(1.5px 1.5px at 25% 40%, #fff6, transparent),
+      radial-gradient(2px 2px at 70% 20%, #fff7, transparent),
+      radial-gradient(1.5px 1.5px at 85% 60%, #fff5, transparent),
+      radial-gradient(2px 2px at 45% 75%, #fff6, transparent),
+      radial-gradient(1.5px 1.5px at 60% 10%, #fff5, transparent);
+    opacity:.6;
+  }
+  .wrap{position:relative; z-index:1; max-width:1100px; margin:0 auto; padding:20px 16px 60px;}
+
+  header{text-align:center; margin-bottom:18px;}
+  header .eyebrow{font-size:14px; letter-spacing:.12em; color:var(--gold-soft); font-weight:600;}
+  header h1{
+    font-family:'Mitr',sans-serif; font-weight:700; font-size:clamp(28px,5vw,42px);
+    margin:6px 0 4px; color:var(--parchment);
+    text-shadow:0 0 18px rgba(232,184,75,0.35);
+  }
+  header p{margin:0; color:#cfd9c f; opacity:.8; font-size:15px;}
+
+  .levels{
+    display:flex; flex-wrap:wrap; gap:8px; justify-content:center;
+    margin:18px auto 22px; max-width:960px;
+  }
+  .lvl-btn{
+    font-family:'Mitr',sans-serif; font-size:13px; font-weight:500;
+    background:rgba(244,236,212,0.08); color:#f4ecd4;
+    border:1px solid rgba(244,236,212,0.25); border-radius:12px;
+    padding:9px 14px; cursor:pointer; transition:.15s ease; text-align:center;
+    display:flex; flex-direction:column; gap:2px; min-width:96px;
+  }
+  .lvl-btn small{font-family:'Sarabun',sans-serif; font-weight:400; opacity:.75; font-size:11px;}
+  .lvl-btn:hover{background:rgba(244,236,212,0.16); transform:translateY(-2px);}
+  .lvl-btn.active{
+    background:linear-gradient(160deg,var(--gold-soft),var(--gold));
+    color:#3c2e20; border-color:var(--gold); box-shadow:0 4px 16px rgba(232,184,75,0.35);
+  }
+  .lvl-btn.active small{opacity:.7;}
+
+  .stage{
+    display:grid; grid-template-columns:1fr 220px; gap:18px;
+    align-items:start;
+  }
+  @media (max-width:760px){ .stage{grid-template-columns:1fr;} }
+
+  .board-card{
+    background:var(--panel); border:1px solid rgba(244,236,212,0.12);
+    border-radius:20px; padding:18px; backdrop-filter:blur(6px);
+    position:relative; overflow:hidden;
+  }
+  .board-title{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; flex-wrap:wrap; gap:6px;}
+  .board-title h2{font-family:'Mitr',sans-serif; font-size:18px; margin:0; color:var(--gold-soft);}
+  .board-title .sub{font-size:13px; opacity:.75;}
+  .progress-line{font-size:13px; opacity:.85; margin-bottom:10px;}
+
+  #board{
+    position:relative; margin:0 auto; touch-action:manipulation;
+    min-height:260px;
+  }
+  .tile{
+    position:absolute; width:64px; height:82px;
+    border-radius:10px;
+    background:linear-gradient(160deg, var(--parchment), var(--parchment-edge));
+    border:1px solid #c9b374;
+    box-shadow:0 3px 0 #b89e63, 0 6px 10px rgba(0,0,0,0.35);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Mitr',sans-serif; font-weight:600; font-size:16px; color:var(--ink);
+    text-align:center; line-height:1.15; padding:4px;
+    cursor:not-allowed; user-select:none;
+    transition:transform .18s ease, box-shadow .18s ease, filter .2s ease, opacity .25s ease;
+    filter:saturate(.55) brightness(.72);
+  }
+  .tile::after{
+    content:''; position:absolute; inset:4px; border-radius:7px;
+    border:1px dashed rgba(60,46,32,0.25); pointer-events:none;
+  }
+  .tile.free{
+    cursor:pointer; filter:none;
+    box-shadow:0 3px 0 #b89e63, 0 6px 14px rgba(0,0,0,0.4), 0 0 0 2px var(--gold), 0 0 14px rgba(232,184,75,0.55);
+  }
+  .tile.free:hover{transform:translateY(-3px);}
+  .tile.selected{
+    box-shadow:0 3px 0 #b89e63, 0 0 0 3px var(--twilight-2), 0 0 22px rgba(122,99,184,0.75);
+    transform:translateY(-5px) scale(1.04);
+  }
+  .tile.matched{opacity:0; transform:scale(1.4) rotate(8deg); pointer-events:none;}
+  .tile.mismatch{animation:shake .32s ease;}
+  .tile.hint{animation:hintpulse 1s ease infinite;}
+  @keyframes shake{
+    0%,100%{transform:translateX(0);} 25%{transform:translateX(-5px);} 75%{transform:translateX(5px);}
+  }
+  @keyframes hintpulse{
+    0%,100%{box-shadow:0 3px 0 #b89e63,0 0 0 2px var(--gold),0 0 10px rgba(232,184,75,.5);}
+    50%{box-shadow:0 3px 0 #b89e63,0 0 0 3px var(--gold),0 0 26px rgba(232,184,75,.95);}
+  }
+
+  .spark{
+    position:absolute; pointer-events:none; font-size:14px;
+    animation:spark-out .7s ease forwards;
+  }
+  @keyframes spark-out{
+    0%{opacity:1; transform:translate(0,0) scale(1) rotate(0deg);}
+    100%{opacity:0; transform:translate(var(--dx),var(--dy)) scale(.3) rotate(180deg);}
+  }
+
+  .panel{
+    background:var(--panel); border:1px solid rgba(244,236,212,0.12);
+    border-radius:20px; padding:16px; backdrop-filter:blur(6px);
+    display:flex; flex-direction:column; gap:10px;
+  }
+  .panel h3{font-family:'Mitr',sans-serif; font-size:14px; margin:0 0 2px; color:var(--gold-soft);}
+  .stars{font-size:22px; letter-spacing:2px;}
+  .boost-btn{
+    display:flex; align-items:center; gap:8px;
+    background:rgba(244,236,212,0.08); border:1px solid rgba(244,236,212,0.2);
+    color:#f4ecd4; border-radius:12px; padding:10px 12px; font-family:'Mitr',sans-serif;
+    font-size:14px; cursor:pointer; transition:.15s;
+  }
+  .boost-btn:hover{background:rgba(244,236,212,0.18); transform:translateY(-1px);}
+  .boost-btn:disabled{opacity:.35; cursor:not-allowed; transform:none;}
+  .boost-btn .emoji{font-size:18px;}
+  .hint-text{font-size:12.5px; opacity:.75; line-height:1.5;}
+
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(10,18,14,0.75);
+    display:none; align-items:center; justify-content:center; z-index:50; padding:20px;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal{
+    background:linear-gradient(160deg,#2c4c37,#1b3324);
+    border:1px solid rgba(232,184,75,0.4); border-radius:22px;
+    padding:32px 28px; max-width:380px; text-align:center;
+    box-shadow:0 0 40px rgba(232,184,75,0.25);
+  }
+  .modal h2{font-family:'Mitr',sans-serif; color:var(--gold-soft); margin-top:0;}
+  .modal .stars-big{font-size:34px; margin:10px 0;}
+  .modal-actions{display:flex; gap:10px; justify-content:center; margin-top:18px; flex-wrap:wrap;}
+  .modal-actions button{
+    font-family:'Mitr',sans-serif; padding:10px 18px; border-radius:12px; border:none;
+    cursor:pointer; font-size:14px; font-weight:600;
+  }
+  .btn-primary{background:linear-gradient(160deg,var(--gold-soft),var(--gold)); color:#3c2e20;}
+  .btn-ghost{background:rgba(244,236,212,0.12); color:#f4ecd4;}
+
+  footer.note{
+    max-width:900px; margin:26px auto 0; font-size:12.5px; opacity:.65; text-align:center; line-height:1.6;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">✨ ก่อนเข้าครัวแม่มด — ห้องฝึกไพ่เวทมนตร์ ✨</div>
+    <h1>ไพ่นกกระจอกอักษรไทย</h1>
+    <p>จับคู่ป้ายเวทที่มีคำอ่านตรงกัน เพื่อปลดล็อกทางเข้าสู่หม้อปรุนของแม่มด</p>
+  </header>
+
+  <div class="levels" id="levelPicker"></div>
+
+  <div class="stage">
+    <div class="board-card">
+      <div class="board-title">
+        <h2 id="boardTitle">แม่ ก กา</h2>
+        <span class="sub" id="boardSub">ไม่มีตัวสะกด · ง่ายมาก</span>
+      </div>
+      <div class="progress-line" id="progressLine">จับคู่แล้ว 0 / 0 คู่</div>
+      <div id="board"></div>
+    </div>
+
+    <div class="panel">
+      <div>
+        <h3>ดาวที่ได้รับ</h3>
+        <div class="stars" id="starDisplay">☆☆☆</div>
+      </div>
+      <div style="height:1px;background:rgba(244,236,212,0.15);"></div>
+      <button class="boost-btn" id="btnHint"><span class="emoji">💡</span> คำใบ้</button>
+      <button class="boost-btn" id="btnUndo"><span class="emoji">↩️</span> ย้อนกลับ</button>
+      <button class="boost-btn" id="btnShuffle"><span class="emoji">🔀</span> สลับป้าย</button>
+      <div class="hint-text">ไม่มีตัวจับเวลา เล่นได้อย่างสบายใจ ✨ เลือกป้ายที่เรืองแสงสีทองได้เท่านั้น</div>
+    </div>
+  </div>
+
+  <footer class="note">
+    ต้นแบบนี้แทรกก่อนเข้าสู่มินิเกม "หยิบฟองสะกดคำ" ของแต่ละมาตราตัวสะกด — ระดับความยากเพิ่มขึ้นตามลำดับมาตรา
+    (แม่ ก กา → กง → กน → กม → เกย → เกอว → กก → กด → กบ) โดยเพิ่มจำนวนชั้นป้ายและจำนวนคู่คำศัพท์
+  </footer>
+</div>
+
+<div class="modal-overlay" id="winModal">
+  <div class="modal">
+    <h2>เก่งมากจ้า! 🎉</h2>
+    <p>หนูจับคู่ป้ายเวทครบทุกคู่แล้ว แม่มดปลดล็อกทางเข้าห้องครัวให้แล้วนะ</p>
+    <div class="stars-big" id="winStars">⭐⭐⭐</div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btnReplay">เล่นซ้ำมาตรานี้</button>
+      <button class="btn-primary" id="btnNext">ไปต่อ: เกมฟองสบู่ →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------------------------------------------------------
+   คลังคำศัพท์แยกตามมาตราตัวสะกด (คำอ่าน/ข้อความบนป้าย)
+--------------------------------------------------------- */
+const WORD_LISTS = {
+  kaka:   ['ปลา','ตา','หู','มือ','ปู','งู','ผ้า','ม้า','ใบไม้','เสือ','กา','สี'],
+  kang:   ['กาง','จาง','ลิง','มุ้ง','ถัง','วัง','ดง','ตรง','ผึ้ง','ฝรั่ง','กรง','ยุง'],
+  kon:    ['จาน','บ้าน','วัน','คน','นอน','กิน','ดิน','เดือน','ขวาน','ปีน','ห่าน','มอญ'],
+  kom:    ['ลม','ส้ม','แขม','ก้ม','จม','ริม','ชม','ห้าม','น้ำ','ทำ','ดำ','คำ'],
+  koei:   ['ยาย','ขาย','สาย','ควาย','ลาย','หมาย','ป้าย','ชาย','ปลาย','ร้าย','ง่าย','เฉย'],
+  keow:   ['ข้าว','แมว','แล้ว','เดี๋ยว','แถว','ดาว','สาว','หิว','นิ้ว','วัว','เขียว','เที่ยว'],
+  kok:    ['นก','ปีก','ดอกไม้','จมูก','ลูก','ปาก','มาก','รัก','ยาก','กระดูก','บอก','ลาก'],
+  kod:    ['มด','จุด','ผัด','ทิศ','รส','จอด','หมด','กรด','อากาศ','เมฆ'],
+  kob:    ['กบ','รูป','จบ','ภาพ','ตับ','ทราบ','นับ','จับ','กราฟ','โลภ'],
+};
+
+const LEVELS = [
+  { id:1, key:'kaka', name:'แม่ ก กา', sound:'ไม่มีตัวสะกด', layers:2, pairs:5, tag:'ง่ายมาก',      stars:1 },
+  { id:2, key:'kang', name:'แม่กง',    sound:'ง',            layers:2, pairs:6, tag:'ง่าย',         stars:1 },
+  { id:3, key:'kon',  name:'แม่กน',    sound:'น ณ ญ ร ล ฬ',   layers:2, pairs:6, tag:'ง่าย-กลาง',    stars:2 },
+  { id:4, key:'kom',  name:'แม่กม',    sound:'ม',            layers:3, pairs:7, tag:'ปานกลาง',      stars:2 },
+  { id:5, key:'koei', name:'แม่เกย',   sound:'ย',            layers:3, pairs:8, tag:'ปานกลาง',      stars:2 },
+  { id:6, key:'keow', name:'แม่เกอว',  sound:'ว',            layers:3, pairs:8, tag:'ปานกลาง-ยาก',  stars:3 },
+  { id:7, key:'kok',  name:'แม่กก',    sound:'ก ข ค ฆ',       layers:4, pairs:9, tag:'ยาก',          stars:3 },
+  { id:8, key:'kod',  name:'แม่กด',    sound:'ด จ ช ซ ฯลฯ',    layers:4, pairs:9, tag:'ยากมาก',       stars:3 },
+  { id:9, key:'kob',  name:'แม่กบ',    sound:'บ ป พ ฟ ภ',     layers:4, pairs:10,tag:'ยากที่สุด',     stars:3 },
+];
+
+/* ---------------------------------------------------------
+   เลย์เอาต์: กระจายป้ายลงหลายชั้นแบบพีระมิดย่อส่วน
+--------------------------------------------------------- */
+const TILE_W = 74, TILE_H = 92;
+
+function buildLayout(pairCount, layerCount){
+  const total = pairCount * 2;
+  const weights = [0.45,0.3,0.17,0.08].slice(0, layerCount);
+  const wsum = weights.reduce((a,b)=>a+b,0);
+  const counts = weights.map(w => Math.max(2, Math.round(w/wsum*total)));
+  const diff = total - counts.reduce((a,b)=>a+b,0);
+  counts[0] += diff;
+
+  const slots = [];
+  const layer0Rows = 2;
+  const layer0Cols = Math.ceil(counts[0] / layer0Rows);
+  const baseWidth = layer0Cols;
+
+  for(let L=0; L<layerCount; L++){
+    const count = counts[L];
+    const rows = L===0 ? layer0Rows : Math.max(1, Math.round(Math.sqrt(count/(layer0Cols/layer0Rows))));
+    const cols = Math.ceil(count/rows);
+    const offsetX = Math.floor((baseWidth - cols)/2);
+    const offsetY = L;
+    let placed = 0;
+    for(let r=0; r<rows && placed<count; r++){
+      for(let c=0; c<cols && placed<count; c++){
+        slots.push({ x:c+offsetX, y:r+offsetY, layer:L });
+        placed++;
+      }
+    }
+  }
+  return slots;
+}
+
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+/* ---------------------------------------------------------
+   สถานะเกม
+--------------------------------------------------------- */
+let tiles = [];       // {id,x,y,layer,text,el,matched}
+let selected = null;
+let history = [];     // for undo: {aId,bId}
+let matchedPairs = 0;
+let totalPairs = 0;
+let currentLevel = LEVELS[0];
+let audioCtx = null;
+
+const boardEl = document.getElementById('board');
+const boardTitle = document.getElementById('boardTitle');
+const boardSub = document.getElementById('boardSub');
+const progressLine = document.getElementById('progressLine');
+const starDisplay = document.getElementById('starDisplay');
+const levelPicker = document.getElementById('levelPicker');
+
+function renderLevelPicker(){
+  levelPicker.innerHTML = '';
+  LEVELS.forEach(lvl=>{
+    const btn = document.createElement('button');
+    btn.className = 'lvl-btn' + (lvl.id===currentLevel.id ? ' active':'');
+    btn.innerHTML = `${lvl.name}<small>${lvl.tag}</small>`;
+    btn.addEventListener('click', ()=> initLevel(lvl));
+    levelPicker.appendChild(btn);
+  });
+}
+
+function initLevel(lvl){
+  currentLevel = lvl;
+  selected = null;
+  history = [];
+  matchedPairs = 0;
+
+  const words = shuffle(WORD_LISTS[lvl.key]).slice(0, lvl.pairs);
+  totalPairs = words.length;
+  const slotDefs = buildLayout(totalPairs, lvl.layers);
+  const texts = shuffle(words.concat(words)); // each word appears twice
+
+  tiles = slotDefs.map((s, i) => ({
+    id: 'T'+i, x:s.x, y:s.y, layer:s.layer, text:texts[i], matched:false, el:null
+  }));
+
+  boardTitle.textContent = lvl.name;
+  boardSub.textContent = `${lvl.sound} · ${lvl.tag}`;
+  starDisplay.textContent = '☆'.repeat(3);
+  renderLevelPicker();
+  renderBoard();
+  updateProgress();
+  document.getElementById('winModal').classList.remove('show');
+}
+
+function renderBoard(){
+  boardEl.innerHTML = '';
+  const maxX = Math.max(...tiles.map(t=>t.x)) + 1;
+  const maxY = Math.max(...tiles.map(t=>t.y)) + 1;
+  boardEl.style.width = (maxX*TILE_W + 20) + 'px';
+  boardEl.style.height = (maxY*TILE_H + 40) + 'px';
+
+  tiles.forEach(t=>{
+    const el = document.createElement('div');
+    el.className = 'tile';
+    el.textContent = t.text;
+    el.style.left = (t.x*TILE_W - t.layer*3) + 'px';
+    el.style.top  = (t.y*TILE_H - t.layer*8) + 'px';
+    el.style.zIndex = t.layer*100 + t.y*10 + t.x;
+    el.addEventListener('click', ()=> onTileClick(t));
+    t.el = el;
+    boardEl.appendChild(el);
+  });
+  updateFreeStates();
+}
+
+function isCovered(t){
+  return tiles.some(o => !o.matched && o.x===t.x && o.y===t.y && o.layer>t.layer);
+}
+function isOpenSide(t, dx){
+  return !tiles.some(o => !o.matched && o.layer===t.layer && o.y===t.y && o.x===t.x+dx);
+}
+function isFree(t){
+  if(t.matched) return false;
+  return !isCovered(t) && (isOpenSide(t,-1) || isOpenSide(t,1));
+}
+
+function updateFreeStates(){
+  tiles.forEach(t=>{
+    if(t.matched) return;
+    const free = isFree(t);
+    t.el.classList.toggle('free', free);
+    if(!free) t.el.classList.remove('selected');
+  });
+}
+
+function updateProgress(){
+  progressLine.textContent = `จับคู่แล้ว ${matchedPairs} / ${totalPairs} คู่`;
+}
+
+/* ---------------------------------------------------------
+   เสียง: เสียงกริ๊งสั้น ๆ (Web Audio) + อ่านคำด้วย speechSynthesis
+--------------------------------------------------------- */
+function playChime(ok){
+  try{
+    audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime;
+    const freqs = ok ? [880, 1320] : [300, 220];
+    freqs.forEach((f,i)=>{
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, t0+i*0.09);
+      gain.gain.setValueAtTime(0.0001, t0+i*0.09);
+      gain.gain.exponentialRampToValueAtTime(0.18, t0+i*0.09+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0+i*0.09+0.28);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(t0+i*0.09); osc.stop(t0+i*0.09+0.3);
+    });
+  }catch(e){ /* audio not available, ignore */ }
+}
+
+function speakThai(text){
+  try{
+    if(!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'th-TH';
+    u.rate = 0.9;
+    const voices = window.speechSynthesis.getVoices();
+    const thVoice = voices.find(v=>v.lang && v.lang.toLowerCase().startsWith('th'));
+    if(thVoice) u.voice = thVoice;
+    window.speechSynthesis.speak(u);
+  }catch(e){ /* ignore */ }
+}
+
+/* ---------------------------------------------------------
+   เอฟเฟกต์ประกายเวทมนตร์ตอนจับคู่สำเร็จ
+--------------------------------------------------------- */
+const SPARK_CHARS = ['✨','⭐','💫','✦'];
+function spawnSparkles(xCenter, yCenter){
+  const count = 14;
+  for(let i=0;i<count;i++){
+    const s = document.createElement('div');
+    s.className = 'spark';
+    s.textContent = SPARK_CHARS[Math.floor(Math.random()*SPARK_CHARS.length)];
+    const angle = Math.random()*Math.PI*2;
+    const dist = 40 + Math.random()*70;
+    s.style.setProperty('--dx', Math.cos(angle)*dist + 'px');
+    s.style.setProperty('--dy', Math.sin(angle)*dist + 'px');
+    s.style.left = xCenter + 'px';
+    s.style.top = yCenter + 'px';
+    s.style.color = Math.random()>0.5 ? '#e8b84b' : '#c9b6ff';
+    boardEl.appendChild(s);
+    setTimeout(()=> s.remove(), 750);
+  }
+}
+
+/* ---------------------------------------------------------
+   ตรรกะการเลือก/จับคู่
+--------------------------------------------------------- */
+function tileCenter(t){
+  return {
+    x: t.x*TILE_W - t.layer*3 + TILE_W/2,
+    y: t.y*TILE_H - t.layer*8 + TILE_H/2
+  };
+}
+
+function onTileClick(t){
+  if(t.matched || !isFree(t)) return;
+
+  if(!selected){
+    selected = t;
+    t.el.classList.add('selected');
+    return;
+  }
+  if(selected.id === t.id){
+    selected.el.classList.remove('selected');
+    selected = null;
+    return;
+  }
+
+  const a = selected, b = t;
+  if(a.text === b.text){
+    a.matched = true; b.matched = true;
+    a.el.classList.add('matched'); b.el.classList.add('matched');
+    a.el.classList.remove('selected'); b.el.classList.remove('selected');
+    history.push({ aId:a.id, bId:b.id });
+    matchedPairs++;
+    selected = null;
+
+    const ca = tileCenter(a), cb = tileCenter(b);
+    spawnSparkles((ca.x+cb.x)/2, (ca.y+cb.y)/2);
+    playChime(true);
+    speakThai(a.text);
+    updateProgress();
+    updateFreeStates();
+
+    if(matchedPairs === totalPairs){
+      setTimeout(showWin, 500);
+    }
+  } else {
+    a.el.classList.add('mismatch'); b.el.classList.add('mismatch');
+    playChime(false);
+    setTimeout(()=>{
+      a.el.classList.remove('mismatch','selected');
+      b.el.classList.remove('mismatch');
+      selected = null;
+    }, 320);
+  }
+}
+
+/* ---------------------------------------------------------
+   ตัวช่วย: คำใบ้ / ย้อนกลับ / สลับป้าย
+--------------------------------------------------------- */
+document.getElementById('btnHint').addEventListener('click', ()=>{
+  const freeTiles = tiles.filter(t=>!t.matched && isFree(t));
+  for(let i=0;i<freeTiles.length;i++){
+    for(let j=i+1;j<freeTiles.length;j++){
+      if(freeTiles[i].text === freeTiles[j].text){
+        [freeTiles[i], freeTiles[j]].forEach(t=>{
+          t.el.classList.add('hint');
+          setTimeout(()=> t.el.classList.remove('hint'), 1800);
+        });
+        return;
+      }
+    }
+  }
+  // no free matching pair currently available
+  boardTitle.animate([{opacity:1},{opacity:.4},{opacity:1}], {duration:400});
+});
+
+document.getElementById('btnUndo').addEventListener('click', ()=>{
+  const last = history.pop();
+  if(!last) return;
+  const a = tiles.find(t=>t.id===last.aId);
+  const b = tiles.find(t=>t.id===last.bId);
+  [a,b].forEach(t=>{
+    t.matched = false;
+    t.el.classList.remove('matched');
+  });
+  matchedPairs--;
+  updateProgress();
+  updateFreeStates();
+});
+
+document.getElementById('btnShuffle').addEventListener('click', ()=>{
+  const remaining = tiles.filter(t=>!t.matched);
+  const texts = shuffle(remaining.map(t=>t.text));
+  remaining.forEach((t,i)=>{ t.text = texts[i]; t.el.textContent = texts[i]; });
+  selected = null;
+  updateFreeStates();
+});
+
+/* ---------------------------------------------------------
+   ป้ายชนะ
+--------------------------------------------------------- */
+function showWin(){
+  const modal = document.getElementById('winModal');
+  const starsEarned = currentLevel.stars;
+  document.getElementById('winStars').textContent = '⭐'.repeat(starsEarned) + '☆'.repeat(3-starsEarned);
+  starDisplay.textContent = '★'.repeat(starsEarned) + '☆'.repeat(3-starsEarned);
+  modal.classList.add('show');
+}
+document.getElementById('btnReplay').addEventListener('click', ()=> initLevel(currentLevel));
+document.getElementById('btnNext').addEventListener('click', ()=>{
+  document.getElementById('winModal').classList.remove('show');
+  const idx = LEVELS.findIndex(l=>l.id===currentLevel.id);
+  const next = LEVELS[Math.min(idx+1, LEVELS.length-1)];
+  initLevel(next);
+  boardTitle.scrollIntoView({behavior:'smooth', block:'center'});
+});
+
+/* ---------------------------------------------------------
+   เริ่มต้น
+--------------------------------------------------------- */
+if('speechSynthesis' in window){
+  window.speechSynthesis.onvoiceschanged = ()=>{};
+}
+renderLevelPicker();
+initLevel(LEVELS[0]);
+</script>
+</body>
+</html>
