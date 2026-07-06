@@ -1173,6 +1173,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
 .screen.mahjong {
   justify-content: flex-start;
   padding-top: max(72px, env(safe-area-inset-top, 72px));
+  padding-bottom: 180px; /* กันเนื้อหาโดนภาพแม่มดที่ปักอยู่ล่างสุดบัง */
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -1183,13 +1184,33 @@ button { font-family: inherit; cursor: pointer; border: none; }
 }
 #mahjongTitle { margin: 0 0 14px; font-size: clamp(20px, 4vw, 30px); }
 
-.mj-tray { display: flex; gap: 10px; margin-bottom: 22px; }
+/* ข้อ 9-10: ไม่ซ้อนภาพกล้อง/ฉากป่าเป็น background หลังมินิเกมไพ่ — เหลือแค่
+   fxCanvas (ใช้วาด particle เอฟเฟกต์) กับพื้นม่วงของ .screen เอง */
+#sceneRoot.mahjong-mode #bgCanvas,
+#sceneRoot.mahjong-mode #camVideo,
+#sceneRoot.mahjong-mode #camShade,
+#sceneRoot.mahjong-mode .cauldron-img,
+#sceneRoot.mahjong-mode .witch,
+#sceneRoot.mahjong-mode .princess-img,
+#sceneRoot.mahjong-mode #toast {
+  display: none !important;
+}
+
+/* ถาด — ชิดติดกันเลย (ไม่มีช่องว่างระหว่างช่อง) ขนาดคำนวณจาก JS ให้พอดีทุก
+   อุปกรณ์เสมอ (ดู computeTileSize ใน mahjong.js) กันล้นจอมือถือ */
+.mj-tray {
+  position: relative;
+  display: flex; gap: 0; margin-bottom: 22px;
+  border: 2px dashed rgba(255, 216, 77, 0.5);
+  border-radius: 10px;
+  overflow: hidden;
+}
 .mj-tray-slot {
-  width: 74px; height: 92px;
-  border: 2px dashed rgba(255, 216, 77, 0.35);
-  border-radius: 12px;
+  flex-shrink: 0;
+  border-right: 2px dashed rgba(255, 216, 77, 0.35);
   background: rgba(10, 4, 30, 0.35);
 }
+.mj-tray-slot:last-child { border-right: none; }
 .mj-tray.shake { animation: mjTrayShake 0.32s ease; }
 @keyframes mjTrayShake {
   0%, 100% { transform: translateX(0); }
@@ -1197,31 +1218,60 @@ button { font-family: inherit; cursor: pointer; border: none; }
   75%      { transform: translateX(8px); }
 }
 
+/* คำตัวใหญ่โชว์ตรงถาดตอนจับคู่สำเร็จ ก่อนอ่านสะกดคำ (ข้อ 7) */
+.mj-big-word {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%) scale(0.4);
+  font: 800 clamp(28px, 7vw, 48px) 'Sarabun', 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, #fff2b0, var(--accent) 45%, #c9860c 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 14px rgba(255, 216, 77, 0.7));
+  opacity: 0;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2500;
+}
+.mj-big-word.show { animation: mjBigWordPop 0.4s cubic-bezier(.34,1.56,.64,1) forwards; }
+@keyframes mjBigWordPop {
+  0%   { opacity: 0; transform: translate(-50%,-50%) scale(0.4); }
+  60%  { opacity: 1; transform: translate(-50%,-50%) scale(1.15); }
+  100% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+}
+
 .mj-board { position: relative; margin: 0 auto 20px; }
+/* ไพ่: พื้นขาว + เงาสีเทาโทนฟ้าเหลื่อม 45° มุมขวาล่าง (คล้ายปุ่ม) + กรอบเงาดำ
+   ล้อมรอบ — ไม่ใช้ภาพพื้นหลังอีกต่อไป (ข้อ 1) ขนาด/ตำแหน่งคุมจาก JS ทั้งหมด
+   (computeTileSize/positionTileOnBoard) เพื่อรองรับทุกอุปกรณ์ (ข้อ 2) */
 .mj-tile {
   position: absolute;
-  width: 74px; height: 92px;
   display: flex; align-items: center; justify-content: center;
-  background:
-    linear-gradient(rgba(10,4,30,0.42), rgba(10,4,30,0.42)),
-    url('../public/assets/images/book.png') center / cover no-repeat;
-  border: 2px solid rgba(255, 216, 77, 0.35);
-  border-radius: 12px;
-  color: #fff;
+  background: #ffffff;
+  border: 2px solid rgba(15, 15, 25, 0.85);
+  border-radius: 10px;
+  color: #1c2740;
   font: 800 22px 'Sarabun', 'Segoe UI', sans-serif;
   text-align: center;
   padding: 4px;
-  filter: saturate(0.55) brightness(0.72);
   cursor: not-allowed;
+  box-shadow:
+    3px 3px 0 rgba(10, 10, 20, 0.55),        /* กรอบเงาดำ ให้ความรู้สึกเป็นปุ่ม */
+    6px 7px 12px rgba(70, 110, 160, 0.45);   /* เงาสีเทาโทนฟ้า เหลื่อม 45° มุมขวาล่าง */
+  filter: brightness(0.9);
+  opacity: 0.9;
   transition: left 0.35s cubic-bezier(.34,1.4,.64,1), top 0.35s cubic-bezier(.34,1.4,.64,1),
-              opacity 0.3s, transform 0.3s;
+              opacity 0.3s, transform 0.3s, filter 0.15s, box-shadow 0.15s;
 }
 /* ไพ่หยิบได้ — เรืองแสงทองด้วย --accent ให้เห็นชัดว่าแตะได้ */
 .mj-tile.free {
   filter: none;
+  opacity: 1;
   cursor: pointer;
   border-color: rgba(255, 216, 77, 0.9);
-  box-shadow: 0 0 14px rgba(255, 216, 77, 0.55);
+  box-shadow:
+    3px 3px 0 rgba(10, 10, 20, 0.55),
+    6px 7px 12px rgba(70, 110, 160, 0.45),
+    0 0 14px rgba(255, 216, 77, 0.6);
 }
 .mj-tile.flying { z-index: 1500 !important; }
 .mj-tile.matched { opacity: 0; transform: scale(1.3) rotate(6deg); pointer-events: none; }
@@ -1229,3 +1279,25 @@ button { font-family: inherit; cursor: pointer; border: none; }
 .mj-shuffle-btn { margin-top: 6px; }
 /* ถาดเต็มไม่มีคู่ — ไฮไลต์ปุ่มสลับป้าย reuse keyframe pillBump เดิม (ดู .hud-pill.bump) */
 .mj-shuffle-btn.pulse { animation: pillBump 0.6s ease-in-out infinite; }
+
+/* แม่มดชี้ล่างสุดกึ่งกลางจอ (ข้อ 8) */
+.mj-witch-img {
+  position: fixed;
+  bottom: 0; left: 50%;
+  transform: translateX(-50%);
+  width: clamp(140px, 30vw, 260px);
+  height: auto;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* มือชี้ AR แทนกล้องจริง (ข้อ 10) — ตำแหน่งอัปเดตจาก onHandFrame ใน mahjong.js
+   ปลายนิ้วชี้อยู่มุมบนซ้ายของภาพ จึงเลื่อนภาพให้ตรงจุดจีบจริง */
+.mj-hand-cursor {
+  position: fixed;
+  width: clamp(48px, 12vw, 84px);
+  height: auto;
+  pointer-events: none;
+  z-index: 3000;
+  transform: translate(-15%, -15%);
+}

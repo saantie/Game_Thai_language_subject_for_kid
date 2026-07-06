@@ -23,7 +23,7 @@ export function createParticleSystem(fx) {
       p.x = cx; p.y = cy;
       p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp - 2;
       p.life = 1; p.r = 3 + Math.random() * 5;
-      p.hue = 120 + Math.random() * 80; p.star = false;
+      p.hue = 120 + Math.random() * 80; p.star = false; p.shard = false;
       p.fillStyle = `hsl(${p.hue},90%,60%)`; // cache สีไว้ตอน spawn — ไม่คำนวณ string ซ้ำทุกเฟรมใน drawParticle
       add(p);
     }
@@ -39,7 +39,7 @@ export function createParticleSystem(fx) {
       p.life = 1;
       p.r = 10 + Math.random() * 14; // ⭐ ใหญ่ขึ้นเห็นชัด
       p.hue = 42 + Math.random() * 18;
-      p.star = true;
+      p.star = true; p.shard = false;
       p.fillStyle = `hsl(${p.hue},90%,60%)`;   // cache สีไว้ตอน spawn (ดู spawnExplosion)
       p.shadowStyle = `hsl(${p.hue},100%,70%)`;
       add(p);
@@ -61,9 +61,33 @@ export function createParticleSystem(fx) {
       p.life = 1;
       p.r = 12 + Math.random() * 12; // ใหญ่ขึ้นชดเชยที่ตัด glow ออก
       p.hue = hueMin + Math.random() * hueRange;
-      p.star = true;
+      p.star = true; p.shard = false;
       p.noGlow = true; // ★ ข้าม shadowBlur ใน drawParticle — ประหยัดสุด
       p.fillStyle = `hsl(${p.hue},95%,62%)`;
+      add(p);
+    }
+  }
+
+  // เศษผลึกแก้วสีขาวระเบิดกระเด็นเบาๆ แล้วร่วงหล่นลง (ตอนจับคู่ไพ่สำเร็จ) —
+  // ต่างจาก spawnCelebrationBurst ตรงไม่พุ่งขึ้น ใช้แรงกระเด็นต่ำ + tumble
+  // (rot/rotSpeed) ให้ดูเหมือนเศษแก้วแตกร่วงจริงๆ ไม่ใช่ดาวประทุ
+  function spawnGlassShards(cx, cy) {
+    const COUNT = 18;
+    for (let i = 0; i < COUNT; i++) {
+      const p = acquire();
+      const a = Math.random() * Math.PI * 2;
+      const sp = 0.8 + Math.random() * 2.6;
+      p.x = cx + (Math.random() - 0.5) * 12;
+      p.y = cy + (Math.random() - 0.5) * 12;
+      p.vx = Math.cos(a) * sp * 0.6;
+      p.vy = Math.sin(a) * sp * 0.35 - 1.2; // กระเด็นออกเบาๆ ก่อนโน้มถ่วงดึงลง
+      p.life = 1;
+      p.decay = 0.012; // อยู่นานกว่าอนุภาคดาวปกติ ให้เห็นร่วงตกชัดเจน
+      p.r = 3 + Math.random() * 5;
+      p.rot = Math.random() * Math.PI * 2;
+      p.rotSpeed = (Math.random() - 0.5) * 0.35;
+      p.shard = true;
+      p.fillStyle = 'rgba(255,255,255,0.95)';
       add(p);
     }
   }
@@ -72,6 +96,7 @@ export function createParticleSystem(fx) {
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
       p.x += p.vx; p.y += p.vy; p.vy += 0.22;
+      if (p.rotSpeed) p.rot += p.rotSpeed;
       p.life -= p.decay || 0.018;
       if (p.life <= 0) { particles.splice(i, 1); particlePool.push(p); }
     }
@@ -81,7 +106,12 @@ export function createParticleSystem(fx) {
     fx.save();
     fx.globalAlpha = Math.max(0, p.life);
     fx.fillStyle = p.fillStyle; // cache ไว้ตอน spawn — เลี่ยงสร้าง string ใหม่ทุกเฟรม/ทุกอนุภาค
-    if (p.star) {
+    if (p.shard) {
+      // เศษผลึกแก้ว — สี่เหลี่ยมเล็กหมุน tumble ตกลง (ดู spawnGlassShards)
+      fx.translate(p.x, p.y);
+      fx.rotate(p.rot || 0);
+      fx.fillRect(-p.r, -p.r * 0.4, p.r * 2, p.r * 0.8);
+    } else if (p.star) {
       // ขอบเรืองให้เห็นชัด — ข้ามได้ถ้า noGlow (shadowBlur แพงสุดต่ออนุภาคบน canvas,
       // ใช้กับ burst ที่มีอนุภาคเยอะๆ พร้อมกันเท่านั้น ดู spawnCelebrationBurst)
       if (!p.noGlow) {
@@ -111,6 +141,7 @@ export function createParticleSystem(fx) {
     spawnExplosion,
     spawnStars,
     spawnCelebrationBurst,
+    spawnGlassShards,
     update,
     draw,
     clear,

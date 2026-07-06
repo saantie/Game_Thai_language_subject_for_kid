@@ -65,6 +65,8 @@ const dom = {
   mahjongBoard: $('#mahjongBoard'),
   mahjongTray: $('#mahjongTray'),
   mahjongShuffleBtn: $('#mahjongShuffleBtn'),
+  mahjongBigWord: $('#mahjongBigWord'),
+  mahjongHandCursor: $('#mahjongHandCursor'),
   hudName: $('#hudName'),
   hudProgress: $('#hudProgress'),
   hudScore: $('#hudScore'),
@@ -121,14 +123,15 @@ const mahjongWarmup = createMahjongWarmup({
 // input layer: hybrid — pointer (touch/เมาส์) ทำงานเสมอ, AR (handpinch) ซ้อนทับ
 // เมื่อเปิดกล้องสำเร็จ — เด็กจิ้มจอก็เล่นได้ จีบนิ้วหน้ากล้องก็เล่นได้
 // route ตาม _screen ตอนเรียกจริง (ไม่ต้อง rewiring ตอนสลับหน้า) — onHandFrame
-// ห้าม forward เข้า game ตอนอยู่หน้า mahjong เพราะ game.js's loop หยุดอยู่
-// (ยังไม่ startMatra) particle จาก spawnDragTrail จะค้างไม่ถูกวาด/ล้างจนกว่า
-// เกมหยิบฟองจะเริ่มจริงแล้วจู่ๆ ก็ระเบิดค้างเก่าออกมา
+// ตอนอยู่หน้า mahjong ต้องเข้า mahjongWarmup.onHandFrame เท่านั้น (ใช้แสดงภาพ
+// มือชี้ AR แทนกล้องจริง) ห้าม forward เข้า game เด็ดขาด เพราะ game.js's loop
+// หยุดอยู่ (ยังไม่ startMatra) particle จาก spawnDragTrail จะค้างไม่ถูกวาด/ล้าง
+// จนกว่าเกมหยิบฟองจะเริ่มจริงแล้วจู่ๆ ก็ระเบิดค้างเก่าออกมา
 const inputHandlers = {
   onPick:      (x, y, slop) => (_screen === 'mahjong' ? mahjongWarmup.onPick(x, y, slop) : game.onPick(x, y, slop)),
   onMove:      (x, y) => (_screen === 'mahjong' ? mahjongWarmup.onMove(x, y) : game.onMove(x, y)),
   onRelease:   (x, y) => (_screen === 'mahjong' ? mahjongWarmup.onRelease(x, y) : game.onRelease(x, y)),
-  onHandFrame: (frame) => { if (_screen !== 'mahjong') game.onHandFrame(frame); },
+  onHandFrame: (frame) => (_screen === 'mahjong' ? mahjongWarmup.onHandFrame(frame) : game.onHandFrame(frame)),
 };
 createPointerInput(scene.fxCanvas, inputHandlers);
 // มินิเกมไพ่วาดเป็น DOM แยกจาก fxCanvas (ไม่ใช่ canvas) — ต้องมี listener ของ
@@ -207,6 +210,9 @@ function showScreen(which) {
   dom.hud.classList.toggle('hidden', which !== 'game');
   dom.voicebar.classList.add('hidden');
   dom.resultScreen.classList.add('hidden');
+  // ข้อ 9-10: ไม่ซ้อนภาพกล้อง/ฉากป่าหลังมินิเกมไพ่ — เหลือแค่ fxCanvas (particle)
+  // กับพื้นม่วงของ .screen เอง (CSS #sceneRoot.mahjong-mode ซ่อนลูกอื่นทั้งหมด)
+  sceneRoot.classList.toggle('mahjong-mode', which === 'mahjong');
   // สลับ BGM ตามหน้า — startLevelBgm() เรียกจาก call site เพื่อควบคุมจังหวะ
   if (which === 'level') {
     audio.stopLevelBgm();   // level select เงียบ — BGM เริ่มเมื่อเกมเริ่ม
@@ -216,7 +222,8 @@ function showScreen(which) {
   } else if (which === 'start') {
     audio.stopLevelBgm();
   } else if (which === 'mahjong') {
-    audio.stopLevelBgm(); // ด่านอุ่นเครื่องไพ่ยังไม่มีเพลงประกอบเฉพาะ — เงียบเหมือนหน้าเลือกมาตรา
+    // เพลงเดียวกับทั้งแอปแต่ลดเสียงลง 50% — เสียงอ่านสะกดคำ/เสียงแตกต้องได้ยินชัด
+    if (app.settings.bgm) audio.startMahjongBgm(); else audio.stopLevelBgm();
   }
 }
 

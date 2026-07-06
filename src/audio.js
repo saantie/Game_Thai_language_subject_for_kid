@@ -155,6 +155,12 @@ export const audio = {
       .catch(() => this.sfx('star')); // decode/fetch ล้มเหลว → synth fallback
   },
 
+  // มินิเกมไพ่: เสียงแตกตอนจับคู่สำเร็จ (คู่กับเอฟเฟกต์ผลึกแก้วร่วงหล่น)
+  playGlassCrush() {
+    playBuffer('public/assets/audio/Glass%20Crush.mp3', 0.85)
+      .catch(() => this.sfx('star')); // decode/fetch ล้มเหลว → synth fallback
+  },
+
   // ---------- SFX ----------
   sfx(name) {
     if (!ctx) return;
@@ -347,6 +353,15 @@ export const audio = {
     levelBgmActive = true;
     this._ensureBgm();
     bgmTarget = 0.25;
+    if (bgmGain && ctx && !ducked) bgmGain.gain.linearRampToValueAtTime(bgmTarget, ctx.currentTime + 0.6);
+    bgmEl.play().catch(() => {});
+  },
+  // มินิเกมไพ่จับคู่ — เพลงเดียวกับทั้งแอป (Moonlit Broomhop) แต่ลดเสียงลง 50%
+  // จากระดับปกติในเกม (0.20) เพราะเสียงอ่านสะกดคำ/เสียงแตกต้องได้ยินชัด
+  startMahjongBgm() {
+    levelBgmActive = false;
+    this._ensureBgm();
+    bgmTarget = 0.10;
     if (bgmGain && ctx && !ducked) bgmGain.gain.linearRampToValueAtTime(bgmTarget, ctx.currentTime + 0.6);
     bgmEl.play().catch(() => {});
   },

@@ -9,12 +9,16 @@
 import { createParticleSystem } from './particles.js';
 import { saveTotalScore } from './storage.js';
 
-const TILE_W = 74;
-const TILE_H = 92;
 const TRAY_CAPACITY = 5;
 const FLY_MS = 350;
 const MATCH_REMOVE_MS = 320;
 const MATCH_POINTS = 20;
+const DEFAULT_TILE_W = 74;
+const TILE_ASPECT = 92 / 74; // สัดส่วนกว้าง:สูงของไพ่
+// เยื้องต่อชั้นเป็น "สัดส่วน" ของขนาดไพ่ (ไม่ใช่พิกเซลตายตัว) ให้ยังเห็นคำของ
+// ไพ่ที่ถูกทับอยู่ได้จริง (ข้อ 3) แทนที่จะซ้อนเกือบสนิทแบบ mahjong solitaire ทั่วไป
+const LAYER_OFFSET_X_RATIO = 0.34;
+const LAYER_OFFSET_Y_RATIO = 0.32;
 
 // ---------- pure logic (พอร์ตจาก prototype, export ไว้เทสต์แยกได้) ----------
 
@@ -79,9 +83,11 @@ export function hasVisibleMatch(freeBoardTiles, trayTiles) {
 // ความยากอิงลำดับ 26 มาตราปัจจุบัน (v143, ดูคอมเมนต์หัวไฟล์ data/matra.js) —
 // เพดาน pairCount/layerCount ตาม tier แล้ว cap ด้วยจำนวนคำจริงของมาตรานั้น
 // (กันมาตราคำน้อยเช่นสระแอะ/เอะ ได้บอร์ดใหญ่เกินจำนวนคำที่มี)
+// tier0 (kaka) ตั้งใจให้ 6 คู่ (12 ใบ) ตามที่ขอ — สูงกว่า tier1-2 โดยตั้งใจ
+// เพราะ kaka เป็นมาตราที่เล่นบ่อยสุด/มีคำให้เลือกเยอะสุด (18 คำ)
 const TIER_BOUNDARIES = [1, 10, 13, 16, 18]; // idx < boundary[i] → tier i, เกินหมด → tier สุดท้าย
 const TIERS = [
-  { pairs: 3, layers: 2 }, // tier0: kaka
+  { pairs: 6, layers: 3 }, // tier0: kaka — เริ่มต้น 12 ใบ
   { pairs: 4, layers: 2 }, // tier1: กลุ่ม1 สระเดี่ยวคู่สั้น-ยาว
   { pairs: 4, layers: 3 }, // tier2: กลุ่ม2 สระเดี่ยวไม่มีคู่
   { pairs: 5, layers: 3 }, // tier3: กลุ่ม3 สระประสม
@@ -96,6 +102,19 @@ export function deriveDifficulty(matra, curriculumIndex) {
   const t = TIERS[tier];
   const pairCount = Math.max(2, Math.min(t.pairs, matra.words.length));
   return { pairCount, layerCount: t.layers };
+}
+
+// ขนาดไพ่ตอบสนองตามหน้าจอ — คำนวณจากทั้งถาด (คงที่ 5 ช่องต้องพอดีความกว้างจอ
+// เสมอ ชิดกันไม่มีช่องว่าง) และกระดาน (คอลัมน์กว้างสุดที่ layout จริงใช้ + กันชน
+// สำหรับการเยื้องต่อชั้น) เอาค่าที่เล็กกว่าเพื่อให้ไม่ล้นจอทั้งสองส่วน
+function computeTileSize(maxBoardCols) {
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 800;
+  const usableW = vw * 0.94;
+  const colsNeeded = Math.max(TRAY_CAPACITY, maxBoardCols + 1);
+  let w = Math.floor(usableW / colsNeeded);
+  w = Math.max(34, Math.min(DEFAULT_TILE_W, w));
+  const h = Math.round(w * TILE_ASPECT);
+  return { w, h };
 }
 
 function shuffleArray(arr) {
@@ -114,14 +133,18 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
 
   let tiles = [];
   let tray = [];
+  let matchQueue = [];       // คู่ที่จับได้แล้ว รอเล่นเอฟเฟกต์/เสียงทีละคู่ (กันเสียงทับกันตอน shuffle เจอหลายคู่พร้อมกัน)
+  let matchProcessing = false;
   let matchedPairs = 0;
   let totalPairs = 0;
   let currentMatraId = null;
   let _stuckVoicePlayed = false;
   let running = false;
   let rafId = 0;
+  let tileW = DEFAULT_TILE_W;
+  let tileH = Math.round(DEFAULT_TILE_W * TILE_ASPECT);
 
-  // ตัว setTimeout ของ pickTile/removeMatchedPair ต้องถูกยกเลิกใน stop() —
+  // ตัว setTimeout ของ pickTile/playMatchEffect ต้องถูกยกเลิกใน stop() —
   // ถ้าไม่ทำ แล้วผู้เล่นกด back ระหว่างไพ่กำลังลอย/กำลังจะจับคู่ callback ที่ค้าง
   // จะยิงทีหลังตอน matchedPairs/totalPairs ถูก reset เป็น 0 พร้อมกันแล้ว ทำให้
   // 0===0 เข้าเงื่อนไข "จบด่าน" เรียก onComplete() ซ้ำผิดจังหวะทั้งที่ออกไปแล้ว
@@ -144,6 +167,10 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     witchSay._t = setTimeout(() => dom.toast.classList.remove('show'), 3500);
   }
 
+  function hideHandCursor() {
+    if (dom.mahjongHandCursor) dom.mahjongHandCursor.classList.add('hidden');
+  }
+
   // ---------- particle loop (วิ่งเฉพาะตอนมี particle ค้างอยู่ — ไพ่เป็น DOM
   // ไม่ต้องวาดซ้ำทุกเฟรมเหมือนฟองในเกมหลัก) ----------
   function loop() {
@@ -164,9 +191,12 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
 
   // ---------- board render ----------
   function positionTileOnBoard(t) {
-    // เยื้องต่อชั้นมากกว่าต้นแบบเดิม (3px/8px) ให้เด็กเห็นชัดว่ามีไพ่ซ้อนอยู่ข้างใต้
-    t.el.style.left = (t.x * TILE_W - t.layer * 8) + 'px';
-    t.el.style.top = (t.y * TILE_H - t.layer * 18) + 'px';
+    const offX = tileW * LAYER_OFFSET_X_RATIO;
+    const offY = tileH * LAYER_OFFSET_Y_RATIO;
+    t.el.style.left = (t.x * tileW - t.layer * offX) + 'px';
+    t.el.style.top = (t.y * tileH - t.layer * offY) + 'px';
+    t.el.style.width = tileW + 'px';
+    t.el.style.height = tileH + 'px';
     t.el.style.zIndex = String(t.layer * 100 + t.y * 10 + t.x);
   }
 
@@ -174,8 +204,18 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     if (!tiles.length || !dom.mahjongBoard) return;
     const maxX = Math.max(...tiles.map((t) => t.x));
     const maxY = Math.max(...tiles.map((t) => t.y));
-    dom.mahjongBoard.style.width = ((maxX + 1) * TILE_W) + 'px';
-    dom.mahjongBoard.style.height = ((maxY + 1) * TILE_H + 24) + 'px';
+    const maxLayer = Math.max(...tiles.map((t) => t.layer));
+    const offX = tileW * LAYER_OFFSET_X_RATIO;
+    dom.mahjongBoard.style.width = ((maxX + 1) * tileW + maxLayer * offX) + 'px';
+    dom.mahjongBoard.style.height = ((maxY + 1) * tileH + 24) + 'px';
+  }
+
+  function sizeTraySlots() {
+    if (!dom.mahjongTray) return;
+    Array.from(dom.mahjongTray.children).forEach((slotEl) => {
+      slotEl.style.width = tileW + 'px';
+      slotEl.style.height = tileH + 'px';
+    });
   }
 
   function renderBoard() {
@@ -255,38 +295,69 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     return null;
   }
 
-  function removeMatchedPair(a, b) {
-    a.state = 'matched'; b.state = 'matched';
-    tray = tray.filter((t) => t !== a && t !== b);
-    a.el.classList.add('matched'); b.el.classList.add('matched');
-    matchedPairs++;
+  // โชว์คำตัวใหญ่ตรงถาด แล้วอ่านสะกดคำทีละพยางค์ (ใช้ word.spell เดิมจาก matra.js
+  // ตัวเดียวกับที่เกมหยิบฟองใช้เฉลยสะกดคำ) — เรียก done() หลังอ่านจบ
+  function showBigWord(wordObj, done) {
+    if (!dom.mahjongBigWord || !wordObj.spell) { done(); return; }
+    dom.mahjongBigWord.textContent = wordObj.display;
+    dom.mahjongBigWord.classList.remove('show');
+    void dom.mahjongBigWord.offsetWidth;
+    dom.mahjongBigWord.classList.add('show');
+    audio.playSpellReveal({ spell: wordObj.spell }, () => {
+      dom.mahjongBigWord.classList.remove('show');
+      done();
+    });
+  }
+
+  // เอฟเฟกต์ตอนจับคู่สำเร็จ: ผลึกแก้วสีขาวระเบิดร่วงหล่น + เสียงแตก แล้วค่อยโชว์
+  // คำตัวใหญ่ + อ่านสะกดคำ — เล่นทีละคู่ (matchQueue) กันเสียง/คำตัวใหญ่ทับกัน
+  // ตอน shuffle บังเอิญเจอหลายคู่พร้อมกัน
+  function playMatchEffect(a, b, done) {
+    a.el.classList.add('matched');
+    b.el.classList.add('matched');
 
     const ra = a.el.getBoundingClientRect();
     const rb = b.el.getBoundingClientRect();
     const cx = (ra.left + ra.right + rb.left + rb.right) / 4;
     const cy = (ra.top + ra.bottom + rb.top + rb.bottom) / 4;
-    particleFx.spawnCelebrationBurst(cx, cy, { hueMin: 42, hueRange: 18 });   // ทอง
-    particleFx.spawnCelebrationBurst(cx, cy, { hueMin: 258, hueRange: 24 }); // ม่วง ธีมแม่มด
+    particleFx.spawnGlassShards(cx, cy);
     ensureLoopRunning();
-
-    audio.speak(a.word);
+    audio.playGlassCrush();
     addScore(MATCH_POINTS);
-    reflowTraySlots();
 
-    const matraIdAtMatch = currentMatraId;
     schedule(() => {
       a.el.remove();
       b.el.remove();
-      if (matchedPairs === totalPairs) onComplete(matraIdAtMatch);
+      showBigWord(a.wordObj, done);
     }, MATCH_REMOVE_MS);
+  }
+
+  function runMatchQueue() {
+    if (matchProcessing || matchQueue.length === 0) return;
+    matchProcessing = true;
+    const [a, b] = matchQueue.shift();
+    playMatchEffect(a, b, () => {
+      matchProcessing = false;
+      if (matchedPairs === totalPairs) {
+        onComplete(currentMatraId);
+      } else {
+        runMatchQueue();
+      }
+    });
   }
 
   function processTrayMatches() {
     let pair;
     while ((pair = scanTrayForFirstMatchPair())) {
-      removeMatchedPair(pair[0], pair[1]);
+      pair[0].state = 'matched';
+      pair[1].state = 'matched';
+      tray = tray.filter((t) => t !== pair[0] && t !== pair[1]);
+      matchedPairs++;
+      matchQueue.push(pair);
     }
+    reflowTraySlots();
     updateStuckIndicator();
+    runMatchQueue();
   }
 
   function pickTile(tile) {
@@ -312,17 +383,30 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     totalPairs = pairCount;
     matchedPairs = 0;
     tray = [];
+    matchQueue = [];
+    matchProcessing = false;
     _stuckVoicePlayed = false;
     if (dom.mahjongShuffleBtn) dom.mahjongShuffleBtn.classList.remove('pulse');
+    if (dom.mahjongBigWord) dom.mahjongBigWord.classList.remove('show');
+    hideHandCursor();
 
     const slots = buildPyramidLayout(pairCount, layerCount);
-    const wordPool = shuffleArray(matra.words.map((w) => w.display)).slice(0, pairCount);
+    const maxBoardCols = Math.max(...slots.map((s) => s.x)) + 1;
+    const size = computeTileSize(maxBoardCols);
+    tileW = size.w;
+    tileH = size.h;
+
+    const wordPool = shuffleArray(matra.words).slice(0, pairCount);
     const wordAssignment = shuffleArray([...wordPool, ...wordPool]);
     tiles = slots.map((s, i) => ({
-      id: `mj${i}`, word: wordAssignment[i], x: s.x, y: s.y, layer: s.layer, state: 'board', el: null,
+      id: `mj${i}`,
+      word: wordAssignment[i].display,
+      wordObj: wordAssignment[i],
+      x: s.x, y: s.y, layer: s.layer, state: 'board', el: null,
     }));
 
     if (dom.mahjongTitle) dom.mahjongTitle.textContent = matra.name;
+    sizeTraySlots();
     renderBoard();
     refreshFreeStates();
   }
@@ -338,19 +422,36 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     pickTile(tile);
   }
 
+  // ---------- AR hand cursor (ข้อ 10) — ไม่ซ้อนภาพกล้องจริง ใช้ภาพมือแทน
+  // ตำแหน่งที่ mediapipe ติดตามได้ — pointer.js ไม่เรียก onHandFrame เลย (เฉพาะ
+  // handpinch.js) จึงใช้เป็นสัญญาณ "AR กำลังทำงานอยู่" ได้ตรงๆ ----------
+  function onHandFrame(frame) {
+    if (!dom.mahjongHandCursor) return;
+    if (!frame) { hideHandCursor(); return; }
+    dom.mahjongHandCursor.classList.remove('hidden');
+    dom.mahjongHandCursor.style.left = frame.x + 'px';
+    dom.mahjongHandCursor.style.top = frame.y + 'px';
+  }
+
   function shuffle() {
     const pool = tiles.filter((t) => t.state !== 'matched');
     if (!pool.length) return;
-    const words = shuffleArray(pool.map((t) => t.word));
+    const wordObjs = shuffleArray(pool.map((t) => t.wordObj));
     pool.forEach((t, i) => {
-      t.word = words[i];
-      t.el.textContent = words[i];
+      t.wordObj = wordObjs[i];
+      t.word = wordObjs[i].display;
+      t.el.textContent = t.word;
     });
     processTrayMatches();
   }
 
   function relayout() {
     if (!tiles.length) return;
+    const maxBoardCols = Math.max(...tiles.map((t) => t.x)) + 1;
+    const size = computeTileSize(maxBoardCols);
+    tileW = size.w;
+    tileH = size.h;
+    sizeTraySlots();
     tiles.forEach((t) => { if (t.state === 'board') positionTileOnBoard(t); });
     sizeBoardContainer();
     tray.forEach((t, i) => positionTileAtTraySlot(t, i));
@@ -364,8 +465,12 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     particleFx.clear();
     if (dom.mahjongBoard) dom.mahjongBoard.innerHTML = '';
     if (dom.mahjongShuffleBtn) dom.mahjongShuffleBtn.classList.remove('pulse');
+    if (dom.mahjongBigWord) dom.mahjongBigWord.classList.remove('show');
+    hideHandCursor();
     tiles = [];
     tray = [];
+    matchQueue = [];
+    matchProcessing = false;
     matchedPairs = 0;
     totalPairs = 0;
     _stuckVoicePlayed = false;
@@ -376,7 +481,7 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     onPick,
     onMove() {},
     onRelease() {},
-    onHandFrame() {},
+    onHandFrame,
     shuffle,
     relayout,
     stop,
