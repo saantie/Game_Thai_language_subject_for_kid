@@ -14,6 +14,7 @@ import {
   loadArEnabled, saveArEnabled,
   loadTotalScore, saveTotalScore,
   loadMahjongSeen, saveMahjongSeen,
+  loadConfirmButtonsOverride, saveConfirmButtonsOverride,
 } from './storage.js';
 
 const MATRA_BY_ID = Object.fromEntries(MATRA.map((m) => [m.id, m]));
@@ -30,7 +31,7 @@ fetch('sw.js?_=' + Date.now())
 // ---- app state กลาง (ต้นแบบเก็บใน memory; production ใช้ IndexedDB/Firebase) ----
 const app = {
   progress: loadProgress(), // โหลดจาก localStorage — { matraId: stars }
-  settings: { showSpellHint: false, bgm: true, arEnabled: loadArEnabled(), confirmButtonsOverride: false },
+  settings: { showSpellHint: false, bgm: true, arEnabled: loadArEnabled(), confirmButtonsOverride: loadConfirmButtonsOverride() },
   totalScore: loadTotalScore(), // คะแนนสะสมข้ามทุกมาตรา — game.js อัปเดตสดระหว่างเล่น
   mahjongSeen: loadMahjongSeen(), // { matraId: true } — ด่านอุ่นเครื่องไพ่โชว์แค่ครั้งแรก
 };
@@ -158,11 +159,12 @@ function onCameraLost() {
   if (arInput) { arInput.destroy(); arInput = null; }
   camVideoEl.classList.remove('show');
   witchSay('กล้องปิดไปแล้วจ้ะ ใช้นิ้วจิ้มจอแทนได้เลยนะ');
+  updateWakeLock();
 }
 
 // AR ทำงานเฉพาะหน้าเกม/มินิเกมไพ่ — หน้าเมนู pause inference + ซ่อนภาพกล้อง (ประหยัดแบต/CPU)
 function syncArToScreen() {
-  if (!arInput) { camVideoEl.classList.remove('show'); return; }
+  if (!arInput) { camVideoEl.classList.remove('show'); updateWakeLock(); return; }
   if (_screen === 'game' || _screen === 'mahjong') {
     arInput.resume();
     camVideoEl.classList.add('show');
@@ -170,7 +172,32 @@ function syncArToScreen() {
     arInput.pause();
     camVideoEl.classList.remove('show');
   }
+  updateWakeLock();
 }
+
+// ---- Wake Lock: กันจอพัก/ดับตอนเล่น AR ในมินิเกมไพ่ (ข้อ 5) — มือจีบลอยอยู่กลาง
+// อากาศไม่แตะจอเลย ต่างจากการแตะจอปกติที่กันจอดับเองอยู่แล้ว จอดับกลางคันจะตัด
+// กล้อง/inference ทำให้ AR หลุดกะทันหันระหว่างเล่น จึงกันเฉพาะตอนอยู่หน้ามินิเกมไพ่
+// และ AR กำลังทำงานจริงเท่านั้น (ไม่ใช่ทุกหน้า กันจอไม่ดับตลอดโดยไม่จำเป็น)
+let wakeLock = null;
+async function updateWakeLock() {
+  const shouldHold = _screen === 'mahjong' && !!arInput;
+  if (shouldHold && !wakeLock) {
+    if (!('wakeLock' in navigator)) return; // เบราว์เซอร์ไม่รองรับ — ข้ามเงียบๆ
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (e) { wakeLock = null; } // ถูกปฏิเสธ/ชั่วคราวใช้ไม่ได้ — ไม่กระทบการเล่น
+  } else if (!shouldHold && wakeLock) {
+    const wl = wakeLock;
+    wakeLock = null;
+    try { await wl.release(); } catch (e) {}
+  }
+}
+// Wake Lock หลุดอัตโนมัติเมื่อสลับแท็บ/พับจอ (ตามสเปก) — ต้องขอใหม่เองตอนกลับมา
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') updateWakeLock();
+});
 
 function initAR() {
   if (!app.settings.arEnabled) return; // ปิดจากปุ่มหน้าแรก
@@ -212,6 +239,7 @@ function showScreen(which) {
   dom.totalBadge.classList.toggle('hidden', which === 'start'); // โชว์ทุกหน้ายกเว้นหน้าเริ่ม
   adultScreen.classList.add('hidden'); // ปิด adult overlay เสมอ
   dom.hud.classList.toggle('hidden', which !== 'game');
+  arQuickToggleBtn.classList.toggle('hidden', which !== 'game' && which !== 'mahjong'); // ข้อ 3
   dom.voicebar.classList.add('hidden');
   dom.resultScreen.classList.add('hidden');
   // ข้อ 9-10: ไม่ซ้อนภาพกล้อง/ฉากป่าหลังมินิเกมไพ่ — เหลือแค่ fxCanvas (particle)
@@ -360,6 +388,8 @@ if (/Android/i.test(navigator.userAgent)) {
 if (!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
   document.body.classList.add('is-desktop');
 }
+// จำค่าที่ผู้ปกครองเคยตั้งไว้ข้ามเซสชัน — ไม่ต้องเปิดใหม่ทุกครั้งที่เข้าแอป (ข้อ 4)
+document.body.classList.toggle('force-confirm', app.settings.confirmButtonsOverride);
 
 // register once ก่อน gesture แรก — ไม่ต้องการ user gesture สำหรับ visibilitychange
 audio.initVisibility();
@@ -378,14 +408,16 @@ $('#startBtn').addEventListener('click', () => {
   playIntroVideo(INTRO_VIDEO_SRC, () => showIntroSpeech(() => showScreen('level')));
 });
 
-// ---- ปุ่มเปิด/ปิดโหมด AR (หน้าแรก) ----
+// ---- ปุ่มเปิด/ปิดโหมด AR (หน้าแรก + ไอคอนกล้องมุมขวาล่างระหว่างเล่น, ข้อ 3) ----
 const arToggleBtn = $('#arToggleBtn');
+const arQuickToggleBtn = $('#arQuickToggleBtn');
 function updateArToggleLabel() {
   arToggleBtn.textContent = app.settings.arEnabled ? '📷 โหมด AR: เปิด' : '📷 โหมด AR: ปิด';
   arToggleBtn.style.opacity = app.settings.arEnabled ? '' : '0.6';
+  arQuickToggleBtn.classList.toggle('ar-off', !app.settings.arEnabled);
 }
 updateArToggleLabel();
-arToggleBtn.addEventListener('click', () => {
+function toggleArEnabled() {
   app.settings.arEnabled = !app.settings.arEnabled;
   saveArEnabled(app.settings.arEnabled);
   updateArToggleLabel();
@@ -393,11 +425,14 @@ arToggleBtn.addEventListener('click', () => {
     // ปิด: หยุดกล้อง/inference ทันที — เกมเล่นต่อด้วย touch
     if (arInput) { arInput.destroy(); arInput = null; }
     camVideoEl.classList.remove('show');
+    updateWakeLock();
   } else if (_micDone) {
     initAR(); // เปิดกลับหลังเคยผ่านหน้า start แล้ว — ขอกล้องได้เลย (ไมค์จบไปแล้ว)
   }
   // ยังไม่กด "เริ่มเล่น" → แค่จำ flag ไว้ initAR จะทำงานหลัง start ตามลำดับ permission
-});
+}
+arToggleBtn.addEventListener('click', toggleArEnabled);
+arQuickToggleBtn.addEventListener('click', toggleArEnabled);
 
 $('#startAdultBtn').addEventListener('click', () => openAdultGate(app, adultScreen));
 $('#levelAdultBtn').addEventListener('click', () => openAdultGate(app, adultScreen));
@@ -451,6 +486,8 @@ $('#mahjongBackBtn').addEventListener('click', () => {
   mahjongWarmup.stop();
   showScreen('level');
 });
+
+$('#levelBackBtn').addEventListener('click', () => showScreen('start'));
 
 $('#mahjongShuffleBtn').addEventListener('click', () => mahjongWarmup.shuffle());
 

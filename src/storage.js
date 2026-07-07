@@ -38,6 +38,24 @@ export function saveArEnabled(on) {
   } catch (e) {}
 }
 
+// ---- setting: แสดงปุ่ม "อ่านถูก/ลองใหม่" บน Android/PC (default ปิด — ใช้ไมค์
+// อย่างเดียว) — เดิมเก็บแค่ใน memory ต้องตั้งใหม่ทุกครั้งที่เปิดแอป (ข้อ 4) ----
+const CONFIRM_BTN_KEY = 'witch_confirm_buttons_override';
+
+export function loadConfirmButtonsOverride() {
+  try {
+    return localStorage.getItem(CONFIRM_BTN_KEY) === '1';
+  } catch (e) {
+    return false;
+  }
+}
+
+export function saveConfirmButtonsOverride(on) {
+  try {
+    localStorage.setItem(CONFIRM_BTN_KEY, on ? '1' : '0');
+  } catch (e) {}
+}
+
 // ---- คะแนนสะสม (ข้ามทุกมาตราตลอดการเล่น) ----
 const TOTAL_SCORE_KEY = 'witch_total_score';
 

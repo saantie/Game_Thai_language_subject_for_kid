@@ -1,6 +1,7 @@
 // ui/adultPage.js — คู่มือผู้ใหญ่ + parent gate + ทูลทิปสะกดคำ (หัวข้อ 6)
 
 import { audio } from '../audio.js';
+import { saveConfirmButtonsOverride } from '../storage.js';
 
 // parent gate ง่าย ๆ ที่เด็กเล็กทำไม่ได้ (ไม่ใช่ security จริง)
 export function openAdultGate(app, screenEl) {
@@ -71,6 +72,7 @@ export function showAdultPage(app, screenEl) {
   };
   confirmBtn.onchange = () => {
     app.settings.confirmButtonsOverride = confirmBtn.checked;
+    saveConfirmButtonsOverride(confirmBtn.checked); // จำข้ามเซสชัน ไม่ต้องตั้งใหม่ทุกครั้ง (ข้อ 4)
     document.body.classList.toggle('force-confirm', confirmBtn.checked);
   };
   screenEl.querySelector('#adultBack').onclick = () => {

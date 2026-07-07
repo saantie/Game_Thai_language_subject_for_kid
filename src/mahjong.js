@@ -31,9 +31,17 @@ const TILE_EMOJIS = ['✨', '⭐', '🌙', '🔮', '🌟', '🎶'];
 
 // จัดวางไพ่เป็นชั้นปิรามิด — สัดส่วนต่อชั้น [0.45,0.3,0.17,0.08] (ชั้น 0 = ฐาน
 // กว้างสุด) layerCount ห้ามเกิน 4 เพราะตารางสัดส่วนนี้มีแค่ 4 ค่า
+//
+// กันพัง: แต่ละชั้นต้องมีอย่างน้อย 2 ใบ (บังคับด้วย Math.max(2,...) ด้านล่าง) ถ้า
+// pairCount น้อยเกินไปเทียบกับ layerCount ที่ขอ (เช่น pairs=3, layers=4 → ต้องการ
+// อย่างน้อย 2*4=8 ใบ แต่มีแค่ 6) counts[0] จะถูกลบด้วย diff จนเหลือ 0 หรือติดลบ
+// ทำให้ layer0Cols=0 แล้ว rows ของชั้นถัดไปคำนวณ sqrt(count/0)=Infinity จน loop
+// วางไพ่ค้างไม่รู้จบ (เจอจริงตอนปรับตาราง TIERS ให้ยากขึ้น, ข้อ 1) จึงต้องลด
+// layerCount ลงเองถ้า total ไม่พอ ก่อนคำนวณสัดส่วนต่อชั้น
 export function buildPyramidLayout(pairCount, layerCount) {
   const total = pairCount * 2;
-  const weights = [0.45, 0.3, 0.17, 0.08].slice(0, layerCount);
+  const safeLayerCount = Math.max(1, Math.min(layerCount, Math.floor(total / 2)));
+  const weights = [0.45, 0.3, 0.17, 0.08].slice(0, safeLayerCount);
   const wsum = weights.reduce((a, b) => a + b, 0);
   const counts = weights.map((w) => Math.max(2, Math.round((w / wsum) * total)));
   const diff = total - counts.reduce((a, b) => a + b, 0);
@@ -44,7 +52,7 @@ export function buildPyramidLayout(pairCount, layerCount) {
   const layer0Cols = Math.ceil(counts[0] / layer0Rows);
   const baseWidth = layer0Cols;
 
-  for (let L = 0; L < layerCount; L++) {
+  for (let L = 0; L < safeLayerCount; L++) {
     const count = counts[L];
     const rows = L === 0 ? layer0Rows : Math.max(1, Math.round(Math.sqrt(count / (layer0Cols / layer0Rows))));
     const cols = Math.ceil(count / rows);
@@ -90,18 +98,22 @@ export function hasVisibleMatch(freeBoardTiles, trayTiles) {
 // ความยากอิงลำดับ 26 มาตราปัจจุบัน (v143, ดูคอมเมนต์หัวไฟล์ data/matra.js) —
 // เพดาน pairCount/layerCount ตาม tier แล้ว cap ด้วยจำนวนคำจริงของมาตรานั้น
 // (กันมาตราคำน้อยเช่นสระแอะ/เอะ ได้บอร์ดใหญ่เกินจำนวนคำที่มี)
-// tier0 (kaka) ตั้งใจให้ 6 คู่ (12 ใบ) ตามที่ขอ — สูงกว่า tier1-2 โดยตั้งใจ
-// เพราะ kaka เป็นมาตราที่เล่นบ่อยสุด/มีคำให้เลือกเยอะสุด (18 คำ)
+// tier0 (kaka) ตั้งใจให้ 6 คู่ (12 ใบ) — kaka เป็นมาตราที่เล่นบ่อยสุด/มีคำให้เลือก
+// เยอะสุด (18 คำ) ส่วน tier1-5 ปรับให้ "pairs" (target สูงสุดที่อยากได้ ถ้าคำพอ)
+// กับ "layers" (ความลึกปิรามิด) เพิ่มขึ้นเป็นลำดับจริงตามมาตราที่ยากขึ้น (ข้อ 1) —
+// deriveDifficulty() clamp ด้วย matra.words.length เสมอ จึงไม่มีทางล้นคำจริงที่มี
+// [หมายเหตุข้อจำกัดข้อมูล: กลุ่ม FILL_FINAL (tier5, กง-กด) ทุกมาตรามีคำตายตัว
+//  มาตราละ 5 คำเท่านั้น — pairs จึงชนเพดาน 5 เสมอไม่ว่าจะตั้ง target สูงแค่ไหน
+//  (ต้องเพิ่มคำใน matra.js ก่อนถึงจะดันสูงกว่านี้ได้จริง) ความยากของ tier5 มาจาก
+//  การสะกด+ตัวลวงเป็นหลัก ไม่ใช่จำนวนไพ่ จึงชดเชยด้วย layers สูงสุด (4) แทน]
 const TIER_BOUNDARIES = [1, 10, 13, 16, 18]; // idx < boundary[i] → tier i, เกินหมด → tier สุดท้าย
 const TIERS = [
   { pairs: 6, layers: 3 }, // tier0: kaka — เริ่มต้น 12 ใบ
-  { pairs: 4, layers: 2 }, // tier1: กลุ่ม1 สระเดี่ยวคู่สั้น-ยาว
-  { pairs: 4, layers: 3 }, // tier2: กลุ่ม2 สระเดี่ยวไม่มีคู่
-  { pairs: 5, layers: 3 }, // tier3: กลุ่ม3 สระประสม
-  { pairs: 5, layers: 4 }, // tier4: กลุ่ม4 สระเกิน
-  { pairs: 5, layers: 4 }, // tier5: มาตราตัวสะกดจริง (กด ยากสุด) — เท่า tier4
-                           // โดยตั้งใจ เพราะถาด 5 ช่อง + เพดานชั้น generator (4)
-                           // ไม่เหลือช่องบีบยากกว่านี้ด้วยตัวแปรสองตัวนี้
+  { pairs: 6, layers: 3 }, // tier1: กลุ่ม1 สระเดี่ยวคู่สั้น-ยาว (คำจริง 3-8 คำ/มาตรา)
+  { pairs: 6, layers: 4 }, // tier2: กลุ่ม2 สระเดี่ยวไม่มีคู่ (คำน้อยกว่า 3-4 แต่ชั้นลึกขึ้น)
+  { pairs: 6, layers: 4 }, // tier3: กลุ่ม3 สระประสม
+  { pairs: 8, layers: 4 }, // tier4: กลุ่ม4 สระเกิน (คำเยอะพอ 8-10 คำ ดันจำนวนคู่ขึ้นจริง)
+  { pairs: 5, layers: 4 }, // tier5: มาตราตัวสะกดจริง (กด ยากสุด) — ชนเพดานข้อมูล 5 คำ/มาตรา
 ];
 export function deriveDifficulty(matra, curriculumIndex) {
   let tier = TIER_BOUNDARIES.findIndex((b) => curriculumIndex < b);

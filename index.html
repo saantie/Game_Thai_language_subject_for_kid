@@ -134,6 +134,9 @@
 
     <!-- หน้าเลือกมาตรา -->
     <div id="levelScreen" class="screen level hidden">
+      <button id="levelBackBtn" class="btn-back" title="กลับหน้าแรก">
+        <img src="public/assets/images/Arrow.png" alt="กลับ" class="back-arrow-img" />
+      </button>
       <h2>เลือกมาตราตัวสะกด</h2>
       <div id="levelGrid" class="level-grid"></div>
       <button id="levelAdultBtn" class="btn-link">สำหรับผู้ปกครอง</button>
@@ -192,6 +195,10 @@
     <script type="module" src="src/main.js"></script>
     <!-- ปุ่มรีเซ็ต progress — แสดงเฉพาะหน้าเลือกมาตรา, มุมล่างขวา -->
     <button id="resetProgressBtn" class="btn-reset-game hidden">↺ รีเซ็ตเกม</button>
+
+    <!-- ปุ่มเปิด/ปิด AR แบบไอคอนกล้อง มุมขวาล่าง — โชว์เฉพาะหน้าเล่นเกมส์จริง
+         (เกมหยิบฟอง/มินิเกมไพ่, ข้อ 3) -->
+    <button id="arQuickToggleBtn" class="btn-icon ar-quick-toggle hidden" type="button" title="เปิด/ปิดกล้อง AR">📷</button>
 
     <!-- แสงวิเศษลอยรอบขอบหน้าจอ — แสดงเฉพาะหน้าเลือกมาตรา -->
     <div id="magicOrbs" class="magic-orbs hidden" aria-hidden="true">

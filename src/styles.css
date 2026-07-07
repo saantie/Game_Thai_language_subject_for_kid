@@ -576,6 +576,20 @@ button { font-family: inherit; cursor: pointer; border: none; }
   transition: background 0.15s, color 0.15s;
 }
 .btn-reset-game:hover { background: rgba(140,30,30,0.75); color: #fff; }
+
+/* ปุ่มเปิด/ปิด AR ไอคอนกล้อง มุมขวาล่าง (ข้อ 3) — โชว์เฉพาะหน้าเล่นเกมส์จริง
+   (game/mahjong สลับ .hidden ใน showScreen()) ไม่ชนกับ .btn-reset-game เพราะ
+   ปุ่มนั้นโชว์เฉพาะหน้า level เท่านั้น คนละหน้ากันเสมอ ใช้ตำแหน่งเดียวกันได้ */
+.ar-quick-toggle {
+  position: fixed;
+  bottom: max(16px, env(safe-area-inset-bottom, 16px));
+  right: max(16px, env(safe-area-inset-right, 16px));
+  z-index: 40; /* เหนือ .screen (6) แต่ต่ำกว่า .total-badge (50) */
+  border: none; cursor: pointer;
+  transition: opacity 0.15s, transform 0.12s;
+}
+.ar-quick-toggle:active { transform: scale(0.9); }
+.ar-quick-toggle.ar-off { opacity: 0.45; }
 .btn-icon {
   background: rgba(255, 255, 255, 0.15); color: #fff; width: 44px; height: 44px;
   border-radius: 12px; font-size: 20px;
@@ -898,6 +912,12 @@ button { font-family: inherit; cursor: pointer; border: none; }
   padding-left: max(20px, env(safe-area-inset-left, 20px));
   padding-right: max(20px, env(safe-area-inset-right, 20px));
 }
+/* ปุ่มกลับหน้าแรกจากหน้าเลือกมาตรา (ข้อ 2) — ตำแหน่ง/สไตล์เดียวกับ #mahjongBackBtn */
+#levelBackBtn {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top, 12px));
+  left: max(12px, env(safe-area-inset-left, 12px));
+}
 
 /* start-card: ป้องกันเนื้อหาล้นบนจอเตี้ย */
 .start-card {
@@ -1186,6 +1206,13 @@ button { font-family: inherit; cursor: pointer; border: none; }
   left: max(12px, env(safe-area-inset-left, 12px));
 }
 #mahjongTitle { margin: 0 0 14px; font-size: clamp(20px, 4vw, 30px); }
+
+/* fxCanvas ปกติ z-index:3 (ต่ำกว่า UI overlay ของเกมหยิบฟองตามสเปก §0) แต่ไพ่ใน
+   มินิเกมนี้เป็น DOM ที่มี z-index สูงถึง 6500 (เคอเซอร์มือ) ทำให้ผลึกแก้วแตกที่วาด
+   บน fxCanvas โดน "ไพ่ระเบิด" ก้อนอื่นบังจนมองไม่เห็น (ข้อ 1) — ยกเฉพาะตอน
+   mahjong-mode ให้ fxCanvas ลอยเหนือทุกอย่างในหน้านี้แทน ไม่กระทบ z-index ปกติ
+   ตอนอยู่เกมหยิบฟอง */
+#sceneRoot.mahjong-mode #fxCanvas { z-index: 7000; }
 
 /* ข้อ 9-10: ไม่ซ้อนภาพกล้อง/ฉากป่าเป็น background หลังมินิเกมไพ่ — เหลือแค่
    fxCanvas (ใช้วาด particle เอฟเฟกต์) กับพื้นม่วงของ .screen เอง */
