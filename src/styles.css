@@ -546,11 +546,14 @@ html, body {
 .vb-state { font-size: 14px; min-height: 18px; opacity: .9; margin-top: 6px; }
 .vb-fallback { display: flex; gap: 10px; justify-content: center; margin-top: 12px; width: 100%; }
 
-/* Android — ซ่อน ok/retry เป็นค่าเริ่มต้น (ใช้ไมค์อย่างเดียว), mic ตรงกลาง
-   ผู้ปกครองเปิดกลับได้ที่หน้าผู้ปกครอง (.force-confirm) — iOS ไม่มี .is-android
-   จึงเห็นปุ่มนี้อยู่แล้วเสมอ (ไม่มี Web Speech API ต้องพึ่งปุ่มกดยืนยัน) */
-.is-android:not(.force-confirm) .vb-fallback { display: none !important; }
-.is-android:not(.force-confirm) .btn-mic { margin: 8px auto 0; }
+/* Android/PC — ซ่อน ok/retry เป็นค่าเริ่มต้น (ใช้ไมค์อย่างเดียว), mic ตรงกลาง
+   ผู้ปกครองเปิดกลับได้ที่หน้าผู้ปกครอง (.force-confirm, ข้อ 1) — iOS ไม่มี
+   .is-android/.is-desktop จึงเห็นปุ่มนี้อยู่แล้วเสมอ (ไม่มี Web Speech API
+   ต้องพึ่งปุ่มกดยืนยัน) */
+.is-android:not(.force-confirm) .vb-fallback,
+.is-desktop:not(.force-confirm) .vb-fallback { display: none !important; }
+.is-android:not(.force-confirm) .btn-mic,
+.is-desktop:not(.force-confirm) .btn-mic { margin: 8px auto 0; }
 
 /* ---- buttons ---- */
 button { font-family: inherit; cursor: pointer; border: none; }
@@ -1289,12 +1292,12 @@ button { font-family: inherit; cursor: pointer; border: none; }
   transition: left 0.35s cubic-bezier(.34,1.4,.64,1), top 0.35s cubic-bezier(.34,1.4,.64,1),
               opacity 0.3s, transform 0.3s, filter 0.15s, box-shadow 0.15s;
 }
-/* ไพ่หยิบได้ — เรืองแสงทองด้วย --accent ให้เห็นชัดว่าแตะได้ */
+/* ไพ่หยิบได้ — เรืองแสงทองด้วย --accent ให้เห็นชัดว่าแตะได้ (เอาขอบสีทองออกแล้ว
+   ใช้กรอบเงาดำเดิมเหมือน .mj-tile ปกติ เหลือแค่ glow เป็นตัวบอกว่าหยิบได้) */
 .mj-tile.free {
   filter: none;
   opacity: 1;
   cursor: grab;
-  border-color: rgba(255, 216, 77, 0.9);
   box-shadow:
     3px 3px 0 rgba(10, 10, 20, 0.55),
     6px 7px 12px rgba(70, 110, 160, 0.45),
@@ -1335,7 +1338,24 @@ button { font-family: inherit; cursor: pointer; border: none; }
   filter: none;
 }
 
-.mj-shuffle-btn { margin-top: 6px; }
+/* ย้ายมาไว้กึ่งกลางบนสุด ลดขนาดลงกันเบียดกับป้ายคะแนนสะสม (.total-badge มุมขวาบน,
+   ข้อ 5) — จัดกึ่งกลางด้วย left:0;right:0;margin:auto (ไม่ใช้ transform) เพื่อไม่ให้
+   ชนกับ transform ของ :active (กดยุบ) และ .pulse (pillBump scale) ด้านล่าง */
+.mj-shuffle-btn {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top, 12px));
+  left: 0; right: 0;
+  margin: 0 auto;
+  width: fit-content;
+  padding: clamp(6px, 1.5vw, 9px) clamp(12px, 4vw, 20px);
+  font-size: clamp(12px, 3vw, 15px);
+  border-radius: 12px;
+  box-shadow: 0 3px 0 #a86a1f;
+  z-index: 5;
+}
+/* ปุ่มเล็กลง — ปรับเงา :active ให้ยุบสัมพันธ์กับขนาดใหม่ (ทับค่า .btn-primary:active
+   เดิมที่ตั้งไว้สำหรับปุ่มขนาดปกติ) */
+.mj-shuffle-btn:active { box-shadow: 0 1px 0 #a86a1f; }
 /* ถาดเต็มไม่มีคู่ — ไฮไลต์ปุ่มสลับป้าย reuse keyframe pillBump เดิม (ดู .hud-pill.bump) */
 .mj-shuffle-btn.pulse { animation: pillBump 0.6s ease-in-out infinite; }
 
@@ -1351,12 +1371,14 @@ button { font-family: inherit; cursor: pointer; border: none; }
 }
 
 /* มือชี้ AR แทนกล้องจริง (ข้อ 10) — ตำแหน่งอัปเดตจาก onHandFrame ใน mahjong.js
-   ปลายนิ้วชี้อยู่มุมบนซ้ายของภาพ จึงเลื่อนภาพให้ตรงจุดจีบจริง */
+   ปลายนิ้วชี้อยู่มุมบนซ้ายของภาพ จึงเลื่อนภาพให้ตรงจุดจีบจริง
+   z-index ต้องสูงกว่า .mj-tile.held (6000 !important) เสมอ (ข้อ 2) ไม่งั้นตอนจับไพ่
+   ภาพมือจะโดนไพ่ที่ถืออยู่บังซ้อนทับ */
 .mj-hand-cursor {
   position: fixed;
   width: clamp(53px, 13.2vw, 92px); /* ใหญ่ขึ้น 10% จากเดิม (48/12vw/84) */
   height: auto;
   pointer-events: none;
-  z-index: 3000;
+  z-index: 6500;
   transform: translate(-15%, -15%);
 }

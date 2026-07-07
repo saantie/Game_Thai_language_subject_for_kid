@@ -107,7 +107,10 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
   let pinchOnFrames = 0;       // นับเฟรมจีบต่อเนื่อง — กัน phantom pick เฟรมเดียว
   let pinchOffFrames = 0;      // นับเฟรมเลิกจีบต่อเนื่อง — กัน phantom release เฟรมเดียว
   let lastX = 0, lastY = 0;
-  let sx = 0, sy = 0;          // ตำแหน่งหลัง EMA smoothing
+  let sx = 0, sy = 0;          // ตำแหน่งหลัง EMA smoothing (ปลายนิ้วชี้)
+  let lastTx = 0, lastTy = 0;
+  let stx = 0, sty = 0;        // ตำแหน่งหลัง EMA smoothing (ปลายนิ้วโป้ง) — ใช้เป็น
+                                // ตำแหน่ง "alt" ให้เกมไพ่เลือกใช้แทนนิ้วชี้ (ข้อ 2)
   let lockedWrist = null;      // ข้อมือของมือที่ล็อก จากเฟรมก่อน
   let lostFrames = 0;
   let loopGen = 0;             // token กัน loop ซ้อนกันเมื่อ watchdog restart chain
@@ -186,9 +189,13 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
     const normDist = handSize > 0.01 ? rawDist / handSize : rawDist;
     // hysteresis: threshold เข้า/ออกคนละค่า — ระหว่างกลางคงสถานะเดิม
     const pinching = isPinching ? normDist < PINCH_OFF : normDist < PINCH_ON;
-    // ตำแหน่งลาก = ปลายนิ้วชี้ (ตรงกับที่เด็กมองว่า "นิ้วอยู่ตรงไหน" ตอนจีบ)
+    // ตำแหน่งลาก = ปลายนิ้วชี้ (ตรงกับที่เด็กมองว่า "นิ้วอยู่ตรงไหน" ตอนจีบ) — คงไว้
+    // เป็นค่า default ของทุกด่านเดิม (game.js) ไม่แตะพฤติกรรมนี้
     const { x, y } = toCanvas(index.x, index.y, canvasW, canvasH);
-    return { pinching, x, y };
+    // ตำแหน่งปลายนิ้วโป้ง — ส่งเป็น "alt" เพิ่มเติมให้เกมไพ่เลือกใช้แทนได้ (ข้อ 2)
+    // โดยไม่กระทบด่านหยิบฟองเดิมที่ยังใช้นิ้วชี้เหมือนเดิม
+    const { x: tx, y: ty } = toCanvas(thumb.x, thumb.y, canvasW, canvasH);
+    return { pinching, x, y, tx, ty };
   }
 
   function forceRelease() {
@@ -196,35 +203,40 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
     pinchOffFrames = 0;
     if (!isPinching) return;
     isPinching = false;
-    handlers.onRelease && handlers.onRelease(lastX, lastY);
+    handlers.onRelease && handlers.onRelease(lastX, lastY, { x: lastTx, y: lastTy });
   }
 
-  function updatePinchState(pinching, x, y) {
+  function updatePinchState(pinching, x, y, tx, ty) {
     // EMA smoothing ก่อนใช้พิกัดทุกครั้ง — ฟองไม่สั่นตามมือเด็ก
     sx += (x - sx) * SMOOTH;
     sy += (y - sy) * SMOOTH;
+    stx += (tx - stx) * SMOOTH;
+    sty += (ty - sty) * SMOOTH;
+    const alt = { x: stx, y: sty };
 
     if (pinching && !isPinching) {
       // ยืนยันจีบต่อเนื่องก่อนนับ — ตัด phantom pick จาก false detection
-      if (++pinchOnFrames < PINCH_ON_FRAMES) { lastX = sx; lastY = sy; return; }
+      if (++pinchOnFrames < PINCH_ON_FRAMES) { lastX = sx; lastY = sy; lastTx = stx; lastTy = sty; return; }
       isPinching = true;
       sx = x; sy = y; // reset filter ตอนเริ่มจีบ กันตำแหน่งค้างจากรอบก่อน
-      handlers.onPick && handlers.onPick(sx, sy, GRAB_SLOP);
+      stx = tx; sty = ty;
+      handlers.onPick && handlers.onPick(sx, sy, GRAB_SLOP, { x: stx, y: sty });
     } else if (pinching && isPinching) {
       if (Math.hypot(sx - lastX, sy - lastY) > DEAD_ZONE) {
-        handlers.onMove && handlers.onMove(sx, sy);
+        handlers.onMove && handlers.onMove(sx, sy, alt);
       }
     } else if (!pinching && isPinching) {
       // ยืนยันเลิกจีบต่อเนื่องก่อนปล่อยจริง — ตัด phantom release จาก landmark
       // เพี้ยนแวบเดียว (พบจริงตอนใช้ท่ากำมือ: มือเอียง/คว่ำตอนเอื้อมลงใกล้หม้อ
       // ทำให้ normDist พุ่งผิดๆ จากมุมกล้อง ไม่ใช่ปล่อยจริง)
-      if (++pinchOffFrames < PINCH_OFF_FRAMES) { lastX = sx; lastY = sy; return; }
+      if (++pinchOffFrames < PINCH_OFF_FRAMES) { lastX = sx; lastY = sy; lastTx = stx; lastTy = sty; return; }
       isPinching = false;
-      handlers.onRelease && handlers.onRelease(sx, sy);
+      handlers.onRelease && handlers.onRelease(sx, sy, alt);
     }
     if (pinching) pinchOffFrames = 0;   // ยังจีบอยู่ปกติ → รีเซ็ตนับเลิกจีบ
     if (!pinching) pinchOnFrames = 0;   // ยังไม่จีบ (หรือจีบไม่ต่อเนื่องพอ) → รีเซ็ตนับจีบ
     lastX = sx; lastY = sy;
+    lastTx = stx; lastTy = sty;
   }
 
   function detectLoop(gen) {
@@ -243,15 +255,16 @@ export async function createHandPinchInput(fxCanvas, handlers, onCameraLost) {
 
       const hand = selectHand(result);
       if (hand) {
-        const { pinching, x, y } = getPinchState(hand.lm, canvasW, canvasH);
-        updatePinchState(pinching, x, y);
+        const { pinching, x, y, tx, ty } = getPinchState(hand.lm, canvasW, canvasH);
+        updatePinchState(pinching, x, y, tx, ty);
 
         // ส่งเฟรมมือดิบทุกเฟรมที่เจอมือ (ไม่ขึ้นกับ pinch state) ให้ game.js ทำ
         // star trail ตอนมือเปิด + เดาะฟองลอยขึ้นตอนหงายมือ — pointer.js ไม่มี concept นี้
+        // (tx,ty = ปลายนิ้วโป้ง ดิบ ไม่ผ่าน smoothing — เกมไพ่ใช้วางรูปมือ AR, ข้อ 2)
         const handLabel = result.handednesses?.[hand.idx]?.[0]?.categoryName;
         const palmUp = palmUpScore(hand.lm, handLabel) > 0;
         handlers.onHandFrame && handlers.onHandFrame({
-          x, y, open: !isPinching, spread: !isPinching, palmUp,
+          x, y, tx, ty, open: !isPinching, spread: !isPinching, palmUp,
         });
       } else {
         // ไม่เห็นมือ (หรือมือที่ล็อกหลุดเฟรม) → release ทันที

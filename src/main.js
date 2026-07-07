@@ -30,7 +30,7 @@ fetch('sw.js?_=' + Date.now())
 // ---- app state กลาง (ต้นแบบเก็บใน memory; production ใช้ IndexedDB/Firebase) ----
 const app = {
   progress: loadProgress(), // โหลดจาก localStorage — { matraId: stars }
-  settings: { showSpellHint: false, bgm: true, arEnabled: loadArEnabled(), androidConfirmButtons: false },
+  settings: { showSpellHint: false, bgm: true, arEnabled: loadArEnabled(), confirmButtonsOverride: false },
   totalScore: loadTotalScore(), // คะแนนสะสมข้ามทุกมาตรา — game.js อัปเดตสดระหว่างเล่น
   mahjongSeen: loadMahjongSeen(), // { matraId: true } — ด่านอุ่นเครื่องไพ่โชว์แค่ครั้งแรก
 };
@@ -128,10 +128,13 @@ const mahjongWarmup = createMahjongWarmup({
 // มือชี้ AR แทนกล้องจริง) ห้าม forward เข้า game เด็ดขาด เพราะ game.js's loop
 // หยุดอยู่ (ยังไม่ startMatra) particle จาก spawnDragTrail จะค้างไม่ถูกวาด/ล้าง
 // จนกว่าเกมหยิบฟองจะเริ่มจริงแล้วจู่ๆ ก็ระเบิดค้างเก่าออกมา
+// alt = ตำแหน่งปลายนิ้วโป้ง (จาก handpinch.js เท่านั้น, pointer.js ไม่ส่งมา) — เกมไพ่
+// ใช้นิ้วโป้งแทนนิ้วชี้ตอนลาก/วางไพ่ (ข้อ 2) ส่วนเกมหยิบฟองยังใช้นิ้วชี้เหมือนเดิมทุก
+// จุด ไม่กระทบพฤติกรรมเดิมที่ปรับจูนมาแล้ว
 const inputHandlers = {
-  onPick:      (x, y, slop) => (_screen === 'mahjong' ? mahjongWarmup.onPick(x, y, slop) : game.onPick(x, y, slop)),
-  onMove:      (x, y) => (_screen === 'mahjong' ? mahjongWarmup.onMove(x, y) : game.onMove(x, y)),
-  onRelease:   (x, y) => (_screen === 'mahjong' ? mahjongWarmup.onRelease(x, y) : game.onRelease(x, y)),
+  onPick:      (x, y, slop, alt) => (_screen === 'mahjong' ? mahjongWarmup.onPick(alt ? alt.x : x, alt ? alt.y : y, slop) : game.onPick(x, y, slop)),
+  onMove:      (x, y, alt) => (_screen === 'mahjong' ? mahjongWarmup.onMove(alt ? alt.x : x, alt ? alt.y : y) : game.onMove(x, y)),
+  onRelease:   (x, y, alt) => (_screen === 'mahjong' ? mahjongWarmup.onRelease(alt ? alt.x : x, alt ? alt.y : y) : game.onRelease(x, y)),
   onHandFrame: (frame) => (_screen === 'mahjong' ? mahjongWarmup.onHandFrame(frame) : game.onHandFrame(frame)),
 };
 createPointerInput(scene.fxCanvas, inputHandlers);
@@ -298,6 +301,7 @@ function playIntroVideo(src, onDone) {
 
   introVideo.src = src;
   introVideo.muted = false;
+  introVideo.volume = 0.6; // ลดเสียงวิดีโอนำเรื่องเหลือ 60%
   introVideo.onerror = finish;   // format/network error → ข้าม
   introVideo.onended = finish;
   skipVideoBtn.onclick = finish;
@@ -348,6 +352,13 @@ function enterBubbleGame(matra) {
 // Android detection — ซ่อน fallback buttons, mic อยู่ตรงกลาง
 if (/Android/i.test(navigator.userAgent)) {
   document.body.classList.add('is-android');
+}
+// PC (ไม่ใช่มือถือ/แท็บเล็ต) — ซ่อนปุ่ม "อ่านถูก/ลองใหม่" โดย default เหมือน Android
+// เพราะ Web Speech API บน Chrome/Edge desktop ทำงานได้แม่นยำพออยู่แล้ว ผู้ปกครองเปิด
+// กลับมาแสดงได้ที่หน้าผู้ปกครอง (ข้อ 1) — iOS ไม่เข้าเงื่อนไขนี้ เพราะ iOS Safari ไม่มี
+// Web Speech API เลย ต้องใช้ปุ่มเสมอ (ดู .force-confirm ใน styles.css)
+if (!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+  document.body.classList.add('is-desktop');
 }
 
 // register once ก่อน gesture แรก — ไม่ต้องการ user gesture สำหรับ visibilitychange

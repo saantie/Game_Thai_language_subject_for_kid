@@ -43,10 +43,10 @@ export function showAdultPage(app, screenEl) {
         <input type="checkbox" id="setBgm"> เปิดเสียงดนตรีพื้นหลัง
       </label>
       <label class="setting">
-        <input type="checkbox" id="setConfirmBtn"> แสดงปุ่ม "อ่านถูก/ลองใหม่" บน Android ด้วย
-        <p class="note">ปกติ Android ใช้ไมค์ฟังเสียงอย่างเดียว (แม่นยำพอ) เปิดข้อนี้ถ้าอยากให้
-           ผู้ใหญ่ช่วยกดยืนยันคำตอบแทนได้ — บน iOS มีปุ่มนี้ให้อยู่แล้วเสมอ เพราะ iOS Safari
-           ยังไม่รองรับการฟังเสียงพูดของเบราว์เซอร์</p>
+        <input type="checkbox" id="setConfirmBtn"> แสดงปุ่ม "อ่านถูก/ลองใหม่" บน Android/คอมพิวเตอร์ด้วย
+        <p class="note">ปกติ Android และคอมพิวเตอร์ (PC) ใช้ไมค์ฟังเสียงอย่างเดียว (แม่นยำพอ)
+           เปิดข้อนี้ถ้าอยากให้ผู้ใหญ่ช่วยกดยืนยันคำตอบแทนได้ — บน iOS มีปุ่มนี้ให้อยู่แล้วเสมอ
+           เพราะ iOS Safari ยังไม่รองรับการฟังเสียงพูดของเบราว์เซอร์</p>
       </label>
 
       <h3>หมายเหตุด้านเสียง</h3>
@@ -63,14 +63,14 @@ export function showAdultPage(app, screenEl) {
   const confirmBtn = screenEl.querySelector('#setConfirmBtn');
   hint.checked = app.settings.showSpellHint;
   bgm.checked = app.settings.bgm;
-  confirmBtn.checked = app.settings.androidConfirmButtons;
+  confirmBtn.checked = app.settings.confirmButtonsOverride;
   hint.onchange = () => (app.settings.showSpellHint = hint.checked);
   bgm.onchange = () => {
     app.settings.bgm = bgm.checked;
     audio.setBgmEnabled(bgm.checked);
   };
   confirmBtn.onchange = () => {
-    app.settings.androidConfirmButtons = confirmBtn.checked;
+    app.settings.confirmButtonsOverride = confirmBtn.checked;
     document.body.classList.toggle('force-confirm', confirmBtn.checked);
   };
   screenEl.querySelector('#adultBack').onclick = () => {

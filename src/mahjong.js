@@ -578,8 +578,13 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     if (!dom.mahjongHandCursor) return;
     if (!frame) { hideHandCursor(); _lastHandOpen = null; return; }
     dom.mahjongHandCursor.classList.remove('hidden');
-    dom.mahjongHandCursor.style.left = frame.x + 'px';
-    dom.mahjongHandCursor.style.top = frame.y + 'px';
+    // ใช้ตำแหน่งปลายนิ้วโป้ง (tx,ty) แทนนิ้วชี้ (ข้อ 2) — ให้ตรงกับตำแหน่งลาก/วางไพ่จริง
+    // ที่ onPick/onMove/onRelease ใช้ (ดู inputHandlers ใน main.js) ตกกรณี frame เก่า
+    // ที่ไม่มี tx/ty (ไม่ควรเกิดแล้ว แต่กันไว้) จึง fallback เป็น x/y
+    const hx = frame.tx != null ? frame.tx : frame.x;
+    const hy = frame.ty != null ? frame.ty : frame.y;
+    dom.mahjongHandCursor.style.left = hx + 'px';
+    dom.mahjongHandCursor.style.top = hy + 'px';
     if (frame.open !== _lastHandOpen) {
       _lastHandOpen = frame.open;
       // มือกาง (ยังไม่จีบ) = Hand click.png, มือจีบหยิบ = Hand click2.png
