@@ -72,18 +72,18 @@ export function createParticleSystem(fx) {
   // ต่างจาก spawnCelebrationBurst ตรงไม่พุ่งขึ้น ใช้แรงกระเด็นต่ำ + tumble
   // (rot/rotSpeed) ให้ดูเหมือนเศษแก้วแตกร่วงจริงๆ ไม่ใช่ดาวประทุ
   function spawnGlassShards(cx, cy) {
-    const COUNT = 18;
+    const COUNT = 14; // ชิ้นใหญ่ขึ้น ลดจำนวนลงเล็กน้อยกันดูรก (ดู r ด้านล่าง)
     for (let i = 0; i < COUNT; i++) {
       const p = acquire();
       const a = Math.random() * Math.PI * 2;
-      const sp = 0.8 + Math.random() * 2.6;
+      const sp = 1.5 + Math.random() * 3.5;
       p.x = cx + (Math.random() - 0.5) * 12;
       p.y = cy + (Math.random() - 0.5) * 12;
-      p.vx = Math.cos(a) * sp * 0.6;
-      p.vy = Math.sin(a) * sp * 0.35 - 1.2; // กระเด็นออกเบาๆ ก่อนโน้มถ่วงดึงลง
+      p.vx = Math.cos(a) * sp * 0.8;
+      p.vy = Math.sin(a) * sp * 0.5 - 1.6; // กระเด็นออกชัดเจนขึ้นก่อนโน้มถ่วงดึงลง
       p.life = 1;
-      p.decay = 0.012; // อยู่นานกว่าอนุภาคดาวปกติ ให้เห็นร่วงตกชัดเจน
-      p.r = 3 + Math.random() * 5;
+      p.decay = 0.011; // อยู่นานกว่าอนุภาคดาวปกติ ให้เห็นร่วงตกชัดเจน
+      p.r = 8 + Math.random() * 10; // ใหญ่ขึ้นชัดเจนจากเดิม (3-8px) ให้เห็นง่ายกว่าเดิม
       p.rot = Math.random() * Math.PI * 2;
       p.rotSpeed = (Math.random() - 0.5) * 0.35;
       p.shard = true;

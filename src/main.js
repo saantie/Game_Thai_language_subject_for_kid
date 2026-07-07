@@ -67,6 +67,7 @@ const dom = {
   mahjongShuffleBtn: $('#mahjongShuffleBtn'),
   mahjongBigWord: $('#mahjongBigWord'),
   mahjongHandCursor: $('#mahjongHandCursor'),
+  mahjongPointsPopup: $('#mahjongPointsPopup'),
   hudName: $('#hudName'),
   hudProgress: $('#hudProgress'),
   hudScore: $('#hudScore'),

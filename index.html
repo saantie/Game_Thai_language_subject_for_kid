@@ -72,6 +72,9 @@
 
     <!-- voicebar: ด่านอ่านออกเสียง -->
     <div id="voicebar" class="voicebar hidden">
+      <!-- ป้ายวิธีสะกดคำ — ย้ายมาไว้บนสุดของการ์ด กึ่งกลางจอเสมอ (สืบทอดการจัดกึ่งกลาง
+           จาก .voicebar เอง) -->
+      <div id="hint" class="vb-hint"></div>
       <div class="vb-prompt">&#x2728; อ่านคำนี้ให้แม่มดฟัง</div>
       <!-- word + orbiting stars -->
       <div class="vb-word-wrap">
@@ -86,7 +89,6 @@
         <div id="wordBig" class="vb-word">—</div>
       </div>
       <div id="vbPoints" class="vb-points" aria-hidden="true">+100</div>
-      <div id="hint" class="vb-hint"></div>
       <div class="vb-fallback">
         <button id="okBtn" class="btn-ok">&#x2705; อ่านถูก</button>
         <button id="retryBtn" class="btn-retry">&#x1F501; ลองใหม่</button>
@@ -170,6 +172,7 @@
       </div>
       <div id="mahjongBoard" class="mj-board"></div>
       <button id="mahjongShuffleBtn" class="btn-primary mj-shuffle-btn">&#x1F500; สลับป้าย</button>
+      <div id="mahjongPointsPopup" class="mj-points-popup" aria-hidden="true"></div>
       <img id="mahjongHandCursor" class="mj-hand-cursor hidden" src="public/assets/images/Hand%20click.png" alt="" aria-hidden="true" />
       <img class="mj-witch-img" src="public/assets/images/wish%20happy.gif" alt="" aria-hidden="true" />
     </div>
