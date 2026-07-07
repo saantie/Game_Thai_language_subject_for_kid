@@ -1354,7 +1354,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
    ปลายนิ้วชี้อยู่มุมบนซ้ายของภาพ จึงเลื่อนภาพให้ตรงจุดจีบจริง */
 .mj-hand-cursor {
   position: fixed;
-  width: clamp(48px, 12vw, 84px);
+  width: clamp(53px, 13.2vw, 92px); /* ใหญ่ขึ้น 10% จากเดิม (48/12vw/84) */
   height: auto;
   pointer-events: none;
   z-index: 3000;
