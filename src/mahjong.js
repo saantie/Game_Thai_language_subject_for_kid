@@ -393,7 +393,12 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     const [a, b] = matchQueue.shift();
     playMatchEffect(a, b, () => {
       matchProcessing = false;
-      if (matchedPairs === totalPairs) {
+      // เช็ค matchQueue ว่างด้วย ไม่ใช่แค่ matchedPairs===totalPairs — เพราะ
+      // processTrayMatches() นับ matchedPairs ของ "ทุกคู่ที่เจอ" ล่วงหน้าตอน
+      // สแกนทีเดียว (เผื่อ shuffle() บังเอิญทำให้ 2 คู่สุดท้ายจับคู่พร้อมกัน) ถ้าเช็ค
+      // แค่ matchedPairs ตอนคู่แรกในคิวเล่นจบ อาจนับว่า "จบด่านแล้ว" ทั้งที่ยังมีคู่
+      // สุดท้ายจริงๆ ค้างอยู่ในคิว ยังไม่ได้อ่านคำเลย
+      if (matchedPairs === totalPairs && matchQueue.length === 0) {
         onComplete(currentMatraId);
       } else {
         runMatchQueue();
