@@ -384,6 +384,7 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     tray.push(tile);
     tile.el.classList.remove('free');
     tile.el.classList.add('flying');
+    audio.sfx('pick'); // เสียงเดียวกับตอนหยิบฟองในเกมหลัก — ให้ feedback ตอนแตะ/ลอยขึ้นถาด
     positionTileAtTraySlot(tile, slotIndex);
     schedule(() => {
       tile.el.classList.remove('flying');
