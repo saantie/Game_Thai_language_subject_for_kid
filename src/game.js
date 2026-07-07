@@ -752,10 +752,22 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   }
 
   function onMove(x, y) {
-    if (held) {
-      held.x = x; held.y = y;
-      spawnDragTrail(x, y);
-      checkHeldCollisions();
+    if (!held) return;
+    held.x = x; held.y = y;
+    spawnDragTrail(x, y);
+    checkHeldCollisions();
+    // แม่เหล็กที่หม้อ (ข้อ 2) — ฟองเข้าใกล้ปากหม้อพอระหว่างลาก (ยังไม่ปล่อยมือ)
+    // ก็ผสมได้เลย ใช้เงื่อนไขเดียวกับ onRelease ทุกอย่างรวม "ลากจริง" (กัน phantom
+    // pinch จาก bug v119 — จีบ+ปล่อยจุดเดิมทันทีตอนฟองซ้อนโซนหม้ออยู่แล้วจะกลาย
+    // เป็นหย่อนเอง) แค่ทริกเกอร์ระหว่างทางแทนที่จะรอปล่อยมือ
+    const b = held;
+    const c = scene.cauldron;
+    const dragged = Math.hypot(x - (b.grabX ?? x), y - (b.grabY ?? y)) > Math.max(24, b.r * 0.6);
+    const overMouth = dragged && Math.hypot(x - c.cx, (y - c.cy) / 1.1) <= c.rx;
+    if (overMouth) {
+      b.held = false;
+      dropInCauldron(b);
+      if (held === b) held = null;
     }
   }
 

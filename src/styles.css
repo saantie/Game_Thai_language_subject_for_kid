@@ -128,11 +128,13 @@ html, body {
 @keyframes witchIdle  { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-8px) rotate(2deg); } }
 @keyframes witchCheer { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-22px) scale(1.15); } }
 
-/* [2.5] เจ้าหญิง — กลายร่างตามความคืบหน้า, ด้านขวาของหม้อ */
+/* [2.5] เจ้าหญิง (สลับร่างเป็นแม่มดใจร้ายได้ — ดู .evil-wish-mode) — กลายร่าง
+   ตามความคืบหน้า, ด้านขวาของหม้อ — ยกสูงขึ้นพ้นแนวปุ่มไอคอน AR มุมขวาล่าง
+   (bottom:16px + สูง 44px ของ .ar-quick-toggle) ไม่ให้ซ้อนทับกัน (ข้อ 5) */
 .princess-img {
   position: fixed;
   right: 3%;
-  bottom: 0;
+  bottom: max(68px, calc(env(safe-area-inset-bottom, 0px) + 68px));
   z-index: 1; /* ใต้หม้อวิเศษ (2) แต่เหนือภาพกล้อง AR — แม่มดใจร้าย/เจ้าหญิงอยู่หลังหม้อ */
   width: clamp(130px, 22vw, 240px);
   height: auto;
@@ -155,7 +157,7 @@ html, body {
 /* Evil wish — landscape/desktop: 1.2× แม่มดน้อย; portrait: 62vw ใหญ่กว่าชัดเจน */
 .princess-img.evil-wish-mode {
   right: 0;
-  bottom: 0;
+  bottom: max(68px, calc(env(safe-area-inset-bottom, 0px) + 68px)); /* พ้นแนว AR icon (ข้อ 5) */
   width: clamp(270px, 54vw, 540px);
   height: auto;
   filter: drop-shadow(0 8px 28px rgba(180, 0, 80, 0.65));
@@ -586,10 +588,16 @@ button { font-family: inherit; cursor: pointer; border: none; }
   right: max(16px, env(safe-area-inset-right, 16px));
   z-index: 40; /* เหนือ .screen (6) แต่ต่ำกว่า .total-badge (50) */
   border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
   transition: opacity 0.15s, transform 0.12s;
 }
 .ar-quick-toggle:active { transform: scale(0.9); }
-.ar-quick-toggle.ar-off { opacity: 0.45; }
+.ar-quick-toggle.ar-off { opacity: 0.85; }
+/* ไอคอนกล้องวีดีโอ + ขีดคาดวงกลมสีแดงตอนปิด AR (ข้อ 4) — .ar-off-mark ซ่อนไว้
+   ด้วย opacity ปกติ โผล่มาเฉพาะตอนปุ่มมี .ar-off (ปิดอยู่) */
+.ar-icon-svg { width: 26px; height: 26px; display: block; }
+.ar-off-mark { opacity: 0; transition: opacity 0.15s; }
+.ar-quick-toggle.ar-off .ar-off-mark { opacity: 1; }
 .btn-icon {
   background: rgba(255, 255, 255, 0.15); color: #fff; width: 44px; height: 44px;
   border-radius: 12px; font-size: 20px;
@@ -1306,6 +1314,8 @@ button { font-family: inherit; cursor: pointer; border: none; }
   background: #ffffff;
   border: 2px solid rgba(15, 15, 25, 0.85);
   border-radius: 10px;
+  /* font-size ตรงนี้แค่ fallback — ตัวจริงคำนวณสัดส่วนกับขนาดไพ่ใน JS
+     (computeTileSize/tileFontSize) แล้ว set ผ่าน el.style.fontSize เสมอ (ข้อ 6) */
   font: 800 22px 'Sarabun', 'Segoe UI', sans-serif;
   text-align: center;
   padding: 4px;
@@ -1324,27 +1334,20 @@ button { font-family: inherit; cursor: pointer; border: none; }
 .mj-tile.free {
   filter: none;
   opacity: 1;
-  cursor: grab;
+  cursor: pointer;
   box-shadow:
     3px 3px 0 rgba(10, 10, 20, 0.55),
     6px 7px 12px rgba(70, 110, 160, 0.45),
     0 7px 10px rgba(0, 0, 0, 0.28),
     0 0 14px rgba(255, 216, 77, 0.6);
 }
-/* กำลังถูกจับ/ลากอยู่ (ข้อ 4) — ตามนิ้ว/มือทันที ไม่มี easing หน่วง (ปิด transition
-   left/top ชั่วคราว) ลอยเหนือทุกอย่างเสมอ */
-.mj-tile.held {
-  transition: none !important;
-  z-index: 6000 !important;
-  cursor: grabbing;
-  filter: brightness(1.08);
-  box-shadow:
-    3px 3px 0 rgba(10, 10, 20, 0.55),
-    6px 7px 12px rgba(70, 110, 160, 0.45),
-    0 10px 16px rgba(0, 0, 0, 0.35),
-    0 0 20px rgba(255, 216, 77, 0.75);
-}
 .mj-tile.flying { z-index: 1500 !important; }
+/* ถอยห่าง+วิ่งเข้าชนกันก่อนระเบิด (ข้อ 3) — transition เร็วกว่าเดิม (ไม่ใช้
+   easing เด้งของ .mj-tile ปกติ) ให้ดูเหมือนพุ่งชนจริงๆ ไม่ใช่ลอยนุ่มนวลแบบเดิม */
+.mj-tile.pre-explode {
+  transition: left 0.16s ease-in, top 0.16s ease-in !important;
+  z-index: 2500 !important;
+}
 .mj-tile.matched { opacity: 0; transform: scale(1.3) rotate(6deg); pointer-events: none; }
 /* ไพ่ไหลมาเรียงตัวตอนเปิดหน้า (ข้อ 3) — เริ่มเล็ก+โปร่งใสตรงกึ่งกลางกระดาน แล้ว
    .entering ถูกลบออกทีละใบ (stagger ใน renderBoard) ให้ transition เดิมของ
@@ -1399,13 +1402,12 @@ button { font-family: inherit; cursor: pointer; border: none; }
 
 /* มือชี้ AR แทนกล้องจริง (ข้อ 10) — ตำแหน่งอัปเดตจาก onHandFrame ใน mahjong.js
    ปลายนิ้วชี้อยู่มุมบนซ้ายของภาพ จึงเลื่อนภาพให้ตรงจุดจีบจริง
-   z-index ต้องสูงกว่า .mj-tile.held (6000 !important) เสมอ (ข้อ 2) ไม่งั้นตอนจับไพ่
-   ภาพมือจะโดนไพ่ที่ถืออยู่บังซ้อนทับ */
+   z-index สูงกว่าไพ่ทุกใบ (ชั้นบนสุด ~400 + .flying 1500) เสมอ ไม่ให้ไพ่บังภาพมือ */
 .mj-hand-cursor {
   position: fixed;
   width: clamp(53px, 13.2vw, 92px); /* ใหญ่ขึ้น 10% จากเดิม (48/12vw/84) */
   height: auto;
   pointer-events: none;
-  z-index: 6500;
+  z-index: 2000;
   transform: translate(-15%, -15%);
 }

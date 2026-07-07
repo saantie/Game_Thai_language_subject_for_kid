@@ -68,11 +68,13 @@ export function createParticleSystem(fx) {
     }
   }
 
-  // เศษผลึกแก้วสีขาวระเบิดกระเด็นเบาๆ แล้วร่วงหล่นลง (ตอนจับคู่ไพ่สำเร็จ) —
-  // ต่างจาก spawnCelebrationBurst ตรงไม่พุ่งขึ้น ใช้แรงกระเด็นต่ำ + tumble
-  // (rot/rotSpeed) ให้ดูเหมือนเศษแก้วแตกร่วงจริงๆ ไม่ใช่ดาวประทุ
-  function spawnGlassShards(cx, cy) {
-    const COUNT = 14; // ชิ้นใหญ่ขึ้น ลดจำนวนลงเล็กน้อยกันดูรก (ดู r ด้านล่าง)
+  // เศษไพ่แตกกระเด็นเบาๆ แล้วร่วงหล่นลง (ตอนจับคู่ไพ่สำเร็จ) — ต่างจาก
+  // spawnCelebrationBurst ตรงไม่พุ่งขึ้น ใช้แรงกระเด็นต่ำ + tumble (rot/rotSpeed)
+  // ให้ดูเหมือนเศษวัตถุแตกร่วงจริงๆ ไม่ใช่ดาวประทุ — สีชิ้นส่วนใช้สีของไพ่คู่ที่
+  // จับได้เอง (ทึบแสงเต็มที่ ไม่ใช่สีขาวโปร่งแสงแบบแก้วเหมือนเดิม) ให้เห็นชัด
+  // และเข้ากับสีคำที่จับคู่ (ดู wordColorMap ใน mahjong.js)
+  function spawnGlassShards(cx, cy, color = '#ffffff') {
+    const COUNT = 28; // เพิ่มอีก 2 เท่าจากเดิม (14) ให้ระเบิดดูอลังการชัดเจนขึ้น
     for (let i = 0; i < COUNT; i++) {
       const p = acquire();
       const a = Math.random() * Math.PI * 2;
@@ -87,7 +89,7 @@ export function createParticleSystem(fx) {
       p.rot = Math.random() * Math.PI * 2;
       p.rotSpeed = (Math.random() - 0.5) * 0.35;
       p.shard = true;
-      p.fillStyle = 'rgba(255,255,255,0.95)';
+      p.fillStyle = color; // ทึบแสงเต็มที่ (ไม่ใช้ rgba โปร่งแสงแบบเดิม)
       add(p);
     }
   }

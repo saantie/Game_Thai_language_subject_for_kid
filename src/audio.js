@@ -30,7 +30,11 @@ const VOICE = {
   echo_prompt: ['ลองอ่านตามแม่มดอีกครั้งนะจ๊ะ', 'อ่านดัง ๆ ตามแม่มดได้เลยจ๊ะ'],
   echo_praise: ['เก่งมากเลยจ๊ะ ฝึกต่อไปจะอ่านได้คล่องขึ้นเลย', 'ดีมากค่ะ พยายามต่อไปจะเก่งขึ้นแน่นอนนะจ๊ะ', 'เยี่ยมเลยค่ะ ฝึกทุกวันจะอ่านออกเสียงได้ดีมากเลย'],
   mahjong_stuck: ['เต็มถาดแล้วจ้ะ ลองกดสลับป้ายดูนะ', 'ลองสลับป้ายดูสิจ๊ะ เดี๋ยวเจอคู่แน่นอน'], // ถาดจับคู่เต็มไม่มีคู่ — ด่านอุ่นเครื่องไพ่
+  // ไพ่อิโมจิจับคู่กัน (ข้อ 7) — ไม่มีคำจริงให้อ่าน ใช้คำชมสุ่มแทน (noRepeat กัน
+  // ชมประโยคเดิมซ้ำติดกัน) ตั้งใจให้ต่างจากพูล correct ของด่านอ่านออกเสียง
+  mahjong_emoji_match: ['เก่งมากเลยจ้า!', 'จับคู่เก่งจัง!', 'สุดยอดไปเลย!', 'ไชโย เจอคู่แล้ว!', 'ยอดเยี่ยมมากค่ะ!', 'มหัศจรรย์จริงๆ!'],
 };
+const _lastVoiceIdx = new Map(); // key -> index ล่าสุดที่สุ่มได้ (สำหรับ noRepeat)
 
 let thaiVoice = null;
 function pickThaiVoice() {
@@ -436,9 +440,16 @@ export const audio = {
 
   // ---------- Voice (MP3 ก่อน, fallback TTS) ----------
   // เล่นวลีแม่มด + คืน text ที่พูด (เพื่อโชว์เป็นคำพูด) ผ่าน onText
+  // noRepeat: true → กันสุ่มได้ index เดิมติดกัน 2 ครั้ง (ต่อ key) ใช้กับคำชมที่
+  // เล่นถี่ๆ อย่างไพ่อิโมจิจับคู่ ไม่ให้รู้สึกจำเจ (ข้อ 7)
   voice(key, opts = {}) {
     const pool = VOICE[key] || [''];
-    const idx  = (Math.random() * pool.length) | 0;
+    let idx = (Math.random() * pool.length) | 0;
+    if (opts.noRepeat && pool.length > 1) {
+      const last = _lastVoiceIdx.get(key);
+      while (idx === last) idx = (Math.random() * pool.length) | 0;
+    }
+    _lastVoiceIdx.set(key, idx);
     const text = pool[idx];
     opts.onText && opts.onText(text);
     const path = `public/assets/audio/voice/${key}_${idx + 1}.mp3`;

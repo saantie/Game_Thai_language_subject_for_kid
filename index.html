@@ -197,8 +197,17 @@
     <button id="resetProgressBtn" class="btn-reset-game hidden">↺ รีเซ็ตเกม</button>
 
     <!-- ปุ่มเปิด/ปิด AR แบบไอคอนกล้อง มุมขวาล่าง — โชว์เฉพาะหน้าเล่นเกมส์จริง
-         (เกมหยิบฟอง/มินิเกมไพ่, ข้อ 3) -->
-    <button id="arQuickToggleBtn" class="btn-icon ar-quick-toggle hidden" type="button" title="เปิด/ปิดกล้อง AR">📷</button>
+         (เกมหยิบฟอง/มินิเกมไพ่, ข้อ 3) ปิด AR = ขีดคาดวงกลมสีแดงทับไอคอน (ข้อ 4) -->
+    <button id="arQuickToggleBtn" class="btn-icon ar-quick-toggle hidden" type="button" title="เปิด/ปิดกล้อง AR">
+      <svg class="ar-icon-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="2" y="6" width="14" height="12" rx="2.5" fill="currentColor" />
+        <path d="M16 10.2 L22 7 V17 L16 13.8 Z" fill="currentColor" />
+        <g class="ar-off-mark">
+          <circle cx="12" cy="12" r="10.5" fill="none" stroke="#ff3b3b" stroke-width="2.4" />
+          <line x1="4.5" y1="4.5" x2="19.5" y2="19.5" stroke="#ff3b3b" stroke-width="2.4" stroke-linecap="round" />
+        </g>
+      </svg>
+    </button>
 
     <!-- แสงวิเศษลอยรอบขอบหน้าจอ — แสดงเฉพาะหน้าเลือกมาตรา -->
     <div id="magicOrbs" class="magic-orbs hidden" aria-hidden="true">

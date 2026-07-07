@@ -2,10 +2,10 @@
 // เล่นครั้งแรกที่ปลดล็อกแต่ละมาตราเท่านั้น (คุมจาก main.js ผ่าน app.mahjongSeen)
 //
 // กลไก: ไพ่วางซ้อนเป็นชั้นปิรามิด (พอร์ตอัลกอริทึมจาก prototypes/thai-mahjong-
-// prototype.html) — จับไพ่ที่ "หยิบได้" (ไม่ถูกทับ + เปิดข้างซ้ายหรือขวา) แล้วลาก
-// ไปวางในถาดพัก 5 ช่อง (มีแม่เหล็กดูดเข้าถาดตอนลากมาซ้อนทับ ไม่ต้องรอปล่อยมือ)
-// พอในถาดมีคำซ้ำกัน 2 ใบจึงจับคู่หายไป — ไม่มีเงื่อนไขแพ้/ตัวจับเวลา ถาดเต็มไม่มี
-// คู่ = ปุ่มสลับป้าย (สุ่มคำใหม่ทั่วถาด+กระดาน) เท่านั้น
+// prototype.html) — แตะ/จีบนิ้ว (AR) ที่ไพ่ที่ "หยิบได้" (ไม่ถูกทับ + เปิดข้างซ้าย
+// หรือขวา) แล้วลอยเข้าถาดพัก 5 ช่องเองทันที ไม่ต้องลากไปวางเอง พอในถาดมีคำซ้ำกัน
+// 2 ใบจึงจับคู่หายไป — ไม่มีเงื่อนไขแพ้/ตัวจับเวลา ถาดเต็มไม่มีคู่ = ปุ่มสลับป้าย
+// (สุ่มคำใหม่ทั่วถาด+กระดาน) เท่านั้น
 
 import { createParticleSystem } from './particles.js';
 import { saveTotalScore } from './storage.js';
@@ -13,6 +13,7 @@ import { saveTotalScore } from './storage.js';
 const TRAY_CAPACITY = 5;
 const FLY_MS = 350;
 const MATCH_REMOVE_MS = 320;
+const PRE_EXPLODE_STEP_MS = 160; // ถอยห่าง+วิ่งเข้าชนกันก่อนระเบิด (ข้อ 3) คนละช่วง
 const MATCH_POINTS = 20;
 const DEFAULT_TILE_W = 74;
 const TILE_ASPECT = 92 / 74; // สัดส่วนกว้าง:สูงของไพ่
@@ -26,6 +27,18 @@ const LAYER_OFFSET_Y_RATIO = 0.32;
 // ช่วยให้เด็กจับคู่ได้ง่ายขึ้นด้วยสายตา อิโมจิตกแต่งมุมไพ่ยังสุ่มอิสระไม่ผูกกับคำ
 const TILE_TEXT_COLORS = ['#c0264d', '#1f7a4d', '#1d5fb8', '#b8590a', '#7c3aed', '#0f8a8a'];
 const TILE_EMOJIS = ['✨', '⭐', '🌙', '🔮', '🌟', '🎶'];
+
+// อิโมจิแทนคำ (ข้อ 7) — ใช้ตอนมาตรานั้นมีคำจริงไม่พอ pairCount ที่ต้องการ (เช่น
+// กลุ่ม FILL_FINAL ตายตัวมาตราละ 5 คำ แต่ curriculumIndex สูงต้องการมากกว่านั้น
+// มาก) ต้องมีจำนวนมากพอไม่ให้ซ้ำกันเมื่อต้องพากันหลายคู่ในมาตราท้ายๆ (สูงสุด
+// pairCount ~31 ที่มาตราสุดท้าย) — ไพ่กลุ่มนี้จับคู่แล้วไม่อ่านคำ ได้ยินเสียงชม
+// สุ่มแทน (ดู flyToTray/playMatchEffect กับ audio.voice('mahjong_emoji_match'))
+const WORD_EMOJIS = [
+  '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯',
+  '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦄',
+  '🐴', '🦋', '🐢', '🐳', '🐬', '🐙', '🦀', '🐝', '🐞', '🐌',
+  '🍎', '🍌', '🍇', '🍉', '🍓', '🍕', '🍰', '🍦', '🍭', '⚽',
+];
 
 // ---------- pure logic (พอร์ตจาก prototype, export ไว้เทสต์แยกได้) ----------
 
@@ -48,7 +61,12 @@ export function buildPyramidLayout(pairCount, layerCount) {
   counts[0] += diff;
 
   const slots = [];
-  const layer0Rows = 2;
+  // จำนวนคู่มากขึ้นเรื่อยๆ ตามมาตรา (ข้อ 7, deriveDifficulty) แถวฐาน (layer0)
+  // ตายตัวที่ 2 แถวเดิมจะกว้างขึ้นเรื่อยๆ ไม่มีเพดาน (คอลัมน์ = counts[0]/2) จน
+  // ล้นความกว้างจอได้ — เพิ่มแถวฐานเองเมื่อคอลัมน์เกิน MAX_LAYER0_COLS แทน ให้
+  // ปิรามิดสูงขึ้นแทนที่จะกว้างขึ้นไม่จำกัด (คุมได้ด้วย overflow-y:auto อยู่แล้ว)
+  const MAX_LAYER0_COLS = 8;
+  const layer0Rows = Math.max(2, Math.ceil(counts[0] / MAX_LAYER0_COLS));
   const layer0Cols = Math.ceil(counts[0] / layer0Rows);
   const baseWidth = layer0Cols;
 
@@ -83,44 +101,23 @@ export function isTileFree(tile, allTiles) {
   return isOpenSide(-1) || isOpenSide(1);
 }
 
-// เช็คว่ามีคู่คำซ้ำ "มองเห็นได้" ตอนนี้ไหม (ไพ่หยิบได้บนกระดาน + ไพ่ในถาด) —
-// ไม่ใช่ตัวเช็ค deadlock จริง (ไม่จำลองว่าทั้งกระดานแก้ได้ไหม) ใช้จุดชนวน
-// ไฮไลต์ปุ่มสลับป้าย/เสียงให้กำลังใจเท่านั้น
-export function hasVisibleMatch(freeBoardTiles, trayTiles) {
-  const seen = new Set();
-  for (const t of [...freeBoardTiles, ...trayTiles]) {
-    if (seen.has(t.word)) return true;
-    seen.add(t.word);
-  }
-  return false;
-}
 
-// ความยากอิงลำดับ 26 มาตราปัจจุบัน (v143, ดูคอมเมนต์หัวไฟล์ data/matra.js) —
-// เพดาน pairCount/layerCount ตาม tier แล้ว cap ด้วยจำนวนคำจริงของมาตรานั้น
-// (กันมาตราคำน้อยเช่นสระแอะ/เอะ ได้บอร์ดใหญ่เกินจำนวนคำที่มี)
-// tier0 (kaka) ตั้งใจให้ 6 คู่ (12 ใบ) — kaka เป็นมาตราที่เล่นบ่อยสุด/มีคำให้เลือก
-// เยอะสุด (18 คำ) ส่วน tier1-5 ปรับให้ "pairs" (target สูงสุดที่อยากได้ ถ้าคำพอ)
-// กับ "layers" (ความลึกปิรามิด) เพิ่มขึ้นเป็นลำดับจริงตามมาตราที่ยากขึ้น (ข้อ 1) —
-// deriveDifficulty() clamp ด้วย matra.words.length เสมอ จึงไม่มีทางล้นคำจริงที่มี
-// [หมายเหตุข้อจำกัดข้อมูล: กลุ่ม FILL_FINAL (tier5, กง-กด) ทุกมาตรามีคำตายตัว
-//  มาตราละ 5 คำเท่านั้น — pairs จึงชนเพดาน 5 เสมอไม่ว่าจะตั้ง target สูงแค่ไหน
-//  (ต้องเพิ่มคำใน matra.js ก่อนถึงจะดันสูงกว่านี้ได้จริง) ความยากของ tier5 มาจาก
-//  การสะกด+ตัวลวงเป็นหลัก ไม่ใช่จำนวนไพ่ จึงชดเชยด้วย layers สูงสุด (4) แทน]
-const TIER_BOUNDARIES = [1, 10, 13, 16, 18]; // idx < boundary[i] → tier i, เกินหมด → tier สุดท้าย
-const TIERS = [
-  { pairs: 6, layers: 3 }, // tier0: kaka — เริ่มต้น 12 ใบ
-  { pairs: 6, layers: 3 }, // tier1: กลุ่ม1 สระเดี่ยวคู่สั้น-ยาว (คำจริง 3-8 คำ/มาตรา)
-  { pairs: 6, layers: 4 }, // tier2: กลุ่ม2 สระเดี่ยวไม่มีคู่ (คำน้อยกว่า 3-4 แต่ชั้นลึกขึ้น)
-  { pairs: 6, layers: 4 }, // tier3: กลุ่ม3 สระประสม
-  { pairs: 8, layers: 4 }, // tier4: กลุ่ม4 สระเกิน (คำเยอะพอ 8-10 คำ ดันจำนวนคู่ขึ้นจริง)
-  { pairs: 5, layers: 4 }, // tier5: มาตราตัวสะกดจริง (กด ยากสุด) — ชนเพดานข้อมูล 5 คำ/มาตรา
-];
+// ความยากอิงลำดับ 26 มาตราปัจจุบัน (v143, ดูคอมเมนต์หัวไฟล์ data/matra.js)
+// (ข้อ 7): "มาตราปัจจุบันต้องมีไพ่มากกว่ามาตราก่อนหน้าอย่างน้อย 2 ใบ (1 คู่)"
+// เป็นกฎตรงตัวทุกมาตรา ไม่ใช่แค่ระหว่างกลุ่ม — pairCount จึงผูกกับ curriculumIndex
+// ตรงๆ (BASE + index) ไม่ cap ด้วยจำนวนคำจริงอีกต่อไป (ต่างจากเดิม) เพราะมาตรา
+// คำน้อย (เช่นกลุ่ม FILL_FINAL ตายตัว 5 คำ/มาตรา) จะใช้ "ไพ่อิโมจิ" แทนคำที่ขาด
+// (ดู startMatra — จับคู่อิโมจิไม่อ่านคำ แต่ได้ยินเสียงชมแบบสุ่มแทน)
+// layerCount (ความลึกปิรามิด) ยังอิงกลุ่มมาตราเดิมเพื่อให้ความซับซ้อนของภาพเพิ่ม
+// เป็นช่วงๆ ตามธรรมชาติของมาตรา ไม่ใช่ทุกมาตราสูงขึ้นทันที
+const BASE_PAIRS = 6; // kaka (idx0) = 6 คู่ (12 ใบ) ตามที่เคยขอไว้ก่อนหน้า
+const LAYER_BOUNDARIES = [1, 10, 13, 16, 18]; // idx < boundary[i] → tier i, เกินหมด → tier สุดท้าย
+const LAYER_TIERS = [3, 3, 4, 4, 4, 4];
 export function deriveDifficulty(matra, curriculumIndex) {
-  let tier = TIER_BOUNDARIES.findIndex((b) => curriculumIndex < b);
-  if (tier === -1) tier = TIERS.length - 1;
-  const t = TIERS[tier];
-  const pairCount = Math.max(2, Math.min(t.pairs, matra.words.length));
-  return { pairCount, layerCount: t.layers };
+  const pairCount = BASE_PAIRS + curriculumIndex; // เพิ่มอย่างน้อย 1 คู่ (2 ใบ) ทุกมาตรา
+  let tier = LAYER_BOUNDARIES.findIndex((b) => curriculumIndex < b);
+  if (tier === -1) tier = LAYER_TIERS.length - 1;
+  return { pairCount, layerCount: LAYER_TIERS[tier] };
 }
 
 // ขนาดไพ่ตอบสนองตามหน้าจอ — คำนวณจากทั้งถาด (คงที่ 5 ช่องต้องพอดีความกว้างจอ
@@ -133,7 +130,10 @@ function computeTileSize(maxBoardCols) {
   let w = Math.floor(usableW / colsNeeded);
   w = Math.max(34, Math.min(DEFAULT_TILE_W, w));
   const h = Math.round(w * TILE_ASPECT);
-  return { w, h };
+  // font-size ผูกกับ w แบบสัดส่วน (ไม่ใช่ค่าคงที่) กันคำล้นไพ่ใบเล็กตอนมีไพ่เยอะ —
+  // 0.6 = ใหญ่ขึ้น 2 เท่าจากอัตราส่วนเดิม (22px ที่ DEFAULT_TILE_W=74px ≈ 0.297) (ข้อ 6)
+  const fontSize = Math.max(14, Math.round(w * 0.6));
+  return { w, h, fontSize };
 }
 
 function shuffleArray(arr) {
@@ -152,7 +152,6 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
 
   let tiles = [];
   let tray = [];
-  let held = null;           // ไพ่ที่กำลังถูกจับ/ลากอยู่ (null = ไม่มี) — ดู grabTile/onMove/onRelease
   let matchQueue = [];       // คู่ที่จับได้แล้ว รอเล่นเอฟเฟกต์/เสียงทีละคู่ (กันเสียงทับกันตอน shuffle เจอหลายคู่พร้อมกัน)
   let matchProcessing = false;
   let matchedPairs = 0;
@@ -163,10 +162,11 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
   let rafId = 0;
   let tileW = DEFAULT_TILE_W;
   let tileH = Math.round(DEFAULT_TILE_W * TILE_ASPECT);
+  let tileFontSize = Math.round(DEFAULT_TILE_W * 0.6);
   let maxLayerInBoard = 0; // ใช้คำนวณ baseShiftX กันไพ่ชั้นบนหลุดพิกัดติดลบ (ดู positionTileOnBoard)
   let wordColorMap = new Map(); // word.display -> สี — คู่คำเดียวกันได้สีเดียวกันเสมอ (ข้อ 2)
 
-  // ตัว setTimeout ของ dropIntoTray/returnToBoard/playMatchEffect ต้องถูกยกเลิกใน stop() —
+  // ตัว setTimeout ของ flyToTray/playMatchEffect ต้องถูกยกเลิกใน stop() —
   // ถ้าไม่ทำ แล้วผู้เล่นกด back ระหว่างไพ่กำลังลอย/กำลังจะจับคู่ callback ที่ค้าง
   // จะยิงทีหลังตอน matchedPairs/totalPairs ถูก reset เป็น 0 พร้อมกันแล้ว ทำให้
   // 0===0 เข้าเงื่อนไข "จบด่าน" เรียก onComplete() ซ้ำผิดจังหวะทั้งที่ออกไปแล้ว
@@ -261,6 +261,7 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
       el.style.color = t.color;
       el.style.width = tileW + 'px';
       el.style.height = tileH + 'px';
+      el.style.fontSize = tileFontSize + 'px';
       el.style.left = (centerX - tileW / 2) + 'px';
       el.style.top = (centerY - tileH / 2) + 'px';
 
@@ -297,9 +298,15 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     updateStuckIndicator();
   }
 
+  // ถาดเต็ม (5/5) = ติดขัดเสมอ ไม่ต้องเช็คว่า "มีคู่มองเห็นได้บนกระดาน" เพิ่ม —
+  // เพราะไพ่ในถาดไม่มีทางซ้ำกันเองอยู่แล้ว (processTrayMatches เคลียร์คู่ซ้ำทันที
+  // ทุกครั้งที่มีไพ่เข้าถาดใหม่) และ onPick ก็ปฏิเสธไพ่ใหม่ทันทีเมื่อถาดเต็ม
+  // (ดู "if (tray.length >= TRAY_CAPACITY) shakeTray()") ต่อให้บนกระดานมีคู่ซ้ำ
+  // มองเห็นอยู่ก็หยิบเข้าถาดไม่ได้จริงอยู่ดี — ทางออกเดียวคือกดสลับป้ายเสมอ (เคย
+  // เป็นบั๊กจริง: บอร์ดใหญ่/มีอิโมจิเยอะขึ้น (ข้อ 7) ทำให้เจอเคสนี้บ่อยขึ้นมาก
+  // จนเกมดูเหมือนค้าง เพราะปุ่มสลับป้ายไม่กระพริบเตือนทั้งที่ติดขัดจริง)
   function updateStuckIndicator() {
-    const freeBoard = tiles.filter((t) => isTileFree(t, tiles));
-    const stuck = tray.length >= TRAY_CAPACITY && !hasVisibleMatch(freeBoard, tray);
+    const stuck = tray.length >= TRAY_CAPACITY;
     if (dom.mahjongShuffleBtn) dom.mahjongShuffleBtn.classList.toggle('pulse', stuck);
     if (stuck && !_stuckVoicePlayed) {
       _stuckVoicePlayed = true;
@@ -365,38 +372,81 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
   // โชว์คำตัวใหญ่ตรงถาด แล้วอ่านสะกดคำทีละพยางค์ (ใช้ word.spell เดิมจาก matra.js
   // ตัวเดียวกับที่เกมหยิบฟองใช้เฉลยสะกดคำ) — เรียก done() หลังอ่านจบ
   function showBigWord(wordObj, done) {
-    if (!dom.mahjongBigWord || !wordObj.spell) { done(); return; }
+    if (!dom.mahjongBigWord) { done(); return; }
     dom.mahjongBigWord.textContent = wordObj.display;
     dom.mahjongBigWord.classList.remove('show');
     void dom.mahjongBigWord.offsetWidth;
     dom.mahjongBigWord.classList.add('show');
+    if (wordObj.isEmoji) {
+      // ไพ่อิโมจิ (ข้อ 7) — ไม่มีคำ/สะกดจริงให้อ่าน โชว์ตัวใหญ่แล้วชมด้วยเสียง
+      // สุ่มแทน (ไม่ซ้ำคำชมเดิมติดกัน — ดู noRepeat ใน audio.voice) รอเสียงชมจบ
+      // ก่อนไปต่อ เหมือนคำจริงที่รอ playSpellReveal จบ
+      audio.voice('mahjong_emoji_match', {
+        noRepeat: true,
+        onEnd: () => { dom.mahjongBigWord.classList.remove('show'); done(); },
+      });
+      return;
+    }
     audio.playSpellReveal({ spell: wordObj.spell }, () => {
       dom.mahjongBigWord.classList.remove('show');
       done();
     });
   }
 
-  // เอฟเฟกต์ตอนจับคู่สำเร็จ: ผลึกแก้วสีขาวระเบิดร่วงหล่น + เสียงแตก แล้วค่อยโชว์
-  // คำตัวใหญ่ + อ่านสะกดคำ — เล่นทีละคู่ (matchQueue) กันเสียง/คำตัวใหญ่ทับกัน
-  // ตอน shuffle บังเอิญเจอหลายคู่พร้อมกัน
+  // เอฟเฟกต์ตอนจับคู่สำเร็จ (ข้อ 3): ไพ่ทั้งคู่ถอยห่างจากตำแหน่งเดิมนิดหน่อยก่อน
+  // แล้ววิ่งเข้าหากันไปชนกึ่งกลาง จึงระเบิดเป็นเศษชิ้นส่วนสีเดียวกับไพ่ + เสียงแตก
+  // แล้วค่อยโชว์คำตัวใหญ่ + อ่านสะกดคำ — เล่นทีละคู่ (matchQueue) กันเสียง/คำตัวใหญ่
+  // ทับกันตอน shuffle บังเอิญเจอหลายคู่พร้อมกัน
   function playMatchEffect(a, b, done) {
-    a.el.classList.add('matched');
-    b.el.classList.add('matched');
+    a.el.classList.add('pre-explode');
+    b.el.classList.add('pre-explode');
 
+    const boardRect = dom.mahjongBoard.getBoundingClientRect();
     const ra = a.el.getBoundingClientRect();
     const rb = b.el.getBoundingClientRect();
-    const cx = (ra.left + ra.right + rb.left + rb.right) / 4;
-    const cy = (ra.top + ra.bottom + rb.top + rb.bottom) / 4;
-    particleFx.spawnGlassShards(cx, cy);
-    ensureLoopRunning();
-    audio.playGlassCrush();
-    addScore(MATCH_POINTS);
+    const acx = (ra.left + ra.right) / 2, acy = (ra.top + ra.bottom) / 2;
+    const bcx = (rb.left + rb.right) / 2, bcy = (rb.top + rb.bottom) / 2;
+    const midX = (acx + bcx) / 2, midY = (acy + bcy) / 2;
+    const dx = bcx - acx, dy = bcy - acy;
+    const dist = Math.hypot(dx, dy) || 1;
+    const ux = dx / dist, uy = dy / dist; // ทิศจาก a ไป b
+    const recoilPx = tileW * 0.4;
+
+    const aLeft0 = ra.left - boardRect.left, aTop0 = ra.top - boardRect.top;
+    const bLeft0 = rb.left - boardRect.left, bTop0 = rb.top - boardRect.top;
+
+    // ขั้น 1: ถอยห่างออกจากกันนิดหน่อยจากตำแหน่งเดิม
+    a.el.style.left = (aLeft0 - ux * recoilPx) + 'px';
+    a.el.style.top = (aTop0 - uy * recoilPx) + 'px';
+    b.el.style.left = (bLeft0 + ux * recoilPx) + 'px';
+    b.el.style.top = (bTop0 + uy * recoilPx) + 'px';
 
     schedule(() => {
-      a.el.remove();
-      b.el.remove();
-      showBigWord(a.wordObj, done);
-    }, MATCH_REMOVE_MS);
+      // ขั้น 2: วิ่งเข้าหากันไปชนกึ่งกลางจุดเดิม
+      const midLeft = midX - boardRect.left - tileW / 2;
+      const midTop = midY - boardRect.top - tileH / 2;
+      a.el.style.left = midLeft + 'px';
+      a.el.style.top = midTop + 'px';
+      b.el.style.left = midLeft + 'px';
+      b.el.style.top = midTop + 'px';
+
+      schedule(() => {
+        // ขั้น 3: ชนกัน → ระเบิด
+        a.el.classList.add('matched');
+        b.el.classList.add('matched');
+        particleFx.spawnGlassShards(midX, midY, a.color);
+        ensureLoopRunning();
+        audio.playGlassCrush();
+        addScore(MATCH_POINTS);
+
+        schedule(() => {
+          a.el.remove();
+          b.el.remove();
+          reflowTraySlots(); // เลื่อนไพ่ที่เหลือในถาดมาชิดซ้าย — รอให้ระเบิดเสร็จก่อน (ข้อ 3)
+          showBigWord(a.wordObj, done);
+        }, MATCH_REMOVE_MS);
+      }, PRE_EXPLODE_STEP_MS);
+    }, PRE_EXPLODE_STEP_MS);
   }
 
   function runMatchQueue() {
@@ -427,67 +477,28 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
       matchedPairs++;
       matchQueue.push(pair);
     }
-    reflowTraySlots();
+    // reflowTraySlots() ย้ายไปเรียกใน playMatchEffect หลังระเบิดเสร็จแทน (ข้อ 3) —
+    // ไม่งั้นไพ่ที่เหลือจะเลื่อนมาชิดซ้ายทันทีตั้งแต่ก่อนเอฟเฟกต์ระเบิดเริ่มเล่นด้วยซ้ำ
     updateStuckIndicator();
     runMatchQueue();
   }
 
-  // ---------- pick / drag / magnet-drop (ข้อ 4) ----------
-  // มือ (AR) หรือนิ้ว (touch/mouse) หยิบไพ่ยกไปวางในถาดจริง — ไม่ใช่แตะแล้วบิน
-  // เข้าถาดทันทีเหมือนเดิม มีแม่เหล็ก: พอลากไพ่มาซ้อนทับถาด (แม้ยังไม่ปล่อยมือ)
-  // ก็ดูดเข้าถาดให้เองทันที ปล่อยนอกถาด = ไพ่ลอยกลับที่เดิมบนกระดาน
-  //
-  // heldBoardRect/heldTrayRect: cache ตำแหน่งกล่องไว้ตอนเริ่มจับ (grabTile) แทน
-  // เรียก getBoundingClientRect() ทุกครั้งใน onMove — onMove ยิงถี่มากระหว่างลาก
-  // (ทุก touchmove/mousemove ไม่ใช่แค่ทุกเฟรม) การอ่าน rect สลับกับเขียน
-  // style.left/top ของไพ่ที่ถืออยู่ในฟังก์ชันเดียวกันจะบังคับ browser ทำ
-  // synchronous layout reflow ทุกครั้ง (layout thrashing) กระดาน/ถาดไม่ขยับระหว่าง
-  // ลากอยู่แล้วในทางปฏิบัติ จึง cache ไว้ครั้งเดียวปลอดภัย
-  let heldBoardRect = null;
-  let heldTrayRect = null;
-
-  function boardRelativePoint(x, y) {
-    const r = heldBoardRect || dom.mahjongBoard.getBoundingClientRect();
-    return { x: x - r.left, y: y - r.top };
-  }
-
-  function isOverTray(x, y) {
-    const r = heldTrayRect;
-    if (!r) return false;
-    const pad = 24; // รัศมีแม่เหล็ก — ใกล้ถาดพอประมาณก็ดูดเข้าได้ ไม่ต้องซ้อนเป๊ะ
-    return x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
-  }
-
-  function grabTile(tile) {
-    held = tile;
-    heldBoardRect = dom.mahjongBoard.getBoundingClientRect();
-    heldTrayRect = dom.mahjongTray ? dom.mahjongTray.getBoundingClientRect() : null;
-    tile.el.classList.remove('free');
-    tile.el.classList.add('held');
-    audio.sfx('pick'); // เสียงเดียวกับตอนหยิบฟองในเกมหลัก — ให้ feedback ตอนเริ่มจับไพ่
-  }
-
-  function dropIntoTray(tile) {
+  // ---------- pick → บินเข้าถาดทันที (ข้อ 1) ----------
+  // แตะ/คลิก หรือจีบนิ้ว (AR) ที่ไพ่ที่หยิบได้ → ลอยเข้าถาดเองทันที ไม่ต้องลาก/ยก
+  // ไปวางเองแบบที่เคยทำ (v148-v152) — พบว่าแตะตรงไปตรงมากว่าสำหรับเด็ก ย้าย
+  // กลไกแม่เหล็ก-ระหว่างลากไปใช้กับเกมหยิบฟองแทน (ดู game.js, ข้อ 2)
+  function flyToTray(tile) {
     tile.state = 'tray';
     const slotIndex = tray.length;
     tray.push(tile);
-    tile.el.classList.remove('held');
+    tile.el.classList.remove('free');
     tile.el.classList.add('flying');
+    audio.sfx('pick');
     positionTileAtTraySlot(tile, slotIndex);
     schedule(() => {
       tile.el.classList.remove('flying');
       refreshFreeStates(); // ไพ่ข้างใต้/ข้างๆ อาจหยิบได้แล้วตอนนี้
       processTrayMatches();
-    }, FLY_MS);
-  }
-
-  function returnToBoard(tile) {
-    tile.el.classList.remove('held');
-    tile.el.classList.add('flying'); // reuse transition/จังหวะเดิมให้ลอยกลับนุ่มนวล
-    positionTileOnBoard(tile);
-    schedule(() => {
-      tile.el.classList.remove('flying');
-      refreshFreeStates();
     }, FLY_MS);
   }
 
@@ -499,7 +510,6 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     const { pairCount, layerCount } = deriveDifficulty(matra, curriculumIndex);
     totalPairs = pairCount;
     matchedPairs = 0;
-    held = null;
     tray = [];
     matchQueue = [];
     matchProcessing = false;
@@ -514,8 +524,18 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     const size = computeTileSize(maxBoardCols);
     tileW = size.w;
     tileH = size.h;
+    tileFontSize = size.fontSize;
 
-    const wordPool = shuffleArray(matra.words).slice(0, pairCount);
+    // คำจริงไม่พอ pairCount ที่มาตรานี้ต้องการ (ข้อ 7) → เติมด้วยไพ่อิโมจิแทน
+    // (isEmoji:true, ไม่มี .spell) จับคู่กันแล้วไม่อ่านคำ/สะกด แต่ได้ยินเสียงชม
+    // แบบสุ่มแทน (ดู playMatchEffect/showBigWord)
+    const realWords = shuffleArray(matra.words);
+    const realCount = Math.min(pairCount, realWords.length);
+    const emojiCount = pairCount - realCount;
+    const emojiWords = shuffleArray(WORD_EMOJIS)
+      .slice(0, emojiCount)
+      .map((e) => ({ display: e, isEmoji: true }));
+    const wordPool = [...realWords.slice(0, realCount), ...emojiWords];
     // คำเดียวกัน = สีเดียวกันเสมอ (ข้อ 2) — จับคู่คำ<->สีไว้ล่วงหน้าตามลำดับคำ
     // ในกองนี้ (ไม่ใช่ตามลำดับไพ่บนกระดาน) กันสีซ้ำโดยไม่ได้ตั้งใจระหว่างคำต่างกัน
     wordColorMap = new Map();
@@ -537,50 +557,25 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
   }
 
   function onPick(x, y) {
-    // กันหยิบซ้อน: touch กับ AR pinch เปิดพร้อมกันได้ (ทั้งคู่เรียก onPick) —
-    // ถ้านิ้วจริงกับจุดที่กล้องตรวจจับไม่ตรงเป๊ะกัน อาจยิง onPick 2 ครั้งคนละ
-    // พิกัดจากท่าเดียว — เช็ค held ตัวเดียวพอ (คุมทั้งสองโหมด ครอบคลุมกว่าเช็ค
-    // .flying แบบเดิม เพราะกันตั้งแต่จังหวะ "เริ่มจับ" ไม่ใช่แค่ตอน "กำลังบิน")
-    if (!tiles.length || held) return;
+    // กันหยิบซ้อน: touch กับ AR pinch เปิดพร้อมกันได้ (ทั้งคู่เรียก onPick) — ถ้า
+    // นิ้วจริงกับจุดที่กล้องตรวจจับไม่ตรงเป๊ะกัน อาจยิง onPick 2 ครั้งคนละพิกัด
+    // จากท่าเดียว จนได้ไพ่คนละใบ (บั๊กที่เจอจริง v146) เช็คว่ามีไพ่กำลังบินอยู่ไหม
+    // (ช่วงสั้นๆ FLY_MS) กันไว้ — ไพ่ที่บินไปแล้วเปลี่ยน state ทันทีแบบ sync อยู่แล้ว
+    // จึงกันการหยิบซ้ำใบเดิมได้ในตัว ไม่ต้องมี flag แยกอีก
+    if (!tiles.length || tiles.some((t) => t.el.classList.contains('flying'))) return;
     const el = document.elementFromPoint(x, y);
     const tileEl = el && el.closest && el.closest('.mj-tile');
     if (!tileEl) return;
     const tile = tiles.find((t) => t.el === tileEl);
     if (!tile || tile.state !== 'board' || !isTileFree(tile, tiles)) return;
-    grabTile(tile);
+    if (tray.length >= TRAY_CAPACITY) { shakeTray(); return; }
+    flyToTray(tile);
   }
 
-  function onMove(x, y) {
-    if (!held) return;
-    const rel = boardRelativePoint(x, y);
-    held.el.style.left = (rel.x - tileW / 2) + 'px';
-    held.el.style.top = (rel.y - tileH / 2) + 'px';
-    if (isOverTray(x, y)) {
-      if (tray.length < TRAY_CAPACITY) {
-        const tile = held;
-        held = null;
-        heldBoardRect = null;
-        heldTrayRect = null;
-        dropIntoTray(tile); // แม่เหล็ก — ซ้อนถาดปุ๊บดูดเข้าเลย ไม่ต้องรอปล่อยมือ (ข้อ 4)
-      } else {
-        shakeTray();
-      }
-    }
-  }
-
-  function onRelease(x, y) {
-    if (!held) return;
-    const tile = held;
-    held = null;
-    const wasOverTray = isOverTray(x, y);
-    heldBoardRect = null;
-    heldTrayRect = null;
-    if (wasOverTray && tray.length < TRAY_CAPACITY) {
-      dropIntoTray(tile);
-    } else {
-      returnToBoard(tile);
-    }
-  }
+  // ไม่ใช้ลากอีกต่อไป (ข้อ 1) แต่ยังต้องมี no-op ไว้ในหน้า public API เพราะ
+  // pointer.js/handpinch.js เรียกทั้ง 3 ตัวเสมอโดยไม่รู้ว่าปลายทางใช้หรือไม่
+  function onMove() {}
+  function onRelease() {}
 
   // ---------- AR hand cursor (ข้อ 10) — ไม่ซ้อนภาพกล้องจริง ใช้ภาพมือแทน
   // ตำแหน่งที่ mediapipe ติดตามได้ — pointer.js ไม่เรียก onHandFrame เลย (เฉพาะ
@@ -626,8 +621,12 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     const size = computeTileSize(maxBoardCols);
     tileW = size.w;
     tileH = size.h;
+    tileFontSize = size.fontSize;
     sizeTraySlots();
-    tiles.forEach((t) => { if (t.state === 'board') positionTileOnBoard(t); });
+    tiles.forEach((t) => {
+      if (t.el) t.el.style.fontSize = tileFontSize + 'px';
+      if (t.state === 'board') positionTileOnBoard(t);
+    });
     sizeBoardContainer();
     tray.forEach((t, i) => positionTileAtTraySlot(t, i));
   }
@@ -644,9 +643,6 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     if (dom.mahjongPointsPopup) dom.mahjongPointsPopup.classList.remove('show');
     hideHandCursor();
     _lastHandOpen = null;
-    held = null; // ทิ้งไพ่ที่กำลังลากค้างอยู่ (ถ้ามี) ไปพร้อมกัน — DOM ถูกล้างไปแล้วข้างบน
-    heldBoardRect = null;
-    heldTrayRect = null;
     tiles = [];
     tray = [];
     matchQueue = [];
