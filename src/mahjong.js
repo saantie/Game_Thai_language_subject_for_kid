@@ -51,7 +51,7 @@ const WORD_EMOJIS = [
 // ทำให้ layer0Cols=0 แล้ว rows ของชั้นถัดไปคำนวณ sqrt(count/0)=Infinity จน loop
 // วางไพ่ค้างไม่รู้จบ (เจอจริงตอนปรับตาราง TIERS ให้ยากขึ้น, ข้อ 1) จึงต้องลด
 // layerCount ลงเองถ้า total ไม่พอ ก่อนคำนวณสัดส่วนต่อชั้น
-export function buildPyramidLayout(pairCount, layerCount) {
+export function buildPyramidLayout(pairCount, layerCount, maxLayer0Cols = 8) {
   const total = pairCount * 2;
   const safeLayerCount = Math.max(1, Math.min(layerCount, Math.floor(total / 2)));
   const weights = [0.45, 0.3, 0.17, 0.08].slice(0, safeLayerCount);
@@ -63,10 +63,11 @@ export function buildPyramidLayout(pairCount, layerCount) {
   const slots = [];
   // จำนวนคู่มากขึ้นเรื่อยๆ ตามมาตรา (ข้อ 7, deriveDifficulty) แถวฐาน (layer0)
   // ตายตัวที่ 2 แถวเดิมจะกว้างขึ้นเรื่อยๆ ไม่มีเพดาน (คอลัมน์ = counts[0]/2) จน
-  // ล้นความกว้างจอได้ — เพิ่มแถวฐานเองเมื่อคอลัมน์เกิน MAX_LAYER0_COLS แทน ให้
+  // ล้นความกว้างจอได้ — เพิ่มแถวฐานเองเมื่อคอลัมน์เกิน maxLayer0Cols แทน ให้
   // ปิรามิดสูงขึ้นแทนที่จะกว้างขึ้นไม่จำกัด (คุมได้ด้วย overflow-y:auto อยู่แล้ว)
-  const MAX_LAYER0_COLS = 8;
-  const layer0Rows = Math.max(2, Math.ceil(counts[0] / MAX_LAYER0_COLS));
+  // maxLayer0Cols คำนวณจาก "ขนาดไพ่จริง" ที่ไม่ย่อแล้ว (ข้อ 5, ดู computeMaxBoardCols
+  // ใน factory) ไม่ใช่ค่าคงที่ 8 แบบเดิมอีกต่อไป — ผู้เรียกส่งมาตามหน้าจอจริง
+  const layer0Rows = Math.max(2, Math.ceil(counts[0] / maxLayer0Cols));
   const layer0Cols = Math.ceil(counts[0] / layer0Rows);
   const baseWidth = layer0Cols;
 
@@ -108,32 +109,38 @@ export function isTileFree(tile, allTiles) {
 // ตรงๆ (BASE + index) ไม่ cap ด้วยจำนวนคำจริงอีกต่อไป (ต่างจากเดิม) เพราะมาตรา
 // คำน้อย (เช่นกลุ่ม FILL_FINAL ตายตัว 5 คำ/มาตรา) จะใช้ "ไพ่อิโมจิ" แทนคำที่ขาด
 // (ดู startMatra — จับคู่อิโมจิไม่อ่านคำ แต่ได้ยินเสียงชมแบบสุ่มแทน)
-// layerCount (ความลึกปิรามิด) ยังอิงกลุ่มมาตราเดิมเพื่อให้ความซับซ้อนของภาพเพิ่ม
-// เป็นช่วงๆ ตามธรรมชาติของมาตรา ไม่ใช่ทุกมาตราสูงขึ้นทันที
+// layerCount ซ้อนได้สูงสุด 3 ชั้นเสมอ (ข้อ 5 ของรอบนี้ — เดิมมาตราหลังๆ ใช้ 4
+// ชั้น) เพราะไพ่ไม่ย่อขนาดอีกต่อไปแล้ว (ดู computeTileSize) ปิรามิดที่มีไพ่เยอะ
+// จึงกว้าง/สูงขึ้นด้วยจำนวนแถวแทน ไม่จำเป็นต้องเพิ่มชั้นอีก
 const BASE_PAIRS = 6; // kaka (idx0) = 6 คู่ (12 ใบ) ตามที่เคยขอไว้ก่อนหน้า
-const LAYER_BOUNDARIES = [1, 10, 13, 16, 18]; // idx < boundary[i] → tier i, เกินหมด → tier สุดท้าย
-const LAYER_TIERS = [3, 3, 4, 4, 4, 4];
+const MAX_LAYERS = 3;
 export function deriveDifficulty(matra, curriculumIndex) {
   const pairCount = BASE_PAIRS + curriculumIndex; // เพิ่มอย่างน้อย 1 คู่ (2 ใบ) ทุกมาตรา
-  let tier = LAYER_BOUNDARIES.findIndex((b) => curriculumIndex < b);
-  if (tier === -1) tier = LAYER_TIERS.length - 1;
-  return { pairCount, layerCount: LAYER_TIERS[tier] };
+  return { pairCount, layerCount: MAX_LAYERS };
 }
 
-// ขนาดไพ่ตอบสนองตามหน้าจอ — คำนวณจากทั้งถาด (คงที่ 5 ช่องต้องพอดีความกว้างจอ
-// เสมอ ชิดกันไม่มีช่องว่าง) และกระดาน (คอลัมน์กว้างสุดที่ layout จริงใช้ + กันชน
-// สำหรับการเยื้องต่อชั้น) เอาค่าที่เล็กกว่าเพื่อให้ไม่ล้นจอทั้งสองส่วน
-function computeTileSize(maxBoardCols) {
+// ขนาดไพ่คงที่ตามความกว้างจอ (ถาด 5 ช่องเสมอ) เท่านั้น — ไม่ย่อลงตามจำนวนไพ่/
+// คอลัมน์ของกระดานอีกต่อไป (ข้อ 5) มาตราที่มีไพ่เยอะจะได้ปิรามิดที่ "กว้าง/สูง
+// ขึ้น" (คอลัมน์/แถวเพิ่ม) แทนที่ไพ่จะเล็กลงเรื่อยๆ จนอ่านยาก
+function computeTileSize() {
   const vw = typeof window !== 'undefined' ? window.innerWidth : 800;
   const usableW = vw * 0.94;
-  const colsNeeded = Math.max(TRAY_CAPACITY, maxBoardCols + 1);
-  let w = Math.floor(usableW / colsNeeded);
+  let w = Math.floor(usableW / TRAY_CAPACITY);
   w = Math.max(34, Math.min(DEFAULT_TILE_W, w));
   const h = Math.round(w * TILE_ASPECT);
-  // font-size ผูกกับ w แบบสัดส่วน (ไม่ใช่ค่าคงที่) กันคำล้นไพ่ใบเล็กตอนมีไพ่เยอะ —
-  // 0.6 = ใหญ่ขึ้น 2 เท่าจากอัตราส่วนเดิม (22px ที่ DEFAULT_TILE_W=74px ≈ 0.297) (ข้อ 6)
+  // font-size ผูกกับ w แบบสัดส่วน (ไม่ใช่ค่าคงที่) — 0.6 = ใหญ่ขึ้น 2 เท่าจาก
+  // อัตราส่วนเดิม (22px ที่ DEFAULT_TILE_W=74px ≈ 0.297) (ข้อ 6 รอบก่อน)
   const fontSize = Math.max(14, Math.round(w * 0.6));
   return { w, h, fontSize };
+}
+
+// จำนวนคอลัมน์สูงสุดที่ฐานปิรามิด (layer0) ใช้ได้โดยไม่ล้นความกว้างจอ ที่ขนาด
+// ไพ่คงที่ (ข้อ 5) — คำนวณจากขนาดไพ่จริงแทนค่าคงที่ตายตัว ให้จอกว้าง (แท็บเล็ต/
+// เดสก์ท็อป) ใช้คอลัมน์ได้มากขึ้นตามจริง แทนที่จะจำกัดไว้ที่ 8 เท่ากันทุกจอ
+function computeMaxBoardCols(tileW) {
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 800;
+  const usableW = vw * 0.94;
+  return Math.max(2, Math.floor(usableW / tileW));
 }
 
 function shuffleArray(arr) {
@@ -298,15 +305,19 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     updateStuckIndicator();
   }
 
-  // ถาดเต็ม (5/5) = ติดขัดเสมอ ไม่ต้องเช็คว่า "มีคู่มองเห็นได้บนกระดาน" เพิ่ม —
-  // เพราะไพ่ในถาดไม่มีทางซ้ำกันเองอยู่แล้ว (processTrayMatches เคลียร์คู่ซ้ำทันที
-  // ทุกครั้งที่มีไพ่เข้าถาดใหม่) และ onPick ก็ปฏิเสธไพ่ใหม่ทันทีเมื่อถาดเต็ม
-  // (ดู "if (tray.length >= TRAY_CAPACITY) shakeTray()") ต่อให้บนกระดานมีคู่ซ้ำ
-  // มองเห็นอยู่ก็หยิบเข้าถาดไม่ได้จริงอยู่ดี — ทางออกเดียวคือกดสลับป้ายเสมอ (เคย
-  // เป็นบั๊กจริง: บอร์ดใหญ่/มีอิโมจิเยอะขึ้น (ข้อ 7) ทำให้เจอเคสนี้บ่อยขึ้นมาก
-  // จนเกมดูเหมือนค้าง เพราะปุ่มสลับป้ายไม่กระพริบเตือนทั้งที่ติดขัดจริง)
+  // ติดขัด (ต้องกดสลับป้ายเท่านั้นถึงจะไปต่อได้) มี 2 กรณี:
+  // 1) ถาดเต็ม (5/5) — ไพ่ในถาดไม่มีทางซ้ำกันเองอยู่แล้ว (processTrayMatches
+  //    เคลียร์คู่ซ้ำทันทีทุกครั้งที่มีไพ่เข้าถาดใหม่) และ onPick ก็ปฏิเสธไพ่ใหม่ทันที
+  //    เมื่อถาดเต็ม ต่อให้บนกระดานมีคู่ซ้ำมองเห็นอยู่ก็หยิบเข้าถาดไม่ได้จริงอยู่ดี
+  // 2) ไม่มีไพ่ "หยิบได้" เหลือบนกระดานเลยสักใบ (ทั้งที่ถาดยังไม่เต็ม) — เป็นไปได้
+  //    จริงตามโครงสร้างปิรามิด (ลำดับที่ไพ่ถูกหยิบออกไปก่อนหน้าทำให้ไพ่ที่เหลือ
+  //    บังกันเองพอดี ไม่ใช่บั๊กจากข้อมูล/ลำดับมาตรา) เจอบ่อยขึ้นเมื่อบอร์ดแคบลง
+  //    (คอลัมน์น้อยลงจากขนาดไพ่คงที่ ข้อ 5) เดิมเช็คแค่กรณี 1 ทำให้ผู้เล่นติดขัด
+  //    จริงแต่ปุ่มสลับป้ายไม่กระพริบเตือนเลย (บั๊กที่เจอจริงตอนทดสอบ)
   function updateStuckIndicator() {
-    const stuck = tray.length >= TRAY_CAPACITY;
+    const anyFreeOnBoard = tiles.some((t) => t.state === 'board' && isTileFree(t, tiles));
+    const anyOnBoard = tiles.some((t) => t.state === 'board');
+    const stuck = tray.length >= TRAY_CAPACITY || (anyOnBoard && !anyFreeOnBoard);
     if (dom.mahjongShuffleBtn) dom.mahjongShuffleBtn.classList.toggle('pulse', stuck);
     if (stuck && !_stuckVoicePlayed) {
       _stuckVoicePlayed = true;
@@ -492,7 +503,7 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     const slotIndex = tray.length;
     tray.push(tile);
     tile.el.classList.remove('free');
-    tile.el.classList.add('flying');
+    tile.el.classList.add('flying', 'in-tray'); // in-tray: เต็มสว่างชัดเจน (ข้อ 6) — .free เดิมหลุดไปตอนนี้
     audio.sfx('pick');
     positionTileAtTraySlot(tile, slotIndex);
     schedule(() => {
@@ -519,12 +530,14 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     if (dom.mahjongPointsPopup) dom.mahjongPointsPopup.classList.remove('show');
     hideHandCursor();
 
-    const slots = buildPyramidLayout(pairCount, layerCount);
-    const maxBoardCols = Math.max(...slots.map((s) => s.x)) + 1;
-    const size = computeTileSize(maxBoardCols);
+    // ขนาดไพ่คงที่ตามความกว้างจอก่อน (ข้อ 5) แล้วค่อยคำนวณว่าฐานปิรามิดใช้ได้กี่
+    // คอลัมน์ที่ขนาดนี้ — สลับลำดับจากเดิม (เดิมจัด layout ก่อนแล้วย่อไพ่ให้พอดี)
+    const size = computeTileSize();
     tileW = size.w;
     tileH = size.h;
     tileFontSize = size.fontSize;
+    const maxBoardCols = computeMaxBoardCols(tileW);
+    const slots = buildPyramidLayout(pairCount, layerCount, maxBoardCols);
 
     // คำจริงไม่พอ pairCount ที่มาตรานี้ต้องการ (ข้อ 7) → เติมด้วยไพ่อิโมจิแทน
     // (isEmoji:true, ไม่มี .spell) จับคู่กันแล้วไม่อ่านคำ/สะกด แต่ได้ยินเสียงชม
@@ -617,8 +630,7 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
 
   function relayout() {
     if (!tiles.length) return;
-    const maxBoardCols = Math.max(...tiles.map((t) => t.x)) + 1;
-    const size = computeTileSize(maxBoardCols);
+    const size = computeTileSize();
     tileW = size.w;
     tileH = size.h;
     tileFontSize = size.fontSize;

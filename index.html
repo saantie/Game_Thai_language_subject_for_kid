@@ -125,8 +125,7 @@
             <span class="gb-spark s5" aria-hidden="true">⭐</span>
           </button>
         </div>
-        <button id="installBtn" class="btn-install hidden">📲 ติดตั้งแอป</button>
-        <button id="arToggleBtn" class="btn-install" type="button">📷 โหมด AR: เปิด</button>
+        <button id="installBtn" class="btn-install hidden">📲 ติดตั้งเกมส์</button>
         <button id="startAdultBtn" class="btn-link">สำหรับผู้ปกครอง</button>
       </div>
       <div class="app-version">v66</div>
@@ -171,14 +170,23 @@
         <div class="mj-tray-slot"></div>
         <div class="mj-tray-slot"></div>
         <div class="mj-tray-slot"></div>
-        <div id="mahjongBigWord" class="mj-big-word"></div>
       </div>
       <div id="mahjongBoard" class="mj-board"></div>
       <button id="mahjongShuffleBtn" class="btn-primary mj-shuffle-btn">&#x1F500; สลับป้าย</button>
+      <!-- ย้ายออกจาก #mahjongTray (ไม่ใช่ลูกของถาดอีกต่อไป) — ถาดมี overflow:hidden
+           กันมุมช่องโผล่นอกกรอบมนอยู่แล้ว เดิมทำให้ตัวอักษรไทยที่มีสระ/วรรณยุกต์
+           ซ้อนสูง (เช่น แกะ, เมีย) โดนตัดขาดตอนขยาย 1.15x ตอน pop (ข้อ 8) -->
+      <div id="mahjongBigWord" class="mj-big-word"></div>
       <div id="mahjongPointsPopup" class="mj-points-popup" aria-hidden="true"></div>
-      <img id="mahjongHandCursor" class="mj-hand-cursor hidden" src="public/assets/images/Hand%20click.png" alt="" aria-hidden="true" />
-      <img class="mj-witch-img" src="public/assets/images/wish%20happy.gif" alt="" aria-hidden="true" />
     </div>
+    <!-- #mahjongHandCursor และ .mj-witch-img ต้องอยู่นอก #mahjongScreen (ข้อ 5) —
+         .screen มี backdrop-filter ซึ่งสร้าง containing block ใหม่ให้ลูกที่เป็น
+         position:fixed (กลายเป็นเหมือน position:absolute ผูกกับ .screen แทน
+         viewport จริง) ปกติไม่มีปัญหาเพราะมาตราเล็กไม่ต้องเลื่อนจอ แต่พอกระดาน
+         สูงพอต้อง scroll (ไพ่ไม่ย่อขนาดแล้ว, ข้อ 5) ภาพมือ/แม่มดจะเลื่อนตามเนื้อหา
+         ไปด้วย ไม่ติดล่างจอจริงอีกต่อไป จนซ้อนทับไพ่ได้ -->
+    <img id="mahjongHandCursor" class="mj-hand-cursor hidden" src="public/assets/images/Hand%20click.png" alt="" aria-hidden="true" />
+    <img class="mj-witch-img hidden" src="public/assets/images/wish%20happy.gif" alt="" aria-hidden="true" />
 
     <!-- วิดีโอนำเรื่องหน้าแรก — เล่นครั้งเดียวหลังกดปุ่ม "เริ่มเล่น" ก่อนเข้าหน้าเลือกมาตรา -->
     <div id="videoOverlay" class="video-overlay hidden" aria-hidden="true">

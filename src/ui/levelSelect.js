@@ -5,6 +5,7 @@ import { audio } from '../audio.js';
 
 // progress: { [matraId]: stars(0-3) } เก็บใน app state กลาง
 export function isUnlocked(app, index) {
+  if (app.isAdmin) return true; // Admin (ล็อกอินด้วยอีเมลที่กำหนด) เล่นได้ทุกมาตราไว้ทดสอบ (ข้อ 1)
   if (index === 0) return true;
   const prev = MATRA[index - 1];
   return (app.progress[prev.id] || 0) >= 1; // ผ่านมาตราก่อนหน้า (≥1 ดาว) จึงปลดล็อก

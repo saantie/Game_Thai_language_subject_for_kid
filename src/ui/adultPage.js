@@ -2,6 +2,9 @@
 
 import { audio } from '../audio.js';
 import { saveConfirmButtonsOverride } from '../storage.js';
+import { registerPlayer, loginPlayer, logoutPlayer, isAdminEmail } from '../firebaseAuth.js';
+
+const FEEDBACK_EMAIL = 'saantie@gmail.com';
 
 // parent gate ง่าย ๆ ที่เด็กเล็กทำไม่ได้ (ไม่ใช่ security จริง)
 export function openAdultGate(app, screenEl) {
@@ -56,6 +59,28 @@ export function showAdultPage(app, screenEl) {
          การรู้จำเสียงพูดของเบราว์เซอร์ (Web Speech API) ซึ่ง iOS Safari ยังไม่รองรับ จึงต้องใช้
          ปุ่มยืนยันคำตอบแทนเสมอในอุปกรณ์นั้น</p>
 
+      <h3>บัญชีผู้เล่น</h3>
+      <p class="note">ไม่บังคับสมัคร — เกมเล่นได้ปกติโดยไม่ต้องล็อกอิน (คะแนน/ดาวยังเก็บในเครื่อง
+         เหมือนเดิม) สมัครไว้เผื่อฟีเจอร์เพิ่มเติมในอนาคต</p>
+      <div id="authStatus" class="auth-status"></div>
+      <div id="authForm" class="auth-form">
+        <input type="email" id="authEmail" class="auth-input" placeholder="อีเมล" autocomplete="email" />
+        <input type="text" id="authPlayerName" class="auth-input" placeholder="ชื่อผู้เล่น (สำหรับสมัครสมาชิกใหม่)" />
+        <input type="password" id="authPin" class="auth-input" placeholder="รหัส 4 หลัก" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" />
+        <div class="auth-buttons">
+          <button class="btn-primary" id="authRegisterBtn" type="button">สมัครสมาชิก</button>
+          <button class="btn-primary" id="authLoginBtn" type="button">เข้าสู่ระบบ</button>
+        </div>
+        <p id="authMsg" class="note"></p>
+      </div>
+
+      <h3>แจ้งปัญหา / แนะนำการพัฒนาเกม</h3>
+      <p class="note">พิมพ์รายละเอียดแล้วกดปุ่ม จะเปิดโปรแกรมอีเมลของคุณพร้อมข้อความนี้ ส่งถึง
+         ${FEEDBACK_EMAIL}</p>
+      <textarea id="feedbackText" class="feedback-textarea" rows="4"
+        placeholder="พบปัญหาอะไร หรืออยากแนะนำอะไรเพิ่มเติม เขียนที่นี่ได้เลยจ้ะ"></textarea>
+      <button class="btn-primary" id="feedbackSendBtn" type="button">ส่งอีเมลแจ้งปัญหา</button>
+
       <button class="btn-primary" id="adultBack">กลับเข้าเกม</button>
     </div>`;
 
@@ -75,6 +100,81 @@ export function showAdultPage(app, screenEl) {
     saveConfirmButtonsOverride(confirmBtn.checked); // จำข้ามเซสชัน ไม่ต้องตั้งใหม่ทุกครั้ง (ข้อ 4)
     document.body.classList.toggle('force-confirm', confirmBtn.checked);
   };
+
+  // ---------- บัญชีผู้เล่น (ข้อ 1) ----------
+  const authStatus = screenEl.querySelector('#authStatus');
+  const authForm = screenEl.querySelector('#authForm');
+  const authEmail = screenEl.querySelector('#authEmail');
+  const authPlayerName = screenEl.querySelector('#authPlayerName');
+  const authPin = screenEl.querySelector('#authPin');
+  const authMsg = screenEl.querySelector('#authMsg');
+
+  function renderAuthStatus() {
+    if (app.currentUser) {
+      const adminBadge = app.isAdmin ? ' <span class="admin-badge">Admin</span>' : '';
+      authStatus.innerHTML = `เข้าสู่ระบบแล้ว: ${app.currentUser.email}${adminBadge}
+        <button class="btn-link" id="authLogoutBtn" type="button">ออกจากระบบ</button>`;
+      authForm.classList.add('hidden');
+      screenEl.querySelector('#authLogoutBtn').onclick = async () => {
+        await logoutPlayer();
+        app.currentUser = null;
+        app.isAdmin = false;
+        authMsg.textContent = '';
+        renderAuthStatus();
+      };
+    } else {
+      authStatus.textContent = '';
+      authForm.classList.remove('hidden');
+    }
+  }
+  renderAuthStatus();
+
+  screenEl.querySelector('#authRegisterBtn').onclick = async () => {
+    const email = authEmail.value.trim();
+    const pin = authPin.value.trim();
+    const playerName = authPlayerName.value.trim();
+    if (!email || !/^\d{4}$/.test(pin)) {
+      authMsg.textContent = 'กรอกอีเมลและรหัส 4 หลัก (ตัวเลขล้วน) ให้ครบก่อนนะ';
+      return;
+    }
+    authMsg.textContent = 'กำลังสมัครสมาชิก...';
+    try {
+      const user = await registerPlayer(email, pin, playerName);
+      app.currentUser = user;
+      app.isAdmin = isAdminEmail(user.email);
+      authMsg.textContent = 'สมัครสมาชิกสำเร็จ!';
+      renderAuthStatus();
+    } catch (e) {
+      authMsg.textContent = 'สมัครไม่สำเร็จ: ' + (e.message || e);
+    }
+  };
+  screenEl.querySelector('#authLoginBtn').onclick = async () => {
+    const email = authEmail.value.trim();
+    const pin = authPin.value.trim();
+    if (!email || !/^\d{4}$/.test(pin)) {
+      authMsg.textContent = 'กรอกอีเมลและรหัส 4 หลัก (ตัวเลขล้วน) ให้ครบก่อนนะ';
+      return;
+    }
+    authMsg.textContent = 'กำลังเข้าสู่ระบบ...';
+    try {
+      const user = await loginPlayer(email, pin);
+      app.currentUser = user;
+      app.isAdmin = isAdminEmail(user.email);
+      authMsg.textContent = 'เข้าสู่ระบบสำเร็จ!';
+      renderAuthStatus();
+    } catch (e) {
+      authMsg.textContent = 'เข้าสู่ระบบไม่สำเร็จ: ' + (e.message || e);
+    }
+  };
+
+  // ---------- แจ้งปัญหา/ข้อเสนอแนะ (ข้อ 2) ----------
+  screenEl.querySelector('#feedbackSendBtn').onclick = () => {
+    const text = screenEl.querySelector('#feedbackText').value.trim();
+    const subject = encodeURIComponent('แจ้งปัญหา/ข้อเสนอแนะ - หม้อแม่มดผสมคำ');
+    const body = encodeURIComponent(text || '(ไม่ได้พิมพ์ข้อความ)');
+    window.location.href = `mailto:${FEEDBACK_EMAIL}?subject=${subject}&body=${body}`;
+  };
+
   screenEl.querySelector('#adultBack').onclick = () => {
     screenEl.classList.remove('show');
     screenEl.classList.add('hidden');

@@ -729,6 +729,10 @@ button { font-family: inherit; cursor: pointer; border: none; }
   mix-blend-mode: multiply;
   position: relative; z-index: 1; /* อยู่เหนือแผ่นสว่าง */
 }
+/* เดสก์ท็อป/PC (ข้อ 4) — 45vw ชนเพดาน 320px แทบทุกจอคอมอยู่แล้ว แต่รวมกับ
+   h1/p/ปุ่มต่างๆ ด้านล่างสูงเกิน viewport height ของจอคอมทั่วไป (โดยเฉพาะโน้ตบุ๊ค
+   จอเตี้ย ~768px) จนต้องมี scrollbar — ย่อแม่มดลงเฉพาะเดสก์ท็อปให้พอดีไม่ล้น */
+body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
 .start-card h1 { font-size: clamp(30px, 7vw, 52px); margin: 8px 0; }
 .start-card p { opacity: 0.85; margin: 0 0 24px; font-size: clamp(15px, 3vw, 20px); }
 
@@ -909,6 +913,22 @@ button { font-family: inherit; cursor: pointer; border: none; }
 .adult-card .setting { display: block; margin: 8px 0; font-size: 16px; }
 .adult-card .note { font-size: 14px; opacity: 0.8; }
 .adult-card .btn-primary { margin-top: 16px; }
+/* บัญชีผู้เล่น + แจ้งปัญหา (ข้อ 1, 2) */
+.auth-status { font-size: 15px; margin: 8px 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.admin-badge {
+  background: var(--accent); color: #2a1800; font-weight: 800; font-size: 12px;
+  padding: 2px 9px; border-radius: 10px;
+}
+.auth-input, .feedback-textarea {
+  display: block; width: 100%; margin: 6px 0; padding: 10px 12px;
+  border-radius: 10px; border: 1px solid rgba(179, 136, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08); color: #fff; font-size: 15px;
+  font-family: inherit; box-sizing: border-box;
+}
+.auth-input::placeholder, .feedback-textarea::placeholder { color: rgba(255, 255, 255, 0.5); }
+.auth-buttons { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.auth-buttons .btn-primary { margin-top: 0; flex: 1; min-width: 120px; }
+.feedback-textarea { resize: vertical; font-family: inherit; }
 
 /* ================================================================
    Responsive + no-overflow fixes — หน้าจอทุกขนาดไม่ล้น
@@ -1204,7 +1224,10 @@ button { font-family: inherit; cursor: pointer; border: none; }
 .screen.mahjong {
   justify-content: flex-start;
   padding-top: max(72px, env(safe-area-inset-top, 72px));
-  padding-bottom: 180px; /* กันเนื้อหาโดนภาพแม่มดที่ปักอยู่ล่างสุดบัง */
+  /* กันเนื้อหาโดนภาพแม่มดที่ปักอยู่ล่างสุดบัง (ข้อ 5) — .mj-witch-img กว้างสุด
+     260px, อัตราส่วนภาพจริง 0.75 → สูงสุด ~195px เผื่อ margin ให้ปลอดภัยจริง
+     ทุกอุปกรณ์ (เดิม 180px ตึงเกินไปเล็กน้อยบนจอกว้างที่แม่มดใหญ่สุด) */
+  padding-bottom: 230px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -1259,11 +1282,18 @@ button { font-family: inherit; cursor: pointer; border: none; }
 }
 
 /* คำตัวใหญ่โชว์ตรงถาดตอนจับคู่สำเร็จ ก่อนอ่านสะกดคำ (ข้อ 7) */
+/* position:fixed กึ่งกลางจอ (ไม่ใช่ absolute ในถาดอีกต่อไป, ข้อ 8) — .mj-tray มี
+   overflow:hidden (กันมุมช่องไพ่โผล่นอกกรอบมน) เคยตัดสระ/วรรณยุกต์ไทยที่ซ้อนสูง
+   ขาดหายเวลาขยาย 1.15x ตอน pop เพราะกล่องถาดเตี้ยเกินไป ย้ายออกมาเป็น fixed
+   เต็มจอแทน (เหมือน .mj-points-popup) ไม่มีอะไรมาบังอีก + เพิ่ม line-height/padding
+   กันสระ/วรรณยุกต์ชิดขอบ */
 .mj-big-word {
-  position: absolute;
+  position: fixed;
   left: 50%; top: 50%;
   transform: translate(-50%, -50%) scale(0.4);
   font: 800 clamp(38px, 10vw, 68px) 'Sarabun', 'Segoe UI', sans-serif;
+  line-height: 1.6;
+  padding: 0.3em 0.15em;
   background: linear-gradient(135deg, #fff2b0, var(--accent) 45%, #c9860c 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 16px rgba(255, 216, 77, 0.7));
@@ -1342,6 +1372,10 @@ button { font-family: inherit; cursor: pointer; border: none; }
     0 0 14px rgba(255, 216, 77, 0.6);
 }
 .mj-tile.flying { z-index: 1500 !important; }
+/* ไพ่ที่ลอยเข้าถาดแล้ว (ข้อ 6) — เดิมโดนถอด .free ออกตอนเข้าถาด ทำให้กลับไปใช้
+   สไตล์ปกติของ .mj-tile ที่หรี่ opacity/brightness ลง (สำหรับไพ่บนกระดานที่ยัง
+   หยิบไม่ได้) ดูเหมือนไพ่ในถาดโปร่งแสง/มืดลงทั้งที่ควรชัดเต็มที่เสมอ */
+.mj-tile.in-tray { opacity: 1; filter: none; }
 /* ถอยห่าง+วิ่งเข้าชนกันก่อนระเบิด (ข้อ 3) — transition เร็วกว่าเดิม (ไม่ใช้
    easing เด้งของ .mj-tile ปกติ) ให้ดูเหมือนพุ่งชนจริงๆ ไม่ใช่ลอยนุ่มนวลแบบเดิม */
 .mj-tile.pre-explode {
@@ -1405,7 +1439,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
    z-index สูงกว่าไพ่ทุกใบ (ชั้นบนสุด ~400 + .flying 1500) เสมอ ไม่ให้ไพ่บังภาพมือ */
 .mj-hand-cursor {
   position: fixed;
-  width: clamp(53px, 13.2vw, 92px); /* ใหญ่ขึ้น 10% จากเดิม (48/12vw/84) */
+  width: clamp(106px, 26.4vw, 184px); /* ใหญ่ขึ้นอีก 2 เท่าจากเดิม (53/13.2vw/92) */
   height: auto;
   pointer-events: none;
   z-index: 2000;

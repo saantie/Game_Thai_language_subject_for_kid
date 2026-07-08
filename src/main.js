@@ -8,6 +8,7 @@ import { createGame } from './game.js';
 import { createMahjongWarmup } from './mahjong.js';
 import { buildLevelSelect } from './ui/levelSelect.js';
 import { openAdultGate } from './ui/adultPage.js';
+import { watchAuthState, isAdminEmail } from './firebaseAuth.js';
 import { MATRA } from './data/matra.js';
 import {
   loadProgress, saveProgress, clearProgress,
@@ -34,7 +35,18 @@ const app = {
   settings: { showSpellHint: false, bgm: true, arEnabled: loadArEnabled(), confirmButtonsOverride: loadConfirmButtonsOverride() },
   totalScore: loadTotalScore(), // คะแนนสะสมข้ามทุกมาตรา — game.js อัปเดตสดระหว่างเล่น
   mahjongSeen: loadMahjongSeen(), // { matraId: true } — ด่านอุ่นเครื่องไพ่โชว์แค่ครั้งแรก
+  isAdmin: false, // ล็อกอินด้วยอีเมล Admin แล้ว → เล่นได้ทุกมาตราไม่ล็อก (ข้อ 1, ดู firebaseAuth.js)
+  currentUser: null, // ผู้เล่นที่ล็อกอินอยู่ (ถ้ามี) — { email, uid } เสริมระบบเดิม ไม่บังคับล็อกอิน
 };
+
+// ฟังสถานะล็อกอิน Firebase (ถ้าตั้งค่าไว้แล้ว) — อัปเดต isAdmin + รีเฟรชหน้าเลือก
+// มาตราถ้ากำลังเปิดอยู่ตอนสถานะเปลี่ยน (ข้อ 1) ไม่บล็อกอะไรถ้ายังไม่ได้ตั้งค่า Firebase
+// จริง (ensureInit ข้างใน firebaseAuth.js จะ fail เงียบๆ แค่ callback(null))
+watchAuthState((user) => {
+  app.currentUser = user;
+  app.isAdmin = isAdminEmail(user?.email);
+  if (_screen === 'level') buildLevelSelect($('#levelGrid'), app, (id) => startMatraById(id));
+});
 
 // ผู้เล่นเก่าที่มีดาวอยู่แล้วก่อนฟีเจอร์นี้มา ไม่ควรต้องมาเจอด่านอุ่นเครื่องผุดขึ้น
 // ทีหลังทุกมาตราที่เคยผ่าน — เช็คทุกครั้งที่บูต (เบา แค่ไล่ key ที่มีอยู่) ไม่ใช่
@@ -56,6 +68,10 @@ const startScreen = $('#startScreen');
 const levelScreen = $('#levelScreen');
 const adultScreen = $('#adultScreen');
 const mahjongScreen = $('#mahjongScreen');
+// ย้ายออกมานอก #mahjongScreen แล้ว (ข้อ 5) — .screen มี backdrop-filter ที่ทำให้
+// position:fixed ของลูกผูกกับกล่อง .screen แทน viewport จริงตอนกระดานสูงต้อง
+// scroll ต้อง toggle .hidden เองแทนการอาศัย parent (#mahjongScreen) ซ่อนให้
+const mjWitchImg = $('.mj-witch-img');
 const sceneRoot = $('#sceneRoot');
 const magicOrbs = $('#magicOrbs');
 const resetBtn = $('#resetProgressBtn');
@@ -234,6 +250,7 @@ function showScreen(which) {
   startScreen.classList.toggle('hidden', which !== 'start');
   levelScreen.classList.toggle('hidden', which !== 'level');
   mahjongScreen.classList.toggle('hidden', which !== 'mahjong');
+  mjWitchImg.classList.toggle('hidden', which !== 'mahjong'); // ข้อ 5 — ย้ายออกจาก #mahjongScreen แล้ว ต้อง toggle เอง
   magicOrbs.classList.toggle('hidden', which !== 'level');
   resetBtn.classList.toggle('hidden', which !== 'level');
   dom.totalBadge.classList.toggle('hidden', which === 'start'); // โชว์ทุกหน้ายกเว้นหน้าเริ่ม
@@ -408,12 +425,11 @@ $('#startBtn').addEventListener('click', () => {
   playIntroVideo(INTRO_VIDEO_SRC, () => showIntroSpeech(() => showScreen('level')));
 });
 
-// ---- ปุ่มเปิด/ปิดโหมด AR (หน้าแรก + ไอคอนกล้องมุมขวาล่างระหว่างเล่น, ข้อ 3) ----
-const arToggleBtn = $('#arToggleBtn');
+// ---- ปุ่มเปิด/ปิดโหมด AR — ไอคอนกล้องมุมขวาล่างระหว่างเล่นเท่านั้น (เอาปุ่มข้อความ
+// บนหน้าแรกออกแล้ว ข้อ 3 ของรอบนี้ — AR ยังเปิดอัตโนมัติตาม arEnabled ที่จำไว้
+// เหมือนเดิม แค่ไม่มีปุ่มเปิด/ปิดตอนอยู่หน้าแรกอีกต่อไป) ----
 const arQuickToggleBtn = $('#arQuickToggleBtn');
 function updateArToggleLabel() {
-  arToggleBtn.textContent = app.settings.arEnabled ? '📷 โหมด AR: เปิด' : '📷 โหมด AR: ปิด';
-  arToggleBtn.style.opacity = app.settings.arEnabled ? '' : '0.6';
   arQuickToggleBtn.classList.toggle('ar-off', !app.settings.arEnabled);
 }
 updateArToggleLabel();
@@ -431,7 +447,6 @@ function toggleArEnabled() {
   }
   // ยังไม่กด "เริ่มเล่น" → แค่จำ flag ไว้ initAR จะทำงานหลัง start ตามลำดับ permission
 }
-arToggleBtn.addEventListener('click', toggleArEnabled);
 arQuickToggleBtn.addEventListener('click', toggleArEnabled);
 
 $('#startAdultBtn').addEventListener('click', () => openAdultGate(app, adultScreen));
