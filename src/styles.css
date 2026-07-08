@@ -1242,7 +1242,29 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
    มินิเกมนี้เป็น DOM ที่มี z-index สูงถึง 6500 (เคอเซอร์มือ) ทำให้ผลึกแก้วแตกที่วาด
    บน fxCanvas โดน "ไพ่ระเบิด" ก้อนอื่นบังจนมองไม่เห็น (ข้อ 1) — ยกเฉพาะตอน
    mahjong-mode ให้ fxCanvas ลอยเหนือทุกอย่างในหน้านี้แทน ไม่กระทบ z-index ปกติ
-   ตอนอยู่เกมหยิบฟอง */
+   ตอนอยู่เกมหยิบฟอง
+
+   z-index:7000 นี้เป็นแค่ค่า "ภายใน" stacking context ของ #sceneRoot เท่านั้น —
+   #sceneRoot เองมี position:fixed + z-index:0 (บรรทัดด้านบนของไฟล์นี้) จึงสร้าง
+   stacking context ของตัวเอง ทำให้ z-index ของลูกข้างในไม่มีทางหลุดออกไปเทียบกับ
+   #mahjongScreen (z-index:6, เป็นพี่น้องของ #sceneRoot คนละ context) ได้เลยไม่ว่า
+   จะตั้งสูงแค่ไหน (บั๊กที่เจอจริง — ทดสอบวาดสีทึบเต็ม fxCanvas แล้วไม่โผล่ให้เห็น
+   เลยสักพิกเซลตอนอยู่หน้ามินิเกมไพ่ พิสูจน์ว่าโดนบังทั้งจอจริง) ต้องยก #sceneRoot
+   ทั้งกล่องขึ้นมาด้วย ไม่ใช่แค่ลูกข้างใน — ปลอดภัยเพราะพี่น้องอื่นๆ ใน #sceneRoot
+   (bgCanvas, camVideo ฯลฯ) ถูกซ่อนด้วย display:none ในโหมดนี้อยู่แล้ว (ดูด้านล่าง)
+   เหลือแค่ fxCanvas ที่มองเห็นจริงเท่านั้น เลือกค่าที่สูงกว่า #mahjongScreen (6)
+   แต่ยังต่ำกว่า .mj-hand-cursor (2000, อยู่นอก #mahjongScreen เช่นกัน) เพื่อให้
+   ภาพมือ AR ยังคงลอยเหนือเอฟเฟกต์ระเบิดเสมอ
+
+   สำคัญ: #sceneRoot เองเป็น position:fixed; inset:0 (เต็มจอ) แม้ไม่มีพื้นหลัง/
+   เนื้อหาที่มองเห็น กล่องเปล่านี้ก็ยังดักคลิก/แตะได้ตามปกติ (pointer-events เริ่มต้น
+   คือ auto) พอยกมันขึ้นเหนือ #mahjongScreen ด้วย z-index จะกลายเป็นดักคลิกทั้งจอ
+   ไปเฉยๆ ทำให้กดไพ่/ปุ่มในมินิเกมไม่ติดเลย (บั๊กที่เจอจริงตอนทดสอบ) ต้องปิด
+   pointer-events ที่ #sceneRoot เองด้วย (ไม่ใช่แค่ #fxCanvas) — เป็นไปได้เพราะ
+   pointer-events สืบทอดลงลูกทุกตัว และไม่มีลูกไหนใน #sceneRoot ต้องรับคลิกเลย
+   ระหว่างโหมดนี้ (มินิเกมไพ่ใช้ DOM listener แยกบน #mahjongScreen เอง — ดู
+   createPointerInput(mahjongScreen, ...) ใน main.js) */
+#sceneRoot.mahjong-mode { z-index: 10; pointer-events: none; }
 #sceneRoot.mahjong-mode #fxCanvas { z-index: 7000; }
 
 /* ข้อ 9-10: ไม่ซ้อนภาพกล้อง/ฉากป่าเป็น background หลังมินิเกมไพ่ — เหลือแค่
