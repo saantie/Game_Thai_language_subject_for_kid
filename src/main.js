@@ -313,6 +313,52 @@ const introVideo    = $('#introVideo');
 const videoFade     = $('#videoFade');
 const skipVideoBtn  = $('#skipVideoBtn');
 const introOverlay  = $('#introOverlay');
+const preloadScreen  = $('#preloadScreen');
+const preloadBarFill = $('#preloadBarFill');
+const preloadPercent = $('#preloadPercent');
+
+// โหลดไฟล์ล่วงหน้าด้วย fetch + ReadableStream แทน video.src ตรงๆ — ได้ % ความคืบหน้า
+// จริงจาก Content-Length มาโชว์แถบโหลด (ข้อ: หน้าโหลดก่อนเล่นวิดีโอนำ) คืนค่าเป็น
+// blob: URL ให้ <video> เล่นได้ทันทีไม่มีสะดุดเพราะข้อมูลอยู่ครบในเครื่องแล้ว
+// ถ้า fetch ล้มเหลว (offline/เซิร์ฟเวอร์ไม่รองรับ ฯลฯ) คืน src เดิมตรงๆ ให้
+// <video> โหลดเองแบบปกติ (fallback พฤติกรรมเดิมก่อนมีแถบโหลด)
+function preloadWithProgress(src, onProgress) {
+  return fetch(src)
+    .then((res) => {
+      if (!res.ok || !res.body) throw new Error('preload fetch failed: ' + res.status);
+      const total = parseInt(res.headers.get('Content-Length'), 10);
+      const reader = res.body.getReader();
+      const chunks = [];
+      let loaded = 0;
+      function pump() {
+        return reader.read().then(({ done, value }) => {
+          if (done) return URL.createObjectURL(new Blob(chunks));
+          chunks.push(value);
+          loaded += value.byteLength;
+          if (total) onProgress(Math.min(100, Math.round((loaded / total) * 100)));
+          return pump();
+        });
+      }
+      return pump();
+    })
+    .catch(() => src);
+}
+
+// โชว์หน้าโหลด (ภาพ "How to fight wish book" + แถบ %) ระหว่างดาวน์โหลดวิดีโอนำ
+// เรื่องล่วงหน้า แล้วค่อยเรียก onDone(resolvedSrc) — resolvedSrc เป็น blob: URL
+// ถ้าโหลดสำเร็จ หรือ path เดิมถ้า fetch ล้มเหลว (ดู preloadWithProgress)
+function showPreloadScreen(src, onDone) {
+  preloadScreen.classList.remove('hidden');
+  preloadBarFill.style.width = '0%';
+  preloadPercent.textContent = '0%';
+  preloadWithProgress(src, (pct) => {
+    preloadBarFill.style.width = pct + '%';
+    preloadPercent.textContent = pct + '%';
+  }).then((resolvedSrc) => {
+    preloadScreen.classList.add('hidden');
+    onDone(resolvedSrc);
+  });
+}
 
 function showIntroSpeech(onDone) {
   introOverlay.classList.remove('hidden');
@@ -352,6 +398,9 @@ function playIntroVideo(src, onDone) {
       introVideo.volume = 1;           // reset ไว้ใช้ครั้งต่อไป
       introVideo.removeAttribute('src');
       introVideo.load();
+      // src เป็น blob: URL จาก preloadWithProgress (โหลดผ่าน fetch ล่วงหน้า) —
+      // คืนหน่วยความจำหลังเล่นจบ กันรั่ว (path ปกติ/fallback ไม่ต้องทำอะไร)
+      if (src.startsWith('blob:')) URL.revokeObjectURL(src);
       videoFade.style.opacity = '0';
       videoOverlay.classList.add('hidden');
       videoOverlay.setAttribute('aria-hidden', 'true');
@@ -436,8 +485,10 @@ $('#startBtn').addEventListener('click', () => {
     initAR(); // ไม่ทำอะไรถ้าปุ่ม AR ปิดอยู่
   });
   audio.stopLevelBgm();
-  // วิดีโอนำ → หน้าม่วงแม่มดน้อยชวนปราบแม่มดใจร้าย → หน้าเลือกมาตรา
-  playIntroVideo(INTRO_VIDEO_SRC, () => showIntroSpeech(() => showScreen('level')));
+  // หน้าโหลด (แถบ %) → วิดีโอนำ → หน้าม่วงแม่มดน้อยชวนปราบแม่มดใจร้าย → หน้าเลือกมาตรา
+  showPreloadScreen(INTRO_VIDEO_SRC, (resolvedSrc) => {
+    playIntroVideo(resolvedSrc, () => showIntroSpeech(() => showScreen('level')));
+  });
 });
 
 // ---- ปุ่มเปิด/ปิดโหมด AR — ไอคอนกล้องมุมขวาล่างระหว่างเล่นเท่านั้น (เอาปุ่มข้อความ

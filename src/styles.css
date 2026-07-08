@@ -1159,6 +1159,57 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
 }
 
 /* ---- วิดีโอ overlay ---- */
+/* หน้าโหลดก่อนเล่นวิดีโอนำ (Movie 1.mp4) — โชว์แถบ % ดาวน์โหลดจริงกันวิดีโอ
+   กระตุก/ค้างตอนเล่นบนเน็ตช้า ใช้ธีมเดียวกับ .intro-overlay (พื้นม่วงเข้ม) */
+.preload-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 205;
+  background: linear-gradient(160deg, #6d28d9 0%, #4c1d95 55%, #2e1065 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+.preload-overlay.hidden { display: none; }
+.preload-book-img {
+  width: clamp(220px, 55vw, 420px);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 24px rgba(0,0,0,0.5));
+  margin-bottom: 8px;
+}
+.preload-label {
+  font-family: 'Mali', 'Sarabun', cursive;
+  font-size: clamp(16px, 4vw, 22px);
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+.preload-bar-track {
+  width: clamp(220px, 60vw, 420px);
+  height: 22px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.15);
+  border: 2px solid rgba(255,216,77,0.5);
+  overflow: hidden;
+}
+.preload-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #fff2b0, var(--accent) 60%, #c9860c 100%);
+  border-radius: 10px;
+  transition: width 0.15s linear;
+}
+.preload-percent {
+  font-family: 'Mali', 'Sarabun', cursive;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff2b0;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+
 .video-overlay {
   position: fixed;
   inset: 0;

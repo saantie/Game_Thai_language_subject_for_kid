@@ -188,6 +188,17 @@
     <img id="mahjongHandCursor" class="mj-hand-cursor hidden" src="public/assets/images/Hand%20click.png" alt="" aria-hidden="true" />
     <img class="mj-witch-img hidden" src="public/assets/images/wish%20happy.gif" alt="" aria-hidden="true" />
 
+    <!-- หน้าโหลดก่อนเล่นวิดีโอนำ — โชว์แถบ % ดาวน์โหลดจริงของ Movie 1.mp4 ก่อนเริ่ม
+         เล่น กันวิดีโอกระตุก/ค้างระหว่างเล่นบนเน็ตช้า (เดิมรอแค่ canplay เงียบๆ) -->
+    <div id="preloadScreen" class="preload-overlay hidden" aria-hidden="true">
+      <img src="public/assets/images/How%20to%20fight%20wish%20book.png" class="preload-book-img" alt="" aria-hidden="true" />
+      <div class="preload-label">กำลังเตรียมความพร้อม...</div>
+      <div class="preload-bar-track">
+        <div id="preloadBarFill" class="preload-bar-fill"></div>
+      </div>
+      <div id="preloadPercent" class="preload-percent">0%</div>
+    </div>
+
     <!-- วิดีโอนำเรื่องหน้าแรก — เล่นครั้งเดียวหลังกดปุ่ม "เริ่มเล่น" ก่อนเข้าหน้าเลือกมาตรา -->
     <div id="videoOverlay" class="video-overlay hidden" aria-hidden="true">
       <video id="introVideo" playsinline webkit-playsinline preload="metadata"></video>
