@@ -400,6 +400,16 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     dom.mahjongTray.classList.add('shake');
   }
 
+  // ไพ่ที่ถูกหนีบอยู่ (ทับจากชั้นบน หรือถูกบังทั้งซ้ายขวา — isTileFree()===false)
+  // โดนพยายามหยิบ — สั่นตัวไพ่ใบนั้น + เสียง "ตึ๊ดๆ" บอกว่าหยิบไม่ได้ตอนนี้
+  function shakeTile(tile) {
+    if (!tile.el) return;
+    tile.el.classList.remove('shake');
+    void tile.el.offsetWidth; // บังคับ reflow ให้ restart animation ได้ทุกครั้ง
+    tile.el.classList.add('shake');
+    audio.sfx('tile_blocked');
+  }
+
   function addScore(points) {
     app.totalScore += points;
     saveTotalScore(app.totalScore);
@@ -642,7 +652,8 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     const tileEl = el && el.closest && el.closest('.mj-tile');
     if (!tileEl) return;
     const tile = tiles.find((t) => t.el === tileEl);
-    if (!tile || tile.state !== 'board' || !isTileFree(tile, tiles)) return;
+    if (!tile || tile.state !== 'board') return;
+    if (!isTileFree(tile, tiles)) { shakeTile(tile); return; } // ถูกหนีบอยู่ — หยิบไม่ได้ตอนนี้
     if (tray.length >= TRAY_CAPACITY) { shakeTray(); return; }
     flyToTray(tile);
   }

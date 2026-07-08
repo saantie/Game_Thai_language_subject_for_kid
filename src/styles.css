@@ -1152,7 +1152,7 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
   .witch, .btn-mic.listening,
   .glass-ball-img, .gb-shine, .gb-spark, .gb-outer-glow,
   .result-card.fly-to-total, .total-badge.blink,
-  .mj-tray.shake, .mj-shuffle-btn.pulse { animation: none !important; }
+  .mj-tray.shake, .mj-shuffle-btn.pulse, .mj-tile.shake { animation: none !important; }
   /* .vb-points เริ่มที่ opacity:0 โดยตั้งใจ (popup) — ปิด animation เฉยๆ จะค้างไม่โชว์
      เลย ต้องบังคับ opacity:1 คู่กันด้วยเมื่อ .show ถูกเพิ่ม */
   .vb-points.show { animation: none !important; opacity: 1; }
@@ -1352,6 +1352,16 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
   0%, 100% { transform: translateX(0); }
   25%      { transform: translateX(-8px); }
   75%      { transform: translateX(8px); }
+}
+
+/* ไพ่ที่ถูกหนีบ (ทับ/บังข้าง) โดนพยายามหยิบ — สั่นบอกว่าหยิบไม่ได้ตอนนี้ */
+.mj-tile.shake { animation: mjTileShake 0.32s ease; }
+@keyframes mjTileShake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  20%      { transform: translateX(-5px) rotate(-4deg); }
+  40%      { transform: translateX(5px) rotate(4deg); }
+  60%      { transform: translateX(-3px) rotate(-2deg); }
+  80%      { transform: translateX(3px) rotate(2deg); }
 }
 
 /* คำตัวใหญ่โชว์ตรงถาดตอนจับคู่สำเร็จ ก่อนอ่านสะกดคำ (ข้อ 7) */

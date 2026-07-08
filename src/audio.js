@@ -214,6 +214,12 @@ export const audio = {
         this._blip(320, 0.045, 'sine', t);
         this._blip(720, 0.05, 'triangle', t + 0.025);
         break;
+      // มินิเกมไพ่: พยายามหยิบไพ่ที่ถูกหนีบอยู่ (ทับ/บังข้าง หยิบไม่ได้ตอนนี้) —
+      // เสียง "ตึ๊ดๆ" สั้นๆ 2 ครั้ง คู่กับ .mj-tile.shake
+      case 'tile_blocked':
+        this._blip(340, 0.09, 'square', t);
+        this._blip(340, 0.09, 'square', t + 0.12);
+        break;
       default:
         break;
     }
