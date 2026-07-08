@@ -73,7 +73,7 @@ export function createParticleSystem(fx) {
   // ให้ดูเหมือนเศษวัตถุแตกร่วงจริงๆ ไม่ใช่ดาวประทุ — สีขาวทึบเสมอ (ไม่ผูกกับสีไพ่
   // คู่ที่จับได้อีกต่อไป) ให้ดูเหมือนเศษผลึกแก้วแตกจริงๆ
   function spawnGlassShards(cx, cy, color = '#ffffff') {
-    const COUNT = 28; // เพิ่มอีก 2 เท่าจากเดิม (14) ให้ระเบิดดูอลังการชัดเจนขึ้น
+    const COUNT = 56; // เพิ่มอีก 1 เท่าจากเดิม (28) ให้ระเบิดดูฟุ้งกระจายมากขึ้น
     for (let i = 0; i < COUNT; i++) {
       const p = acquire();
       const a = Math.random() * Math.PI * 2;
@@ -84,7 +84,7 @@ export function createParticleSystem(fx) {
       p.vy = Math.sin(a) * sp * 0.5 - 1.6; // กระเด็นออกชัดเจนขึ้นก่อนโน้มถ่วงดึงลง
       p.life = 1;
       p.decay = 0.011; // อยู่นานกว่าอนุภาคดาวปกติ ให้เห็นร่วงตกชัดเจน
-      p.r = 8 + Math.random() * 10; // ใหญ่ขึ้นชัดเจนจากเดิม (3-8px) ให้เห็นง่ายกว่าเดิม
+      p.r = 4 + Math.random() * 5; // เล็กลงจากเดิม (8-18px) ให้เข้ากับจำนวนที่เพิ่มขึ้น
       p.rot = Math.random() * Math.PI * 2;
       p.rotSpeed = (Math.random() - 0.5) * 0.35;
       p.shard = true;
@@ -111,6 +111,12 @@ export function createParticleSystem(fx) {
       // เศษผลึกแก้ว — สี่เหลี่ยมเล็กหมุน tumble ตกลง (ดู spawnGlassShards)
       fx.translate(p.x, p.y);
       fx.rotate(p.rot || 0);
+      // เงาสีเทาโทนม่วง — วาดสี่เหลี่ยมทึบ offset เล็กน้อยก่อนตัวชิ้นส่วนจริง
+      // (ไม่ใช้ shadowBlur ของ canvas ซึ่งแพงต่ออนุภาคมาก โดยเฉพาะตอนนี้ที่เพิ่ม
+      // จำนวนชิ้นส่วนเป็น 2 เท่าแล้ว — ดูคอมเมนต์เดียวกันที่ .star/noGlow ด้านล่าง)
+      fx.fillStyle = 'rgba(90, 80, 115, 0.45)';
+      fx.fillRect(-p.r + 1.5, -p.r * 0.4 + 1.5, p.r * 2, p.r * 0.8);
+      fx.fillStyle = p.fillStyle;
       fx.fillRect(-p.r, -p.r * 0.4, p.r * 2, p.r * 0.8);
     } else if (p.star) {
       // ขอบเรืองให้เห็นชัด — ข้ามได้ถ้า noGlow (shadowBlur แพงสุดต่ออนุภาคบน canvas,

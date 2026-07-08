@@ -168,6 +168,12 @@ export const audio = {
       .catch(() => this.sfx('star')); // decode/fetch ล้มเหลว → synth fallback
   },
 
+  // มินิเกมไพ่: เสียงตอนดีด/หยิบไพ่ลอยเข้าถาด (แทน synth 'pick' เดิม)
+  playCartoonBoing() {
+    playBuffer('public/assets/audio/Cartoon%20Boing.mp3', 0.85)
+      .catch(() => this.sfx('pick')); // decode/fetch ล้มเหลว → synth fallback เดิม
+  },
+
   // ---------- SFX ----------
   sfx(name) {
     if (!ctx) return;

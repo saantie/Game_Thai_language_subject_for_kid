@@ -557,7 +557,7 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     tray.push(tile);
     tile.el.classList.remove('free');
     tile.el.classList.add('flying', 'in-tray'); // in-tray: เต็มสว่างชัดเจน (ข้อ 6) — .free เดิมหลุดไปตอนนี้
-    audio.sfx('pick');
+    audio.playCartoonBoing(); // เสียงตอนดีดไพ่ (แทน synth 'pick' เดิม)
     positionTileAtTraySlot(tile, slotIndex);
     schedule(() => {
       tile.el.classList.remove('flying');
