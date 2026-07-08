@@ -119,12 +119,33 @@ export function deriveDifficulty(matra, curriculumIndex) {
   return { pairCount, layerCount: MAX_LAYERS };
 }
 
+// ขอบเส้นประของ .mj-tray เอง (2px ทั้งสองฝั่ง, ดู .mj-tray ใน styles.css) — ช่องไพ่
+// แต่ละใบ (.mj-tray-slot) เป็น box-sizing:border-box จึงไม่บวกความกว้างเพิ่ม แต่
+// ตัว .mj-tray container เองไม่ได้ set width ชัดเจน (shrink-to-fit ตามลูก) ทำให้
+// border ของ container เองบวกเพิ่มนอกเหนือผลรวมของช่องไพ่เสมอ ต้องกันพื้นที่นี้ไว้
+const TRAY_OUTER_BORDER_PX = 4;
+
+// วัดความกว้าง "ใช้งานได้จริง" จาก DOM (นับ padding จริงของ #mahjongScreen ที่เป็น
+// ผู้ปกครองของ #mahjongBoard/#mahjongTray) แทนการประมาณด้วย window.innerWidth*0.94
+// เดิม — ค่าประมาณเดิมคลาดเคลื่อนจาก padding จริงของ .screen (24px ทั้ง 2 ฝั่ง =
+// 48px) มากพอจะทำให้ถาด/กระดานล้นขอบจอมือถือแนวตั้งจริง (บั๊กที่เจอจริง ข้อ 1)
+// screenEl เป็น optional — เผื่อเรียกจากสคริปต์ทดสอบ pure logic ที่ไม่มี DOM จริง
+function computeUsableWidth(screenEl) {
+  if (screenEl) {
+    const cs = getComputedStyle(screenEl);
+    const padL = parseFloat(cs.paddingLeft) || 0;
+    const padR = parseFloat(cs.paddingRight) || 0;
+    return screenEl.clientWidth - padL - padR - TRAY_OUTER_BORDER_PX;
+  }
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 800;
+  return vw * 0.94 - TRAY_OUTER_BORDER_PX;
+}
+
 // ขนาดไพ่คงที่ตามความกว้างจอ (ถาด 5 ช่องเสมอ) เท่านั้น — ไม่ย่อลงตามจำนวนไพ่/
 // คอลัมน์ของกระดานอีกต่อไป (ข้อ 5) มาตราที่มีไพ่เยอะจะได้ปิรามิดที่ "กว้าง/สูง
 // ขึ้น" (คอลัมน์/แถวเพิ่ม) แทนที่ไพ่จะเล็กลงเรื่อยๆ จนอ่านยาก
-function computeTileSize() {
-  const vw = typeof window !== 'undefined' ? window.innerWidth : 800;
-  const usableW = vw * 0.94;
+function computeTileSize(screenEl) {
+  const usableW = computeUsableWidth(screenEl);
   let w = Math.floor(usableW / TRAY_CAPACITY);
   w = Math.max(34, Math.min(DEFAULT_TILE_W, w));
   const h = Math.round(w * TILE_ASPECT);
@@ -137,10 +158,16 @@ function computeTileSize() {
 // จำนวนคอลัมน์สูงสุดที่ฐานปิรามิด (layer0) ใช้ได้โดยไม่ล้นความกว้างจอ ที่ขนาด
 // ไพ่คงที่ (ข้อ 5) — คำนวณจากขนาดไพ่จริงแทนค่าคงที่ตายตัว ให้จอกว้าง (แท็บเล็ต/
 // เดสก์ท็อป) ใช้คอลัมน์ได้มากขึ้นตามจริง แทนที่จะจำกัดไว้ที่ 8 เท่ากันทุกจอ
-function computeMaxBoardCols(tileW) {
-  const vw = typeof window !== 'undefined' ? window.innerWidth : 800;
-  const usableW = vw * 0.94;
-  return Math.max(2, Math.floor(usableW / tileW));
+//
+// ต้องกันพื้นที่ให้ "layer offset" ด้วย (ข้อ 1 บั๊กที่เจอจริง) — ไพ่ชั้นบนเยื้อง
+// ซ้ายด้วย baseShiftX (ดู positionTileOnBoard/sizeBoardContainer) ทำให้กระดานจริง
+// กว้างกว่า "จำนวนคอลัมน์ × tileW" เสมอ อีก (MAX_LAYERS-1) × tileW × ratio เยื้อง —
+// ถ้าไม่กันไว้ maxBoardCols จะปล่อยให้ layer0 กว้างพอดีเป๊ะกับจอ แล้วส่วนเยื้อง
+// ล้นออกไปอีกจนกระดานล้นขอบจอจริง (วัดได้จริงบนมือถือแนวตั้ง 360px)
+function computeMaxBoardCols(tileW, screenEl) {
+  const usableW = computeUsableWidth(screenEl);
+  const offsetReservePx = (MAX_LAYERS - 1) * LAYER_OFFSET_X_RATIO * tileW;
+  return Math.max(2, Math.floor((usableW - offsetReservePx) / tileW));
 }
 
 function shuffleArray(arr) {
@@ -287,6 +314,8 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
       dom.mahjongBoard.appendChild(el);
     });
 
+    fitWordFontSize(); // ลดฟอนต์ทั้งชุดถ้าคำยาวสุดในรอบนี้ล้นขอบไพ่ (ข้อ 1)
+
     requestAnimationFrame(() => {
       tiles.forEach((t, i) => {
         schedule(() => {
@@ -296,6 +325,26 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
         }, i * 45);
       });
     });
+  }
+
+  // ลดฟอนต์ไพ่ทั้งชุดเท่ากันทุกใบ (ให้ดูสม่ำเสมอ ไม่ใช่ลดเฉพาะใบที่ยาว) ถ้าคำที่ยาว
+  // ที่สุดในรอบนี้ล้นขอบไพ่ — เกิดกับคำสระประกอบหน้า-หลังพยัญชนะ (เช่นสระแอะ "แพะ",
+  // สระเอาะ "เกาะ") ที่ยาวกว่าคำ 2 ตัวอักษรทั่วไปอย่างเห็นได้ชัด วัดจริงจาก DOM
+  // (scrollWidth) แม่นกว่าประมาณจากจำนวนตัวอักษร เพราะความกว้างสระ/วรรณยุกต์แต่ละ
+  // ตัวไม่เท่ากัน (บั๊กที่เจอจริง ข้อ 1) — เรียกครั้งเดียวตอน renderBoard พอ เพราะ
+  // shuffle() แค่สลับคำเดิมไปมา ไม่ได้เปลี่ยนชุดคำที่ใช้ ความยาวสุดจึงไม่เปลี่ยน
+  function fitWordFontSize() {
+    if (!tiles.length) return;
+    const maxTextW = tileW - 10; // เผื่อ padding ของ .mj-tile (4px ทั้งสองฝั่ง) + กันชนขอบ
+    let widest = 0;
+    tiles.forEach((t) => {
+      if (t.wordEl && t.wordEl.scrollWidth > widest) widest = t.wordEl.scrollWidth;
+    });
+    if (widest > maxTextW && widest > 0) {
+      const scale = maxTextW / widest;
+      tileFontSize = Math.max(12, Math.floor(tileFontSize * scale));
+      tiles.forEach((t) => { if (t.el) t.el.style.fontSize = tileFontSize + 'px'; });
+    }
   }
 
   function refreshFreeStates() {
@@ -385,7 +434,10 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
   // ตัวเดียวกับที่เกมหยิบฟองใช้เฉลยสะกดคำ) — เรียก done() หลังอ่านจบ
   function showBigWord(wordObj, done) {
     if (!dom.mahjongBigWord) { done(); return; }
-    dom.mahjongBigWord.textContent = wordObj.display;
+    // เขียนคำลง .mj-big-word-text (ลูกข้างใน) ไม่ใช่ตัว .mj-big-word เอง — แยก
+    // element กันพื้นหลังบังตัวอักษร (ดูคอมเมนต์ .mj-big-word ใน styles.css)
+    const textEl = dom.mahjongBigWord.querySelector('.mj-big-word-text') || dom.mahjongBigWord;
+    textEl.textContent = wordObj.display;
     dom.mahjongBigWord.classList.remove('show');
     void dom.mahjongBigWord.offsetWidth;
     dom.mahjongBigWord.classList.add('show');
@@ -510,8 +562,14 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     schedule(() => {
       tile.el.classList.remove('flying');
       audio.sfx('card_place'); // ไพ่วางลงถาดแล้ว (ข้อ 3) — ต่างจาก 'pick' ตอนเริ่มลอย
-      refreshFreeStates(); // ไพ่ข้างใต้/ข้างๆ อาจหยิบได้แล้วตอนนี้
+      // เช็คจับคู่ก่อน refreshFreeStates() เสมอ (ข้อ 2) — ถ้าใบล่าสุดที่เพิ่งเข้ามา
+      // คือคู่ที่จับได้พอดีตอนถาดเต็ม (5/5) เดิมลำดับสลับกันทำให้ updateStuckIndicator
+      // (เรียกจาก refreshFreeStates) เห็นถาดเต็มก่อนที่ processTrayMatches จะทันเอา
+      // คู่ที่จับได้ออกไป กลายเป็นคำเตือน "เต็มถาดแล้วจ้ะ ลองสลับป้าย" หลอกเด็กทั้งที่
+      // กำลังจะจับคู่สำเร็จอยู่แล้ว (บั๊กที่เจอจริง) — สลับให้จับคู่ก่อนเสมอ ถ้าเต็ม
+      // จริงๆ (ไม่มีคู่) ค่อยเตือนตามปกติ
       processTrayMatches();
+      refreshFreeStates(); // ไพ่ข้างใต้/ข้างๆ อาจหยิบได้แล้วตอนนี้
     }, FLY_MS);
   }
 
@@ -534,11 +592,13 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
 
     // ขนาดไพ่คงที่ตามความกว้างจอก่อน (ข้อ 5) แล้วค่อยคำนวณว่าฐานปิรามิดใช้ได้กี่
     // คอลัมน์ที่ขนาดนี้ — สลับลำดับจากเดิม (เดิมจัด layout ก่อนแล้วย่อไพ่ให้พอดี)
-    const size = computeTileSize();
+    // ส่ง #mahjongScreen (ผู้ปกครองของ mahjongBoard) เข้าไปวัด padding จริง กันล้นจอ
+    const screenEl = dom.mahjongBoard && dom.mahjongBoard.parentElement;
+    const size = computeTileSize(screenEl);
     tileW = size.w;
     tileH = size.h;
     tileFontSize = size.fontSize;
-    const maxBoardCols = computeMaxBoardCols(tileW);
+    const maxBoardCols = computeMaxBoardCols(tileW, screenEl);
     const slots = buildPyramidLayout(pairCount, layerCount, maxBoardCols);
 
     // คำจริงไม่พอ pairCount ที่มาตรานี้ต้องการ (ข้อ 7) → เติมด้วยไพ่อิโมจิแทน
@@ -632,7 +692,8 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
 
   function relayout() {
     if (!tiles.length) return;
-    const size = computeTileSize();
+    const screenEl = dom.mahjongBoard && dom.mahjongBoard.parentElement;
+    const size = computeTileSize(screenEl);
     tileW = size.w;
     tileH = size.h;
     tileFontSize = size.fontSize;
