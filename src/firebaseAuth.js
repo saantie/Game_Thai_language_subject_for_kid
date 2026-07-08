@@ -6,18 +6,17 @@
 //   2) ถ้าอีเมลที่ล็อกอินอยู่ในรายชื่อ Admin (ฮาร์ดโค้ดด้านล่าง) → ปลดล็อกทุกมาตรา
 //      ไม่มีการล็อกเลย ไว้ให้ทดสอบเกมได้ทุกด่านทันที (ดู isUnlocked ใน levelSelect.js)
 //
-// ต้องใส่ Firebase config จริงก่อนใช้งานได้จริง — ไปเอาจาก Firebase Console
-// (⚙ Project settings > General > Your apps > SDK setup and configuration) แล้ว
-// แทนที่ค่าใน firebaseConfig ด้านล่างทั้งหมด ก่อนใส่ค่าจริง โมดูลนี้จะ throw ตอน
-// เรียกใช้ฟังก์ชันใดๆ (isFirebaseReady() คืน false) แต่ไม่ทำให้แอปพังหรือบล็อกการ
-// เล่นเกมปกติ เพราะฟีเจอร์นี้เป็นส่วนเสริมในหน้าผู้ปกครองเท่านั้น
+// Firebase config จริงของโปรเจกต์ "games-for-kid" (จาก Firebase Console ⚙ Project
+// settings > General > Your apps) — ค่านี้เป็น public identifier ของฝั่ง client
+// ตามปกติของ Firebase (ไม่ใช่ secret) ความปลอดภัยจริงคุมด้วย Firebase
+// Authentication + Firestore Security Rules ฝั่ง console แทน
 const firebaseConfig = {
-  apiKey: 'REPLACE_ME',
-  authDomain: 'REPLACE_ME.firebaseapp.com',
-  projectId: 'REPLACE_ME',
-  storageBucket: 'REPLACE_ME.appspot.com',
-  messagingSenderId: 'REPLACE_ME',
-  appId: 'REPLACE_ME',
+  apiKey: 'AIzaSyDq739Umvb345lhYPV4jq-IsaUFfQmWumI',
+  authDomain: 'games-for-kid.firebaseapp.com',
+  projectId: 'games-for-kid',
+  storageBucket: 'games-for-kid.firebasestorage.app',
+  messagingSenderId: '22538217948',
+  appId: '1:22538217948:web:bcc5d10340b45608958719',
 };
 
 // อีเมล Admin — ล็อกอินด้วยอีเมลนี้แล้วเล่นได้ทุกมาตราทันทีไม่ต้องผ่านมาตราก่อนหน้า
