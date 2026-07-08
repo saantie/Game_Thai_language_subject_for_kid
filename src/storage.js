@@ -89,3 +89,21 @@ export function saveMahjongSeen(seenMap) {
     localStorage.setItem(MAHJONG_SEEN_KEY, JSON.stringify(seenMap));
   } catch (e) {}
 }
+
+// ---- คำใบ้ AR "ดีดนิ้วชี้เพื่อเลือกไพ่" — พูดครั้งเดียวตลอดการเล่น ครั้งแรกที่
+// AR ทำงานอยู่ในเกมไพ่จับคู่เท่านั้น (ข้อ 2) ----
+const AR_FLICK_HINT_KEY = 'witch_ar_flick_hint_shown';
+
+export function loadArFlickHintShown() {
+  try {
+    return localStorage.getItem(AR_FLICK_HINT_KEY) === '1';
+  } catch (e) {
+    return false;
+  }
+}
+
+export function saveArFlickHintShown() {
+  try {
+    localStorage.setItem(AR_FLICK_HINT_KEY, '1');
+  } catch (e) {}
+}

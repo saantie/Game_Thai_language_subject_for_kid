@@ -292,6 +292,7 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
         schedule(() => {
           t.el.classList.remove('entering');
           positionTileOnBoard(t);
+          audio.sfx('card_deal'); // ไพ่เรียงตัวเข้าที่ทีละใบตอนเริ่มมาตรา (ข้อ 3)
         }, i * 45);
       });
     });
@@ -405,7 +406,7 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
   }
 
   // เอฟเฟกต์ตอนจับคู่สำเร็จ (ข้อ 3): ไพ่ทั้งคู่ถอยห่างจากตำแหน่งเดิมนิดหน่อยก่อน
-  // แล้ววิ่งเข้าหากันไปชนกึ่งกลาง จึงระเบิดเป็นเศษชิ้นส่วนสีเดียวกับไพ่ + เสียงแตก
+  // แล้ววิ่งเข้าหากันไปชนกึ่งกลาง จึงระเบิดเป็นเศษชิ้นส่วนสีขาวทึบ + เสียงแตก
   // แล้วค่อยโชว์คำตัวใหญ่ + อ่านสะกดคำ — เล่นทีละคู่ (matchQueue) กันเสียง/คำตัวใหญ่
   // ทับกันตอน shuffle บังเอิญเจอหลายคู่พร้อมกัน
   function playMatchEffect(a, b, done) {
@@ -445,7 +446,7 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
         // ขั้น 3: ชนกัน → ระเบิด
         a.el.classList.add('matched');
         b.el.classList.add('matched');
-        particleFx.spawnGlassShards(midX, midY, a.color);
+        particleFx.spawnGlassShards(midX, midY); // สีขาวทึบเสมอ (ค่า default ของ spawnGlassShards)
         ensureLoopRunning();
         audio.playGlassCrush();
         addScore(MATCH_POINTS);
@@ -508,6 +509,7 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     positionTileAtTraySlot(tile, slotIndex);
     schedule(() => {
       tile.el.classList.remove('flying');
+      audio.sfx('card_place'); // ไพ่วางลงถาดแล้ว (ข้อ 3) — ต่างจาก 'pick' ตอนเริ่มลอย
       refreshFreeStates(); // ไพ่ข้างใต้/ข้างๆ อาจหยิบได้แล้วตอนนี้
       processTrayMatches();
     }, FLY_MS);

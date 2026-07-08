@@ -1291,9 +1291,10 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
   position: fixed;
   left: 50%; top: 50%;
   transform: translate(-50%, -50%) scale(0.4);
-  font: 800 clamp(38px, 10vw, 68px) 'Sarabun', 'Segoe UI', sans-serif;
+  /* ขยาย 2 เท่าจากเดิม (clamp(38px,10vw,68px)) ให้อ่านชัดขึ้นตอนจับคู่สำเร็จ */
+  font: 800 clamp(76px, 20vw, 136px) 'Sarabun', 'Segoe UI', sans-serif;
   line-height: 1.6;
-  padding: 0.3em 0.15em;
+  padding: 0.3em 0.4em;
   background: linear-gradient(135deg, #fff2b0, var(--accent) 45%, #c9860c 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 16px rgba(255, 216, 77, 0.7));
@@ -1301,6 +1302,18 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
   white-space: nowrap;
   pointer-events: none;
   z-index: 2500;
+}
+/* พื้นหลังหลังคำตัวใหญ่ — ::before เต็มกล่อง (z-index ลบ อยู่หลังตัวอักษรที่เป็น
+   normal-flow content) ให้คำอ่านง่ายขึ้นตัดกับฉากพื้นหลัง ไม่ต้องแตะ JS ที่ set
+   แค่ textContent ตรงๆ */
+.mj-big-word::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 28px;
+  background: rgba(20, 8, 40, 0.78);
+  box-shadow: 0 0 0 3px rgba(255, 216, 77, 0.35) inset;
+  z-index: -1;
 }
 .mj-big-word.show { animation: mjBigWordPop 0.4s cubic-bezier(.34,1.56,.64,1) forwards; }
 @keyframes mjBigWordPop {

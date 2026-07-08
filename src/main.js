@@ -16,6 +16,7 @@ import {
   loadTotalScore, saveTotalScore,
   loadMahjongSeen, saveMahjongSeen,
   loadConfirmButtonsOverride, saveConfirmButtonsOverride,
+  loadArFlickHintShown, saveArFlickHintShown,
 } from './storage.js';
 
 const MATRA_BY_ID = Object.fromEntries(MATRA.map((m) => [m.id, m]));
@@ -182,13 +183,27 @@ function onCameraLost() {
 function syncArToScreen() {
   if (!arInput) { camVideoEl.classList.remove('show'); updateWakeLock(); return; }
   if (_screen === 'game' || _screen === 'mahjong') {
+    // เกมไพ่ใช้ท่าดีดนิ้วชี้แทนจีบสองนิ้ว (ข้อ 2) — เกมหยิบฟองยังใช้จีบเหมือนเดิม
+    arInput.setMode(_screen === 'mahjong' ? 'flick' : 'pinch');
     arInput.resume();
     camVideoEl.classList.add('show');
+    if (_screen === 'mahjong') maybeShowArFlickHint();
   } else {
     arInput.pause();
     camVideoEl.classList.remove('show');
   }
   updateWakeLock();
+}
+
+// เปิด AR ในเกมไพ่ครั้งแรก (ข้อ 2) — สอนท่าดีดนิ้วชี้ พูดครั้งเดียวตลอดการเล่น
+// (persist ผ่าน localStorage ไม่ใช่แค่ session) เรียกจาก syncArToScreen ทุกครั้งที่
+// เข้าเกมไพ่ตอน AR ทำงานอยู่ แต่ยิงเสียงจริงแค่ครั้งแรกเท่านั้น
+let _arFlickHintShown = loadArFlickHintShown();
+function maybeShowArFlickHint() {
+  if (_arFlickHintShown) return;
+  _arFlickHintShown = true;
+  saveArFlickHintShown();
+  audio.voice('mahjong_flick_hint', { onText: witchSay });
 }
 
 // ---- Wake Lock: กันจอพัก/ดับตอนเล่น AR ในมินิเกมไพ่ (ข้อ 5) — มือจีบลอยอยู่กลาง
