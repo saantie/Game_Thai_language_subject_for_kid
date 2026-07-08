@@ -51,6 +51,11 @@ const WORD_EMOJIS = [
 // ทำให้ layer0Cols=0 แล้ว rows ของชั้นถัดไปคำนวณ sqrt(count/0)=Infinity จน loop
 // วางไพ่ค้างไม่รู้จบ (เจอจริงตอนปรับตาราง TIERS ให้ยากขึ้น, ข้อ 1) จึงต้องลด
 // layerCount ลงเองถ้า total ไม่พอ ก่อนคำนวณสัดส่วนต่อชั้น
+// เพดานแถว/คอลัมน์สูงสุดต่อชั้น — ไพ่แต่ละชั้นเรียงได้สูงสุด 6 แถว × 5 คอลัมน์
+// (30 ใบ/ชั้น) ห้ามเกินไม่ว่าจอจะกว้างแค่ไหน
+const MAX_LAYER_ROWS = 6;
+const MAX_LAYER_COLS = 5;
+
 export function buildPyramidLayout(pairCount, layerCount, maxLayer0Cols = 8) {
   const total = pairCount * 2;
   const safeLayerCount = Math.max(1, Math.min(layerCount, Math.floor(total / 2)));
@@ -60,20 +65,44 @@ export function buildPyramidLayout(pairCount, layerCount, maxLayer0Cols = 8) {
   const diff = total - counts.reduce((a, b) => a + b, 0);
   counts[0] += diff;
 
+  // คอลัมน์สูงสุดของหน้าจอจริง (จาก computeMaxBoardCols ในโรงงาน) แต่ไม่เกิน
+  // เพดานตายตัว 5 คอลัมน์ เสมอ — จอกว้าง (แท็บเล็ต/เดสก์ท็อป) ก็ไม่ให้เกิน 5
+  const cappedCols = Math.min(maxLayer0Cols, MAX_LAYER_COLS);
+
+  // ไล่ยกส่วนที่เกินเพดาน (6 แถว × cappedCols คอลัมน์) ของแต่ละชั้นไปให้ชั้นถัดไป
+  // แทน — เกิดขึ้นเฉพาะมาตรายากท้ายๆ ที่ pairCount สูงมากจน layer0 ได้รับส่วน
+  // แบ่งเกิน 30 ใบ (ตัวอย่างจริง: มาตราสุดท้าย pairCount=31 → layer0 ได้ 31 ใบ
+  // เกินเพดานไป 1 ใบ) ชั้นสุดท้ายไม่มีที่ไปต่อ ปล่อยเกินได้เป็นทางออกสุดท้าย
+  // (ห้ามลดจำนวนไพ่ทิ้งเด็ดขาด ทุกคู่ต้องมีที่วางและจับคู่ได้จริงเสมอ)
+  for (let L = 0; L < counts.length - 1; L++) {
+    const capacity = cappedCols * MAX_LAYER_ROWS;
+    if (counts[L] > capacity) {
+      const overflow = counts[L] - capacity;
+      counts[L] = capacity;
+      counts[L + 1] += overflow;
+    }
+  }
+
   const slots = [];
   // จำนวนคู่มากขึ้นเรื่อยๆ ตามมาตรา (ข้อ 7, deriveDifficulty) แถวฐาน (layer0)
   // ตายตัวที่ 2 แถวเดิมจะกว้างขึ้นเรื่อยๆ ไม่มีเพดาน (คอลัมน์ = counts[0]/2) จน
-  // ล้นความกว้างจอได้ — เพิ่มแถวฐานเองเมื่อคอลัมน์เกิน maxLayer0Cols แทน ให้
-  // ปิรามิดสูงขึ้นแทนที่จะกว้างขึ้นไม่จำกัด (คุมได้ด้วย overflow-y:auto อยู่แล้ว)
-  // maxLayer0Cols คำนวณจาก "ขนาดไพ่จริง" ที่ไม่ย่อแล้ว (ข้อ 5, ดู computeMaxBoardCols
-  // ใน factory) ไม่ใช่ค่าคงที่ 8 แบบเดิมอีกต่อไป — ผู้เรียกส่งมาตามหน้าจอจริง
-  const layer0Rows = Math.max(2, Math.ceil(counts[0] / maxLayer0Cols));
+  // ล้นความกว้างจอได้ — เพิ่มแถวฐานเองเมื่อคอลัมน์เกิน cappedCols แทน ให้ปิรามิด
+  // สูงขึ้นแทนที่จะกว้างขึ้นไม่จำกัด แต่ไม่เกิน MAX_LAYER_ROWS (คุมได้ด้วย
+  // overflow-y:auto สำหรับกรณีตกค้างที่ปล่อยเกินไว้ด้านบน)
+  const layer0Rows = Math.min(MAX_LAYER_ROWS, Math.max(2, Math.ceil(counts[0] / cappedCols)));
   const layer0Cols = Math.ceil(counts[0] / layer0Rows);
   const baseWidth = layer0Cols;
 
   for (let L = 0; L < safeLayerCount; L++) {
     const count = counts[L];
-    const rows = L === 0 ? layer0Rows : Math.max(1, Math.round(Math.sqrt(count / (layer0Cols / layer0Rows))));
+    let rows = L === 0 ? layer0Rows : Math.max(1, Math.round(Math.sqrt(count / (layer0Cols / layer0Rows))));
+    // กันแถวน้อยเกินไปจนคอลัมน์ที่คำนวณได้ (count/rows) ต้องเกิน cappedCols (ใช้
+    // ค่าเดียวกับ layer0 ไม่ใช่เพดานตายตัว 5 เฉยๆ — กันชั้นบนกว้างเกิน baseWidth
+    // ของ layer0 จนล้นขอบจอ) ต้องคำนวณก่อนกันแถวเกินเสมอ ไม่งั้นไพ่จะหายจากกระดาน
+    rows = Math.max(rows, Math.ceil(count / cappedCols));
+    // กันแถวเกิน MAX_LAYER_ROWS (6) — ปลอดภัยเสมอเพราะ cascade ด้านบนรับประกันว่า
+    // count<=cappedCols*6 แล้วสำหรับทุกชั้นยกเว้นชั้นสุดท้าย (ซึ่งปล่อยเกินได้)
+    rows = Math.min(rows, MAX_LAYER_ROWS);
     const cols = Math.ceil(count / rows);
     const offsetX = Math.floor((baseWidth - cols) / 2);
     const offsetY = L;
@@ -587,6 +616,12 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
 
   function startMatra(matra, curriculumIndex, totalCount) {
     clearPendingTimers(); // กันเศษ timer ค้างจากรอบก่อนหน้า (ปกติ stop() เคลียร์ไปแล้ว)
+    // เคลียร์ #fxCanvas ทันที (ไม่รอ particle loop ซึ่งทำงานแบบ reactive เท่านั้น
+    // — ไม่ได้วิ่งทุกเฟรมเหมือน game.js) กันเฟรมสุดท้ายของฟองสบู่จากเกมหยิบฟอง
+    // (แชร์ fxCanvas เดียวกัน) ค้างอยู่บนจอจนกว่าจะมีการจับคู่ไพ่ครั้งแรก — เดิม
+    // มองไม่เห็นเพราะ fxCanvas เคยถูกบังอยู่หลัง #mahjongScreen แต่หลังแก้ z-index
+    // (v158) ให้ fxCanvas ลอยเหนือ UI แล้ว ฟองสบู่ค้างนี้เลยโผล่ให้เห็นจริง (บั๊กที่เจอ)
+    scene.clearFx();
     currentMatraId = matra.id;
     const { pairCount, layerCount } = deriveDifficulty(matra, curriculumIndex);
     totalPairs = pairCount;
