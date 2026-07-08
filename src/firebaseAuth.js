@@ -52,7 +52,11 @@ async function ensureInit() {
     const [appMod, authMod, fsMod] = await _sdkPromise;
     app = appMod.initializeApp(firebaseConfig);
     auth = authMod.getAuth(app);
-    db = fsMod.getFirestore(app);
+    // auto-detect long-polling: ลองต่อแบบปกติ (เร็วกว่า) ก่อนเสมอ ถ้าเครือข่าย
+    // (พร็อกซี/ไฟร์วอลล์บางที่) บล็อกการเชื่อมต่อสดจริงๆ ค่อย fallback เป็น
+    // long-polling เอง — ไม่กระทบผู้เล่นส่วนใหญ่ที่เน็ตปกติ (ต่างจาก
+    // experimentalForceLongPolling ที่บังคับ long-polling ทุกคน ช้ากว่าโดยไม่จำเป็น)
+    db = fsMod.initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
     _authMod = authMod;
     _fsMod = fsMod;
   } catch (e) {
@@ -77,11 +81,17 @@ export async function registerPlayer(email, pin, playerName) {
   await ensureInit();
   if (!auth) throw new Error('ระบบลงทะเบียนยังไม่พร้อมใช้งาน (ยังไม่ได้ตั้งค่า Firebase)');
   const cred = await _authMod.createUserWithEmailAndPassword(auth, email, pinToPassword(pin));
-  await _fsMod.setDoc(_fsMod.doc(db, 'users', cred.user.uid), {
+  // บันทึกชื่อผู้เล่นลง Firestore แบบ "ไม่บล็อก" (ไม่ await) — สมัครสมาชิกสำเร็จ
+  // แล้วตั้งแต่บรรทัด Auth ด้านบน (Admin bypass ก็เช็คแค่อีเมลจาก Auth เท่านั้น
+  // ไม่ต้องพึ่ง Firestore เลย) ถ้า Firestore ยังไม่ได้เปิดใช้ในโปรเจกต์/เน็ตช้า/
+  // ล้มเหลว ไม่ควรทำให้ทั้งฟังก์ชันนี้ค้างหรือดูเหมือนสมัครไม่สำเร็จทั้งที่ Auth
+  // สร้างบัญชีจริงไปแล้ว (เจอจริงตอนทดสอบ — setDoc ค้างได้นานมากถ้า Firestore
+  // ยังไม่ถูกสร้าง/เปิดใช้ในโปรเจกต์ Firebase Console)
+  _fsMod.setDoc(_fsMod.doc(db, 'users', cred.user.uid), {
     email,
     playerName: playerName || '',
     createdAt: Date.now(),
-  });
+  }).catch((e) => console.warn('บันทึกชื่อผู้เล่นลง Firestore ไม่สำเร็จ (ไม่กระทบการสมัครสมาชิก):', e));
   return cred.user;
 }
 
