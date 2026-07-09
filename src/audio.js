@@ -545,6 +545,15 @@ export const audio = {
     setTimeout(next, 350);
   },
 
+  // อ่านคำเต็มออกเสียง (ไม่สะกดทีละพยางค์แบบ playSpellReveal) — ใช้ไฟล์เดียวกับ
+  // พยางค์สุดท้ายของ word.spell (โฟลเดอร์ 'word' ตาม convention เดิม) มี MP3 →
+  // เล่นไฟล์ | ไม่มี → พูด TTS คำนั้นแทน — ใช้ตอนตอบถูก (reward) ให้ได้ยินคำที่
+  // เพิ่งอ่านถูกก่อนตามด้วยคำชม
+  playWordAudio(word, onEnd) {
+    const path = `public/assets/audio/word/${encodeURIComponent(word.display)}.mp3`;
+    this._playMp3(path, () => this.speak(word.display, { onEnd }), onEnd);
+  },
+
   stopSpeaking() {
     this._spellCancelled = true;
     if ('speechSynthesis' in window) {

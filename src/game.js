@@ -548,19 +548,26 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     scene.witch.play('cheer');
     audio.playCorrectChime();             // ข้อ 7: เสียง Magic Chime.mp3 จริง — ให้ดังก่อน
     setTimeout(spawnRewardStars, 180); // แล้วดาวรอบการ์ดค่อยระเบิดตามจังหวะเสียง (ไม่พร้อมกัน)
-    audio.voice('correct', { onText: witchSay });
-    // โชว์คะแนนที่ได้ (+100/+50) ทับมุมการ์ด ก่อนการ์ดจะหุบลอยไปป้ายคะแนน (750ms
-    // ด้านล่าง) — เห็นชัดว่าตอบถูกครั้งนี้ได้กี่แต้ม ไม่ใช่รู้แค่ตอนตัวเลขที่ป้ายขยับ
+    // โชว์คะแนนที่ได้ (+100/+50) ทับมุมการ์ดทันที ก่อนการ์ดจะหุบลอยไปป้ายคะแนน —
+    // เห็นชัดว่าตอบถูกครั้งนี้ได้กี่แต้ม ไม่ใช่รู้แค่ตอนตัวเลขที่ป้ายขยับ
     if (dom.vbPoints) {
       dom.vbPoints.textContent = `+${points}`;
       dom.vbPoints.classList.remove('show');
       void dom.vbPoints.offsetWidth;
       dom.vbPoints.classList.add('show');
     }
-    setTimeout(() => rewardFlyAnim(
-      () => setTimeout(nextRound, 250),
-      () => { updateScore(points); } // ตัด synth 'star' (เสียงตุ๊ดๆ) ออก — มี Magic Chime แล้วพอ
-    ), 750);
+    // ลำดับเสียง: อ่านคำที่เพิ่งตอบถูกออกเสียงก่อน → ตามด้วยคำชม → ต่อเมื่อทั้งคู่
+    // เล่นจบแล้วเท่านั้นการ์ดถึงจะหุบลอยไปป้ายคะแนน (แทนตัวจับเวลาคงที่ 750ms เดิม
+    // ที่ไม่ผูกกับความยาวเสียงจริงเลย)
+    audio.playWordAudio(currentWord, () => {
+      audio.voice('correct', {
+        onText: witchSay,
+        onEnd: () => rewardFlyAnim(
+          () => setTimeout(nextRound, 250),
+          () => { updateScore(points); } // ตัด synth 'star' (เสียงตุ๊ดๆ) ออก — มี Magic Chime แล้วพอ
+        ),
+      });
+    });
   }
 
   function revealSpelling() {
