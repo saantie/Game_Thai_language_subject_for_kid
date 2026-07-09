@@ -592,13 +592,15 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
   // แตะ/คลิก หรือจีบนิ้ว (AR) ที่ไพ่ที่หยิบได้ → ลอยเข้าถาดเองทันที ไม่ต้องลาก/ยก
   // ไปวางเองแบบที่เคยทำ (v148-v152) — พบว่าแตะตรงไปตรงมากว่าสำหรับเด็ก ย้าย
   // กลไกแม่เหล็ก-ระหว่างลากไปใช้กับเกมหยิบฟองแทน (ดู game.js, ข้อ 2)
-  function flyToTray(tile) {
+  function flyToTray(tile, isAR) {
     tile.state = 'tray';
     const slotIndex = tray.length;
     tray.push(tile);
     tile.el.classList.remove('free');
     tile.el.classList.add('flying', 'in-tray'); // in-tray: เต็มสว่างชัดเจน (ข้อ 6) — .free เดิมหลุดไปตอนนี้
-    audio.playCartoonBoing(); // เสียงตอนดีดไพ่ (แทน synth 'pick' เดิม)
+    // โหมด AR (ดีดนิ้ว) ใช้เสียง Cartoon Boing.mp3 จริง — สัมผัสจอปกติ (ไม่ใช่ AR)
+    // ใช้เสียงสังเคราะห์ synth 'pick' เดิมแทน (ข้อ: เสียงเลือกไพ่ต่างกันตามโหมด)
+    if (isAR) audio.playCartoonBoing(); else audio.sfx('pick');
     positionTileAtTraySlot(tile, slotIndex);
     schedule(() => {
       tile.el.classList.remove('flying');
@@ -678,7 +680,11 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     refreshFreeStates();
   }
 
-  function onPick(x, y) {
+  // slop มีค่า (ตัวเลข) เฉพาะตอนมาจาก AR (handpinch.js ส่ง GRAB_SLOP มาเสมอ) —
+  // pointer.js (แตะจอ/เมาส์) เรียก onPick(x,y) แค่ 2 argument ไม่มี slop เลย ใช้
+  // เป็นสัญญาณแยกโหมด AR vs สัมผัสจอปกติ โดยไม่ต้องเพิ่ม state/plumbing ใหม่
+  // (ข้อ: เสียงเลือกไพ่ต่างกันตามโหมด)
+  function onPick(x, y, slop) {
     // กันหยิบซ้อน: touch กับ AR pinch เปิดพร้อมกันได้ (ทั้งคู่เรียก onPick) — ถ้า
     // นิ้วจริงกับจุดที่กล้องตรวจจับไม่ตรงเป๊ะกัน อาจยิง onPick 2 ครั้งคนละพิกัด
     // จากท่าเดียว จนได้ไพ่คนละใบ (บั๊กที่เจอจริง v146) เช็คว่ามีไพ่กำลังบินอยู่ไหม
@@ -692,7 +698,7 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     if (!tile || tile.state !== 'board') return;
     if (!isTileFree(tile, tiles)) { shakeTile(tile); return; } // ถูกหนีบอยู่ — หยิบไม่ได้ตอนนี้
     if (tray.length >= TRAY_CAPACITY) { shakeTray(); return; }
-    flyToTray(tile);
+    flyToTray(tile, slop != null);
   }
 
   // ไม่ใช้ลากอีกต่อไป (ข้อ 1) แต่ยังต้องมี no-op ไว้ในหน้า public API เพราะ
@@ -740,25 +746,7 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     return false;
   }
 
-  // สลับป้าย — วนสุ่มซ้ำในหน่วยความจำ (ไม่วาดหน้าจอระหว่างทาง) จนกว่าจะได้คำซ้ำ
-  // กันในถาดจริง แล้วค่อย apply ผลลัพธ์ครั้งเดียว ผู้เล่นกดครั้งเดียวจบ ไม่ต้องกด
-  // ซ้ำๆ เอง — ถาดมีไพ่น้อยกว่า 2 ใบ ไม่มีทางเกิดคู่ในถาดได้เลยไม่ว่าสุ่มกี่ครั้ง
-  // (ข้ามการวนเช็คไปเลยในกรณีนั้น) MAX_ATTEMPTS กันลูปค้างในกรณีสุดโต่งที่ไม่น่า
-  // เกิดขึ้นจริง (pigeonhole รับประกันว่าถ้ายังมีคู่เหลืออยู่จริง โอกาสเกิดคู่ใน
-  // ถาดต่อการสุ่ม 1 ครั้งไม่เคยเป็นศูนย์)
-  const MAX_SHUFFLE_ATTEMPTS = 300;
-  function shuffle() {
-    const pool = tiles.filter((t) => t.state !== 'matched');
-    if (!pool.length) return;
-    const canFormTrayMatch = tray.length >= 2;
-
-    let wordObjs;
-    let attempt = 0;
-    do {
-      wordObjs = shuffleArray(pool.map((t) => t.wordObj));
-      attempt++;
-    } while (canFormTrayMatch && attempt < MAX_SHUFFLE_ATTEMPTS && !trayHasMatch(pool, wordObjs));
-
+  function applyWordAssignment(pool, wordObjs) {
     pool.forEach((t, i) => {
       t.wordObj = wordObjs[i];
       t.word = wordObjs[i].display;
@@ -766,7 +754,49 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
       if (t.wordEl) t.wordEl.textContent = t.word;
       if (t.el) t.el.style.color = t.color;
     });
-    processTrayMatches();
+  }
+
+  // สลับป้าย — หาผลลัพธ์สุดท้าย (วนสุ่มในหน่วยความจำจนกว่าจะได้คำซ้ำกันในถาดจริง
+  // ผู้เล่นกดครั้งเดียวจบ ไม่ต้องกดซ้ำๆ เอง) ไว้ก่อน แล้วค่อยโชว์การหมุนสุ่มให้
+  // เห็นเป็นรอบๆ (SHUFFLE_SPIN_CYCLES ครั้ง) ก่อนจบที่ผลลัพธ์จริงในรอบสุดท้าย —
+  // ถาดมีไพ่น้อยกว่า 2 ใบ ไม่มีทางเกิดคู่ในถาดได้เลยไม่ว่าสุ่มกี่ครั้ง (ข้ามการวน
+  // เช็คไปเลยในกรณีนั้น) MAX_SHUFFLE_ATTEMPTS กันลูปค้างในกรณีสุดโต่งที่ไม่น่า
+  // เกิดขึ้นจริง (pigeonhole รับประกันว่าถ้ายังมีคู่เหลืออยู่จริง โอกาสเกิดคู่ใน
+  // ถาดต่อการสุ่ม 1 ครั้งไม่เคยเป็นศูนย์)
+  const MAX_SHUFFLE_ATTEMPTS = 300;
+  const SHUFFLE_SPIN_CYCLES = 5;
+  const SHUFFLE_SPIN_INTERVAL_MS = 110;
+  let _shuffling = false; // กันกดซ้ำ/เรียกซ้อนระหว่างกำลังหมุนสุ่มอยู่
+  function shuffle() {
+    if (_shuffling) return;
+    const pool = tiles.filter((t) => t.state !== 'matched');
+    if (!pool.length) return;
+    const canFormTrayMatch = tray.length >= 2;
+
+    let finalWordObjs;
+    let attempt = 0;
+    do {
+      finalWordObjs = shuffleArray(pool.map((t) => t.wordObj));
+      attempt++;
+    } while (canFormTrayMatch && attempt < MAX_SHUFFLE_ATTEMPTS && !trayHasMatch(pool, finalWordObjs));
+
+    _shuffling = true;
+    if (dom.mahjongShuffleBtn) dom.mahjongShuffleBtn.disabled = true;
+    let cycle = 0;
+    const spinTick = () => {
+      cycle++;
+      const isLast = cycle >= SHUFFLE_SPIN_CYCLES;
+      applyWordAssignment(pool, isLast ? finalWordObjs : shuffleArray(pool.map((t) => t.wordObj)));
+      audio.sfx('card_deal'); // เสียงเดียวกับตอนไพ่เรียงตัว ให้ความรู้สึกกำลังสับ/หมุน
+      if (!isLast) {
+        schedule(spinTick, SHUFFLE_SPIN_INTERVAL_MS);
+      } else {
+        _shuffling = false;
+        if (dom.mahjongShuffleBtn) dom.mahjongShuffleBtn.disabled = false;
+        processTrayMatches();
+      }
+    };
+    spinTick();
   }
 
   function relayout() {
@@ -792,7 +822,7 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     clearPendingTimers();
     particleFx.clear();
     if (dom.mahjongBoard) dom.mahjongBoard.innerHTML = '';
-    if (dom.mahjongShuffleBtn) dom.mahjongShuffleBtn.classList.remove('pulse');
+    if (dom.mahjongShuffleBtn) { dom.mahjongShuffleBtn.classList.remove('pulse'); dom.mahjongShuffleBtn.disabled = false; }
     if (dom.mahjongBigWord) dom.mahjongBigWord.classList.remove('show');
     if (dom.mahjongPointsPopup) dom.mahjongPointsPopup.classList.remove('show');
     hideHandCursor();
@@ -804,6 +834,10 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     matchedPairs = 0;
     totalPairs = 0;
     _stuckVoicePlayed = false;
+    // clearPendingTimers() ด้านบนตัดห่วง spinTick ที่ค้างอยู่แล้ว แต่ _shuffling
+    // ไม่ถูกรีเซ็ตเองถ้าออกจากหน้ากลางคันตอนกำลังหมุนสุ่ม — ต้องเคลียร์ตรงนี้ด้วย
+    // ไม่งั้นปุ่มสลับป้ายจะกดไม่ติดตลอดไปตั้งแต่รอบถัดไป
+    _shuffling = false;
   }
 
   return {

@@ -857,6 +857,7 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
   filter: drop-shadow(0 0 10px rgba(255, 216, 77, 0.4));
 }
 .result-total {
+  position: relative; /* จุดอ้างอิงให้ .result-star-particle วางตำแหน่งกลาง (ข้อ: ดาวระเบิด) */
   display: flex; flex-direction: column; align-items: center; gap: 2px;
 }
 .result-total-label {
@@ -870,6 +871,24 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
   filter: drop-shadow(0 0 12px rgba(255, 216, 77, 0.55));
 }
 .result-total-value.settle { animation: digitSettle 0.45s cubic-bezier(.22,1.5,.6,1); }
+
+/* ดาวระเบิดรอบตัวเลขคะแนนสะสมตอนวิ่งขึ้นเสร็จ — DOM/CSS ล้วนๆ ไม่ใช้ fxCanvas
+   เพราะ #resultScreen เป็น full-screen overlay (z-index:6) บัง #sceneRoot
+   (z-index:0) ทั้งจอ ต่อให้วาดตรงไหนบน fxCanvas ก็มองไม่เห็น (บั๊กแบบเดียวกับที่
+   เจอใน #mahjongScreen ก่อนแก้ v158) */
+.result-star-particle {
+  position: absolute;
+  left: 50%; top: 50%;
+  font-size: 18px;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.4);
+  opacity: 1;
+  animation: resultStarBurst 0.7s ease-out forwards;
+}
+@keyframes resultStarBurst {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--star-dx)), calc(-50% + var(--star-dy))) scale(1); opacity: 0; }
+}
 
 /* คะแนนสะสม fixed มุมขวาบน — เป้าหมายที่ .result-card บินไปหาตอนกดกลับเลือกมาตรา
    top เว้นลงมาพ้น .hud (มี word-pill ชิดขอบขวาเดียวกัน — เดิมทับกันพอดี เห็นเป็น
@@ -1521,6 +1540,8 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
 .mj-shuffle-btn:active { box-shadow: 0 1px 0 #a86a1f; }
 /* ถาดเต็มไม่มีคู่ — ไฮไลต์ปุ่มสลับป้าย reuse keyframe pillBump เดิม (ดู .hud-pill.bump) */
 .mj-shuffle-btn.pulse { animation: pillBump 0.6s ease-in-out infinite; }
+/* ปิดปุ่มระหว่างกำลังหมุนสุ่มให้เห็น (กันกดซ้อน) */
+.mj-shuffle-btn:disabled { opacity: 0.6; cursor: default; filter: grayscale(0.3); }
 
 /* แม่มดชี้ล่างสุดกึ่งกลางจอ (ข้อ 8) */
 .mj-witch-img {

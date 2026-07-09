@@ -282,6 +282,34 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     return totalDur;
   }
 
+  // ดาวระเบิดรอบตัวเลขคะแนนสะสมตอนวิ่งขึ้นเสร็จ (หน้าสรุปดาว) — DOM/CSS ล้วนๆ
+  // ไม่ใช้ fxCanvas/particleFx เพราะ #resultScreen เป็น full-screen overlay
+  // (z-index:6) บัง #sceneRoot (z-index:0) ทั้งจอ ต่อให้วาดตรงไหนบน fxCanvas ก็
+  // มองไม่เห็น (บั๊กแบบเดียวกับที่เจอใน #mahjongScreen มาก่อนแก้ v158)
+  const REDUCED_MOTION = typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function _burstResultStars() {
+    if (REDUCED_MOTION) return; // ข้ามไปเลย กันสร้าง element ที่ไม่มี animation มาลบออกให้
+    const host = dom.resultTotalValue && dom.resultTotalValue.closest('.result-total');
+    if (!host) return;
+    const STAR_COUNT = 10;
+    for (let i = 0; i < STAR_COUNT; i++) {
+      const star = document.createElement('span');
+      star.className = 'result-star-particle';
+      star.textContent = '⭐';
+      const angle = (i / STAR_COUNT) * Math.PI * 2 + Math.random() * 0.4;
+      const dist = 40 + Math.random() * 30;
+      star.style.setProperty('--star-dx', `${Math.cos(angle) * dist}px`);
+      star.style.setProperty('--star-dy', `${Math.sin(angle) * dist}px`);
+      host.appendChild(star);
+      // ลบทิ้งทั้ง 2 ทาง (animationend + timeout สำรอง) กันค้างถ้า event ไม่ยิง
+      // ด้วยเหตุผลใดก็ตาม (เช่นแท็บถูกซ่อนระหว่าง animation กำลังเล่น)
+      const remove = () => star.remove();
+      star.addEventListener('animationend', remove, { once: true });
+      setTimeout(remove, 800);
+    }
+  }
+
   function _burstScoreIcon() {
     if (!scoreIconEl) return;
     scoreIconEl.classList.remove('burst');
@@ -556,10 +584,10 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       void dom.vbPoints.offsetWidth;
       dom.vbPoints.classList.add('show');
     }
-    // ลำดับเสียง: อ่านคำที่เพิ่งตอบถูกออกเสียงก่อน → ตามด้วยคำชม → ต่อเมื่อทั้งคู่
-    // เล่นจบแล้วเท่านั้นการ์ดถึงจะหุบลอยไปป้ายคะแนน (แทนตัวจับเวลาคงที่ 750ms เดิม
-    // ที่ไม่ผูกกับความยาวเสียงจริงเลย)
-    audio.playWordAudio(currentWord, () => {
+    // ลำดับเสียง: สะกดคำที่เพิ่งตอบถูกออกเสียงทีละพยางค์ก่อน (เช่น "ผอ อา ผา")
+    // → ตามด้วยคำชม → ต่อเมื่อทั้งคู่เล่นจบแล้วเท่านั้นการ์ดถึงจะหุบลอยไปป้ายคะแนน
+    // (แทนตัวจับเวลาคงที่ 750ms เดิมที่ไม่ผูกกับความยาวเสียงจริงเลย)
+    audio.playSpellReveal(currentWord, () => {
       audio.voice('correct', {
         onText: witchSay,
         onEnd: () => rewardFlyAnim(
@@ -623,6 +651,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
       if (dom.resultTotalValue) {
         const dur = _rollScoreDigits(dom.resultTotalValue, totalScoreAtStart, app.totalScore);
         audio.playCountUpSound(dur);
+        setTimeout(_burstResultStars, dur); // ดาวระเบิดพอดีตอนตัวเลขวิ่งเสร็จ
       }
 
       dom.resultBtn.onclick = () => {
