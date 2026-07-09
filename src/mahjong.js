@@ -724,10 +724,41 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     }
   }
 
+  // เช็คว่าการสุ่มจับคู่คำรอบนี้ (wordObjs ตามลำดับเดียวกับ pool) ทำให้ไพ่ที่อยู่
+  // ในถาดได้คำซ้ำกันอย่างน้อย 1 คู่ไหม — ไม่นับไพ่บนกระดาน เพราะ shuffle ไม่ได้
+  // ย้ายไพ่ระหว่างถาด/กระดาน แค่เปลี่ยนคำที่แสดงเท่านั้น (ดู processTrayMatches
+  // ที่ทำงานกับ tray array ล้วนๆ)
+  function trayHasMatch(pool, wordObjs) {
+    const trayIdx = new Set(tray.map((t) => t.id));
+    const trayWords = [];
+    pool.forEach((t, i) => { if (trayIdx.has(t.id)) trayWords.push(wordObjs[i].display); });
+    const seen = new Set();
+    for (const w of trayWords) {
+      if (seen.has(w)) return true;
+      seen.add(w);
+    }
+    return false;
+  }
+
+  // สลับป้าย — วนสุ่มซ้ำในหน่วยความจำ (ไม่วาดหน้าจอระหว่างทาง) จนกว่าจะได้คำซ้ำ
+  // กันในถาดจริง แล้วค่อย apply ผลลัพธ์ครั้งเดียว ผู้เล่นกดครั้งเดียวจบ ไม่ต้องกด
+  // ซ้ำๆ เอง — ถาดมีไพ่น้อยกว่า 2 ใบ ไม่มีทางเกิดคู่ในถาดได้เลยไม่ว่าสุ่มกี่ครั้ง
+  // (ข้ามการวนเช็คไปเลยในกรณีนั้น) MAX_ATTEMPTS กันลูปค้างในกรณีสุดโต่งที่ไม่น่า
+  // เกิดขึ้นจริง (pigeonhole รับประกันว่าถ้ายังมีคู่เหลืออยู่จริง โอกาสเกิดคู่ใน
+  // ถาดต่อการสุ่ม 1 ครั้งไม่เคยเป็นศูนย์)
+  const MAX_SHUFFLE_ATTEMPTS = 300;
   function shuffle() {
     const pool = tiles.filter((t) => t.state !== 'matched');
     if (!pool.length) return;
-    const wordObjs = shuffleArray(pool.map((t) => t.wordObj));
+    const canFormTrayMatch = tray.length >= 2;
+
+    let wordObjs;
+    let attempt = 0;
+    do {
+      wordObjs = shuffleArray(pool.map((t) => t.wordObj));
+      attempt++;
+    } while (canFormTrayMatch && attempt < MAX_SHUFFLE_ATTEMPTS && !trayHasMatch(pool, wordObjs));
+
     pool.forEach((t, i) => {
       t.wordObj = wordObjs[i];
       t.word = wordObjs[i].display;
