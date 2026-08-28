@@ -1,18 +1,20 @@
-// worldMap.js — "แผนที่มนตรา" แทนหน้าเลือกมาตรา (Phase 1)
+// worldMap.js — "แผนที่มนตรา" แทนหน้าเลือกมาตรา (Phase 1–3)
 //
-// เดินฮีโร่ (เจ้าหญิง) บนแผนที่ป่าเวทมนตร์เลื่อนแนวตั้ง แตะ/ลากพื้นเพื่อเดิน
-// คริสตอล 1 ลูก = 1 มาตรา เรียงตามลำดับการสอน (MATRA index 0 → 29)
-// เดินไป/แตะคริสตอลที่ปลดล็อก → onPickMatra(id) → main.js เรียก startMatraById เดิม
+// เดินฮีโร่ (เจ้าหญิง) บนแผนที่ป่าเวทมนตร์เลื่อนแนวตั้ง (มาตราแรกล่างสุด เดินขึ้นบน)
+// คริสตอล 1 ลูก = 1 มาตรา · แตะ/ลากพื้นให้เดิน · เดิน/แตะคริสตอลปลดล็อก → onPickMatra
 //
-// โครงเลียนแบบ src/mahjong.js — โมดูลมินิเกมแยก วาดบน #fxCanvas ที่ใช้ร่วมกับ
-// game.js / mahjong.js  ***ต้องมีเจ้าของ canvas ตัวเดียวต่อครั้ง*** — main.js เรียก
-// worldMap.stop() ทุกครั้งที่ออกจากหน้า map (ดู showScreen)
+// Phase 2: ลูกสมุนแม่มด (pool) เดินป้วนเปี้ยน — ฮีโร่เหวี่ยงไม้ใส่เองเมื่อเข้าใกล้
+//          กระเด็น + สะเก็ด + แต้ม (ไม่มี HP ไม่มีแพ้)
+// Phase 3: biome สี 6 โซนตามกลุ่มสระ · โขดหิน/พุ่ม/ต้นไม้ วาด procedural · แม่มดปลายแผนที่
+//          return beat ตอนกลับจากมาตรา (ดาวไหลเข้าคริสตอล → กุญแจลูกถัดไปแตก)
 //
-// Phase 1 ยังไม่มี: ลูกสมุน/ระบบตี, แอนิเมชันดูดดาว/กุญแจแตก, biome สี, parallax เต็ม
+// โครงเลียนแบบ src/mahjong.js — วาดบน #fxCanvas ที่ใช้ร่วมกับ game.js/mahjong.js
+// ***เจ้าของ canvas ต้องมีตัวเดียวต่อครั้ง*** — main.js เรียก worldMap.stop() ทุกครั้งที่ออก
 
 import { MATRA } from './data/matra.js';
 import { isUnlocked, getStars } from './ui/levelSelect.js';
 import { createParticleSystem } from './particles.js';
+import { saveTotalScore } from './storage.js';
 
 // asset ที่มีอยู่แล้วใน APP_SHELL — encode ช่องว่างเหมือนที่อื่นในโปรเจกต์
 const CRYSTAL_IMG = new Image();
@@ -46,6 +48,43 @@ const CR_SCALE = (NODE_R * 2) / 180;
 const CR_DW = 400 * CR_SCALE;
 const CR_DH = 218 * CR_SCALE;
 
+// ---- Phase 2: ลูกสมุน ----
+const MAX_MINIONS = 5;
+const ATTACK_R = 88;      // ระยะที่ฮีโร่เหวี่ยงไม้ใส่ลูกสมุนเอง
+const KNOCK = 7;          // แรงกระเด็นตอนโดนตี
+const ATTACK_CD = 26;     // เฟรม cooldown ระหว่างเหวี่ยง
+const SWING_T = 12;       // เฟรมโชว์รอยไม้เหวี่ยง
+const MINION_PTS = 2;     // แต้มสะสมต่อลูกสมุน 1 ตัว
+
+// ---- Phase 3: biome (กลุ่มสระใน matra.js header — const ในไฟล์ ไม่แตะ matra.js) ----
+//   0     kaka (โหมโรง)
+//   1–9   สระเดี่ยว คู่สั้น-ยาว
+//   10–15 สระเดี่ยว (ต่อ)
+//   16–18 สระประสม
+//   19–21 สระเกิน
+//   22–29 มาตราตัวสะกดจริง (ยากสุด — อยู่บนสุดของแผนที่)
+const BIOME_STARTS = [0, 1, 10, 16, 19, 22];
+const BIOME_GRAD = [
+  ['#2c1c50', '#1a0e38'],
+  ['#241457', '#160b34'],
+  ['#1b2550', '#0f1733'],
+  ['#2a1a52', '#160d34'],
+  ['#381c48', '#20102e'],
+  ['#3c1230', '#210a1c'],
+];
+const BIOME_BASE = '#140a2c'; // เติมช่องว่างบน/ล่างสุด
+
+// พิกัดวงกลมของ decor/minion — hoist ออกนอก loop (อย่า alloc array ทุกเฟรม)
+const BUSH_BLOBS = [[-8, 2], [8, 2], [0, -4], [-3, 4], [4, 5]];
+const TREE_BLOBS = [[0, -22, 15], [-9, -12, 11], [9, -12, 11], [0, -34, 10]];
+
+// hash เลขลำดับ → [0,1) แบบ deterministic (ไม่ใช้ Math.random ใน loop/layout)
+function h01(n) {
+  let x = (n * 2654435761) >>> 0;
+  x ^= x >>> 15; x = (x * 2246822519) >>> 0; x ^= x >>> 13;
+  return (x >>> 0) / 4294967296;
+}
+
 export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   const fx = scene.fx;
   const particleFx = createParticleSystem(fx); // pool แยกของตัวเอง (แบบ mahjong.js)
@@ -64,8 +103,19 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   let camTarget = 0;
   let camLockIdx = -1; // >=0 = กล้องล็อกที่โหนดนี้จนกว่าจะแตะพื้นครั้งแรก
 
-  const hero = { wx: 0, wy: 0, tx: 0, ty: 0, moving: false, facing: 1, bob: 0 };
+  const hero = { wx: 0, wy: 0, tx: 0, ty: 0, moving: false, facing: 1, bob: 0, attackCd: 0, swingT: 0 };
   let enterLatch = false; // true = ตัดสินใจเข้าโหนดแล้ว รอ stop() (กันเข้าซ้ำ tap+เดินถึง)
+
+  // Phase 2 — ลูกสมุน (object pool แบบ mahjong/particles)
+  let minions = [];
+  const minionPool = [];
+  let spawnCd = 80;
+
+  // Phase 3
+  let biomeBands = []; // { yLo, yHi, grad }  world-space (cache ต่อ resize)
+  let decor = [];      // { wx, wy, type, s, flip }  0=หิน 1=พุ่ม 2=ต้นไม้
+  let witchWY = 0;     // world y ของแม่มดปลายแผนที่ (เหนือมาตราสุดท้าย)
+  let returnAnim = null; // { idx, from, to, shown, phase:'absorb'|'unlock'|'done', t, nextIdx }
 
   const unlocked = Object.create(null); // matraId -> bool
   const stars = Object.create(null);    // matraId -> 0..3
@@ -78,8 +128,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   let pressNodeIdx = -1;
   let moved = false;
 
-  let bgGrad = null;   // cache — สร้างใหม่ตอน computeLayout (ขนาดจอเปลี่ยน)
-  let decorDots = [];  // ดาวจาง ๆ พื้นหลัง — คำนวณครั้งเดียวตอน computeLayout (ไม่ alloc ใน loop)
+  let decorDots = [];  // ประกายจาง ๆ พื้นหลัง — คำนวณครั้งเดียวตอน computeLayout (ไม่ alloc ใน loop)
   let roadPath = null; // Path2D ของเส้นทาง (world space) — สร้างครั้งเดียวตอน computeLayout
 
   // ---- cancel-safe timers (คัดลอกจาก mahjong.js — เคยมีบั๊ก timer ค้างยิง
@@ -125,9 +174,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       wy: pad + (N - 1 - i) * spacing,
       shake: 0,
     }));
-    bgGrad = null;
 
-    // ดาวพื้นหลัง — สุ่มแบบ deterministic (ไม่ใช้ Math.random ใน loop) ใน band สูง 1 จอ
+    // ประกายพื้นหลัง — สุ่มแบบ deterministic (ไม่ใช้ Math.random ใน loop) ใน band สูง 1 จอ
     const DOT_N = 46;
     decorDots.length = 0;
     for (let i = 0; i < DOT_N; i++) {
@@ -142,6 +190,39 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       roadPath = new Path2D();
       roadPath.moveTo(nodes[0].wx, nodes[0].wy);
       for (let i = 1; i < nodes.length; i++) roadPath.lineTo(nodes[i].wx, nodes[i].wy);
+    }
+
+    // biome bands (world space) — 1 แถบต่อกลุ่ม, gradient cache ในตัว band
+    biomeBands.length = 0;
+    for (let b = 0; b < BIOME_STARTS.length; b++) {
+      const si = BIOME_STARTS[b];
+      const ei = b + 1 < BIOME_STARTS.length ? BIOME_STARTS[b + 1] - 1 : N - 1;
+      // nodes กลับหัว: si มี wy มาก (ล่าง), ei มี wy น้อย (บน)
+      const yLo = nodes[ei].wy - spacing * 0.75;
+      const yHi = nodes[si].wy + spacing * 0.75;
+      const grad = fx.createLinearGradient(0, yLo, 0, yHi);
+      grad.addColorStop(0, BIOME_GRAD[b][0]);
+      grad.addColorStop(1, BIOME_GRAD[b][1]);
+      biomeBands.push({ yLo, yHi, grad });
+    }
+
+    // แม่มดอยู่เหนือมาตราสุดท้าย (index N-1 = wy น้อยสุด)
+    witchWY = nodes[N - 1].wy - spacing * 0.95;
+
+    // ของประดับ — หิน/พุ่ม/ต้นไม้ กระจาย deterministic (เลี่ยงกลางเส้นทาง)
+    decor.length = 0;
+    const decorN = Math.max(8, Math.round(worldH / 240));
+    for (let i = 0; i < decorN; i++) {
+      const r1 = h01(i * 3 + 1);
+      const r2 = h01(i * 3 + 2);
+      const r3 = h01(i * 3 + 3);
+      const side = r1 < 0.5 ? -1 : 1;
+      // ออกห่างจากแกนกลาง (เส้นทาง) อย่างน้อย amp*0.55 แล้วสุ่มต่อไปทางขอบ
+      let dx = side * (amp * 0.55 + r2 * (W * 0.42));
+      const wx = Math.max(20, Math.min(W - 20, midX + dx));
+      const wy = ((i + r3) / decorN) * worldH;
+      const type = r3 < 0.42 ? 0 : r3 < 0.78 ? 1 : 2;
+      decor.push({ wx, wy, type, s: 0.75 + r2 * 0.7, flip: r1 < 0.5 ? -1 : 1 });
     }
   }
 
@@ -176,15 +257,26 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   }
 
   // ---------- lifecycle ----------
-  // opts?: { focusMatraId }  — ถ้ากลับมาจากมาตรา ให้โฟกัสลูกนั้น
+  // opts?: { focusMatraId, justCompleted:{matraId,stars} }
   function enter(opts) {
     opts = opts || {};
+    const jc = opts.justCompleted;
+    // snapshot ก่อน refresh — stars/unlocked ยังเป็นค่าจากครั้งก่อนที่อยู่บนแผนที่
+    const oldStars = jc ? (stars[jc.matraId] || 0) : 0;
+    const prevUnlocked = Object.assign(Object.create(null), unlocked);
+
     computeLayout();
     refresh();
 
+    minions.forEach((m) => minionPool.push(m));
+    minions.length = 0;
+    spawnCd = 120;
+    returnAnim = null;
+
     let fi = focusIdx;
-    if (opts.focusMatraId) {
-      const k = nodes.findIndex((n) => n.matraId === opts.focusMatraId);
+    const focusId = opts.focusMatraId || (jc && jc.matraId);
+    if (focusId) {
+      const k = nodes.findIndex((n) => n.matraId === focusId);
       if (k >= 0) fi = k;
     }
     focusIdx = fi;
@@ -197,6 +289,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     hero.moving = false;
     hero.facing = 1;
     hero.bob = 0;
+    hero.attackCd = 0;
+    hero.swingT = 0;
 
     cam.y = clampCam(node.wy - H / 2);
     camTarget = cam.y;
@@ -211,13 +305,28 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     lastTs = 0;
     if (!rafId) rafId = requestAnimationFrame(loop);
 
-    // เก็บคริสตอลสำเร็จ (มีดาวแล้ว) — ประกายเบา ๆ ที่ลูกนั้น
-    if (opts.focusMatraId && (stars[opts.focusMatraId] || 0) > 0 && !REDUCED_MOTION) {
-      const px = node.wx;
-      const py = node.wy - cam.y;
-      schedule(() => {
-        if (running) particleFx.spawnCelebrationBurst(px, py, { hueMin: 188, hueRange: 34 });
-      }, 120);
+    // ---- return beat: กลับจากมาตราที่เพิ่งเล่นจบ ----
+    if (jc) {
+      const newStars = stars[jc.matraId] || 0;
+      const nextK = fi + 1; // มาตราถัดไป (array order)
+      const nextNew =
+        nextK < nodes.length &&
+        !prevUnlocked[nodes[nextK].matraId] &&
+        !!unlocked[nodes[nextK].matraId];
+      if (REDUCED_MOTION) {
+        // ไม่มีอนิเมชัน — refresh() อัปเดตดาว/ปลดล็อกให้แล้ว
+      } else {
+        returnAnim = {
+          idx: fi,
+          from: oldStars,
+          to: newStars,
+          shown: oldStars,
+          phase: 'absorb',
+          t: 0,
+          nextIdx: nextNew ? nextK : -1,
+        };
+        audio.playCorrectChime();
+      }
     }
   }
 
@@ -230,16 +339,24 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     particleFx.clear();
     scene.clearFx(); // อย่าทิ้งเฟรมแผนที่ค้างให้ game/mahjong
     hero.moving = false;
+    hero.attackCd = 0;
+    hero.swingT = 0;
     enterLatch = false;
     camLockIdx = -1;
     pressed = false;
     moved = false;
     pressNodeIdx = -1;
+    minions.forEach((m) => minionPool.push(m));
+    minions.length = 0;
+    spawnCd = 80;
+    returnAnim = null;
   }
 
   function relayout() {
     if (!running) return;
     const keep = nodes[focusIdx] ? nodes[focusIdx].matraId : null;
+    minions.forEach((m) => minionPool.push(m));
+    minions.length = 0;
     computeLayout();
     refresh();
     if (keep) {
@@ -278,6 +395,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
   function onPick(x, y) {
     if (!running) return;
+    returnAnim = null; // แตะ = ข้าม return beat
     pressed = true;
     moved = false;
     pressX = x;
@@ -337,6 +455,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       !hero.moving &&
       particleFx.count === 0 &&
       Math.abs(camTarget - cam.y) < 0.5 &&
+      minions.length === 0 &&
+      !returnAnim &&
       !anyShake();
     // ยังคง ~30fps ตอนนิ่ง เพื่อให้วงกระเพื่อมโหนด focus เดินต่อ (แนวเดียวกับ game.js)
     if (quiet && now - lastTs < 33) return;
@@ -400,7 +520,130 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       }
     }
 
+    updateMinions();
+    updateReturnAnim();
     particleFx.update();
+  }
+
+  // ---------- Phase 2: ลูกสมุน + ตีอัตโนมัติ ----------
+  function updateMinions() {
+    if (hero.attackCd > 0) hero.attackCd--;
+    if (hero.swingT > 0) hero.swingT--;
+
+    // spawn — เฉพาะตอนไม่มี return beat และ motion ไม่ถูกปิด
+    if (!REDUCED_MOTION && !returnAnim) {
+      if (spawnCd > 0) spawnCd--;
+      if (spawnCd <= 0 && minions.length < MAX_MINIONS) {
+        spawnMinion();
+        spawnCd = 70 + ((h01(performance.now() | 0) * 90) | 0);
+      }
+    }
+
+    const viewLo = cam.y - H * 0.6;
+    const viewHi = cam.y + H * 1.6;
+    for (let i = minions.length - 1; i >= 0; i--) {
+      const m = minions[i];
+      if (m.state === 'knock') {
+        m.wx += m.vx;
+        m.wy += m.vy;
+        m.vx *= 0.9;
+        m.vy *= 0.9;
+        m.spin += m.spinV;
+        if (Math.abs(m.vx) < 0.4 && Math.abs(m.vy) < 0.4) { m.state = 'roam'; m.spin = 0; }
+      } else {
+        m.wob += 0.06;
+        m.wx += m.vx + Math.cos(m.wob) * 0.4;
+        m.wy += m.vy + Math.sin(m.wob * 0.7) * 0.3;
+        m.retarget--;
+        if (m.retarget <= 0) {
+          const a = h01((performance.now() | 0) + i * 131) * Math.PI * 2;
+          m.vx = Math.cos(a) * 0.7;
+          m.vy = Math.sin(a) * 0.5;
+          m.retarget = 90 + ((h01(i * 977 + 3) * 120) | 0);
+        }
+      }
+      // ออกนอกโลก/นอกจอไกล → คืน pool
+      if (m.wy < viewLo || m.wy > viewHi || m.wx < -60 || m.wx > W + 60) {
+        minionPool.push(m);
+        minions.splice(i, 1);
+        continue;
+      }
+      // เข้าใกล้ฮีโร่ + cooldown พร้อม → ฮีโร่เหวี่ยงไม้ใส่เอง
+      if (m.state === 'roam' && hero.attackCd <= 0) {
+        const dx = m.wx - hero.wx;
+        const dy = m.wy - hero.wy;
+        if (dx * dx + dy * dy <= ATTACK_R * ATTACK_R) {
+          const d = Math.hypot(dx, dy) || 1;
+          m.state = 'knock';
+          m.vx = (dx / d) * KNOCK;
+          m.vy = (dy / d) * KNOCK;
+          m.spinV = dx < 0 ? -0.35 : 0.35;
+          hero.attackCd = ATTACK_CD;
+          hero.swingT = SWING_T;
+          hero.facing = dx < 0 ? -1 : 1;
+          particleFx.spawnExplosion(m.wx, m.wy - cam.y); // spawnExplosion รับพิกัด canvas
+          audio.sfx('pick');
+          addPoints(MINION_PTS);
+        }
+      }
+    }
+  }
+
+  // +แต้มสะสม (เหมือน mahjong.addScore) — bump ป้ายคะแนนสะสม
+  function addPoints(pts) {
+    app.totalScore = (app.totalScore || 0) + pts;
+    saveTotalScore(app.totalScore);
+    if (dom.totalBadgeValue) dom.totalBadgeValue.textContent = app.totalScore;
+  }
+
+  function spawnMinion() {
+    const m = minionPool.pop() || {};
+    const fromTop = h01((performance.now() | 0) * 7) < 0.5;
+    m.wx = 30 + h01((performance.now() | 0) * 13) * (W - 60);
+    m.wy = fromTop ? cam.y - 30 : cam.y + H + 30;
+    m.vx = (h01((performance.now() | 0) * 17) - 0.5) * 1.2;
+    m.vy = fromTop ? 0.5 : -0.5;
+    m.wob = h01((performance.now() | 0) * 19) * 6;
+    m.spin = 0;
+    m.spinV = 0;
+    m.retarget = 40;
+    m.state = 'roam';
+    minions.push(m);
+  }
+
+  // ---------- Phase 3: return beat ----------
+  function updateReturnAnim() {
+    if (!returnAnim) return;
+    const ra = returnAnim;
+    ra.t++;
+    const node = nodes[ra.idx];
+    if (ra.phase === 'absorb') {
+      // ดาวไหลเข้าคริสตอล + ประกายเป็นระยะ
+      const p = Math.min(1, ra.t / 42);
+      ra.shown = ra.from + (ra.to - ra.from) * p;
+      if (ra.t % 14 === 6) {
+        particleFx.spawnCelebrationBurst(node.wx, node.wy - cam.y, { hueMin: 186, hueRange: 40 });
+      }
+      camTarget = clampCam(node.wy - H / 2);
+      if (ra.t >= 46) {
+        ra.shown = ra.to;
+        if (ra.nextIdx >= 0) { ra.phase = 'unlock'; ra.t = 0; }
+        else { ra.phase = 'done'; ra.t = 0; }
+      }
+    } else if (ra.phase === 'unlock') {
+      // แพนไปลูกถัดไป กุญแจแตก
+      const nn = nodes[ra.nextIdx];
+      camTarget = clampCam(nn.wy - H / 2);
+      if (ra.t === 20) {
+        particleFx.spawnGlassShards(nn.wx, nn.wy - cam.y, '#c3b4e8');
+        audio.sfx('ting');
+      }
+      if (ra.t >= 44) { ra.phase = 'done'; ra.t = 0; }
+    } else {
+      // กลับมาที่ลูกที่เพิ่งผ่าน
+      camTarget = clampCam(node.wy - H / 2);
+      if (ra.t >= 26) returnAnim = null;
+    }
   }
 
   function nearestUnlockedUnderHero() {
@@ -421,31 +664,40 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const cy = cam.y;
     scene.clearFx();
 
-    // 1) พื้นหลัง — gradient เดียว (cache)
-    if (!bgGrad) {
-      bgGrad = fx.createLinearGradient(0, 0, 0, H);
-      bgGrad.addColorStop(0, '#241457');
-      bgGrad.addColorStop(0.55, '#1b0e3f');
-      bgGrad.addColorStop(1, '#150a30');
-    }
-    fx.fillStyle = bgGrad;
+    // ฐานสีเข้ม เผื่อช่องว่างบน/ล่างสุด
+    fx.fillStyle = BIOME_BASE;
     fx.fillRect(0, 0, W, H);
 
+    // ---- world layer: biome / ดาว / แม่มด / ประดับ / เส้นทาง ----
+    fx.save();
+    fx.translate(0, -cy);
+
+    for (let b = 0; b < biomeBands.length; b++) {
+      const band = biomeBands[b];
+      if (band.yHi < cy - 20 || band.yLo > cy + H + 20) continue;
+      fx.fillStyle = band.grad; // gradient ผูกพิกัด world — ต้องอยู่ใน transform นี้
+      fx.fillRect(0, band.yLo, W, band.yHi - band.yLo);
+    }
+
     if (!REDUCED_MOTION) {
-      // ดาวจาง ๆ เลื่อน parallax ช้ากว่ากล้อง (wrap ในความสูง 1 จอ)
-      fx.fillStyle = 'rgba(150,130,220,0.30)';
-      const off = (cy * 0.4) % H;
+      // ประกายจาง — parallax เลื่อนช้ากว่ากล้อง
+      fx.fillStyle = 'rgba(150,130,220,0.22)';
+      const pOff = cy * 0.45;
       for (let i = 0; i < decorDots.length; i++) {
         const d = decorDots[i];
-        let y = d.y - off;
-        if (y < 0) y += H;
-        fx.fillRect(d.x, y, 1.6, 1.6);
+        const y = cy + (((d.y - pOff) % H) + H) % H; // wrap ในช่วง 1 จอรอบกล้อง
+        fx.fillRect(d.x, y, 1.5, 1.5);
       }
     }
 
-    // 2) เส้นทาง (world space) — ใช้ Path2D cache (fallback lineTo loop ถ้าไม่รองรับ)
-    fx.save();
-    fx.translate(0, -cy);
+    if (witchWY > cy - 160 && witchWY < cy + H + 40) drawWitch();
+
+    for (let i = 0; i < decor.length; i++) {
+      const dc = decor[i];
+      if (dc.wy < cy - 140 || dc.wy > cy + H + 70) continue;
+      drawDecor(dc);
+    }
+
     fx.lineCap = 'round';
     fx.lineJoin = 'round';
     if (!HAS_PATH2D) {
@@ -453,24 +705,24 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.moveTo(nodes[0].wx, nodes[0].wy);
       for (let i = 1; i < nodes.length; i++) fx.lineTo(nodes[i].wx, nodes[i].wy);
     }
-    // 3 ชั้น: ฐานเข้มกว้าง → ไส้อุ่น → เส้นประกลาง
-    fx.strokeStyle = 'rgba(18,7,42,0.85)';
+    fx.strokeStyle = 'rgba(14,6,34,0.9)';
     fx.lineWidth = 26;
     strokeRoad();
-    fx.strokeStyle = 'rgba(255,214,130,0.28)';
+    fx.strokeStyle = 'rgba(255,214,130,0.26)';
     fx.lineWidth = 10;
     strokeRoad();
     fx.setLineDash(ROAD_DASH);
-    fx.strokeStyle = 'rgba(255,236,184,0.55)';
+    fx.strokeStyle = 'rgba(255,236,184,0.5)';
     fx.lineWidth = 2;
     strokeRoad();
     fx.setLineDash(NO_DASH);
+
     fx.restore();
 
-    // 3) คริสตอล (cull นอกจอ)
+    // ---- screen layer: คริสตอล / ลูกสมุน / ฮีโร่ / particle ----
     fx.textAlign = 'center';
     fx.textBaseline = 'alphabetic';
-    fx.font = NODE_FONT; // set ครั้งเดียว — drawNode ไม่ต้อง set ซ้ำทุกใบ
+    fx.font = NODE_FONT;
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
       const sy = n.wy - cy;
@@ -480,10 +732,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       drawNode(n, sx, sy, i, now);
     }
 
-    // 4) ฮีโร่
+    for (let i = 0; i < minions.length; i++) drawMinion(minions[i], cy);
+
     drawHero(cy);
 
-    // 5) particle
     particleFx.draw();
   }
 
@@ -532,10 +784,15 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.fillStyle = '#c3b4e8';
       fx.fillRect(sx - 7.5, sy - 3, 15, 11);
     } else {
-      // ดาว 0–3
-      const sc = stars[n.matraId] || 0;
+      // ดาว 0–3 (ระหว่าง return beat ใช้ค่าที่กำลังไหล)
+      let sc = stars[n.matraId] || 0;
+      if (returnAnim && returnAnim.idx === i) sc = returnAnim.shown;
       const py = sy + NODE_R + 11;
-      for (let s = 0; s < 3; s++) drawPip(sx - 14 + s * 14, py, s < sc);
+      for (let s = 0; s < 3; s++) {
+        // เศษ (0..1) ของดาวที่กำลังเติม → ทำให้พองนิดหน่อย
+        const fillAmt = Math.max(0, Math.min(1, sc - s));
+        drawPip(sx - 14 + s * 14, py, fillAmt);
+      }
     }
 
     // ชื่อมาตรา (fx.font set แล้วใน render() ก่อนวน loop)
@@ -543,10 +800,14 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.fillText(n.name, sx, sy + NODE_R + (locked ? 17 : 27));
   }
 
-  function drawPip(x, y, filled) {
+  // amt: 0 = ว่าง, 1 = เต็ม, ระหว่างนั้น = กำลังเติม (พองนิดหน่อย)
+  function drawPip(x, y, amt) {
+    const grow = amt > 0 && amt < 1 ? 1 + (1 - Math.abs(amt - 0.5) * 2) * 0.5 : 1;
+    const outer = 5 * grow;
+    const inner = 2.2 * grow;
     fx.beginPath();
     for (let i = 0; i < 10; i++) {
-      const r = i % 2 === 0 ? 5 : 2.2;
+      const r = i % 2 === 0 ? outer : inner;
       const a = (i * Math.PI) / 5 - Math.PI / 2;
       const px = x + Math.cos(a) * r;
       const py = y + Math.sin(a) * r;
@@ -554,7 +815,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       else fx.lineTo(px, py);
     }
     fx.closePath();
-    fx.fillStyle = filled ? STAR_FILL : STAR_EMPTY;
+    fx.fillStyle = amt >= 0.5 ? STAR_FILL : STAR_EMPTY;
     fx.fill();
   }
 
@@ -583,6 +844,151 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.fillStyle = '#ffb3d4';
       fx.fill();
     }
+
+    // รอยไม้กายสิทธิ์เหวี่ยง (ตอนตีลูกสมุน)
+    if (hero.swingT > 0) {
+      const p = hero.swingT / SWING_T; // 1 → 0
+      const a0 = -0.5 + (1 - p) * 1.9;
+      fx.save();
+      fx.translate(sx + hero.facing * HERO_R * 0.5, sy - HERO_R * 0.4);
+      fx.rotate(hero.facing * a0);
+      fx.strokeStyle = 'rgba(255,240,180,' + (0.5 * p + 0.25).toFixed(2) + ')';
+      fx.lineWidth = 3;
+      fx.lineCap = 'round';
+      fx.beginPath();
+      fx.arc(0, 0, HERO_R * 0.95, -0.7, 0.7);
+      fx.stroke();
+      fx.restore();
+    }
+  }
+
+  // ---------- Phase 2/3 draw helpers ----------
+  function drawMinion(m, cy) {
+    const sx = m.wx;
+    const sy = m.wy - cy;
+    fx.save();
+    fx.translate(sx, sy);
+    if (m.state === 'knock') fx.rotate(m.spin);
+    else fx.translate(0, Math.sin(m.wob) * 2);
+    // เงา
+    fx.fillStyle = 'rgba(0,0,0,0.22)';
+    fx.beginPath();
+    fx.ellipse(0, 11, 9, 3, 0, 0, Math.PI * 2);
+    fx.fill();
+    // หมวก
+    fx.fillStyle = '#4a2f6b';
+    fx.beginPath();
+    fx.moveTo(0, -16);
+    fx.lineTo(-8, -3);
+    fx.lineTo(8, -3);
+    fx.closePath();
+    fx.fill();
+    // ตัว
+    fx.fillStyle = '#86c97f';
+    fx.beginPath();
+    fx.arc(0, 1, 8.5, 0, Math.PI * 2);
+    fx.fill();
+    fx.fillStyle = '#a9dda2';
+    fx.beginPath();
+    fx.arc(0, 2.5, 4.2, 0, Math.PI * 2);
+    fx.fill();
+    // ตา
+    fx.fillStyle = '#1c0f34';
+    fx.beginPath();
+    fx.arc(-3, -1, 1.4, 0, Math.PI * 2);
+    fx.arc(3, -1, 1.4, 0, Math.PI * 2);
+    fx.fill();
+    fx.restore();
+  }
+
+  function drawDecor(dc) {
+    const s = dc.s;
+    fx.save();
+    fx.translate(dc.wx, dc.wy);
+    fx.scale(dc.flip * s, s);
+    if (dc.type === 0) {
+      // โขดหิน
+      fx.fillStyle = '#241640';
+      fx.beginPath();
+      fx.ellipse(0, 0, 16, 11, 0, 0, Math.PI * 2);
+      fx.fill();
+      fx.fillStyle = '#33224f';
+      fx.beginPath();
+      fx.ellipse(-4, -4, 9, 7, 0, 0, Math.PI * 2);
+      fx.fill();
+      fx.fillStyle = 'rgba(120,100,170,0.28)';
+      fx.beginPath();
+      fx.ellipse(-5, -6, 4, 2.5, 0, 0, Math.PI * 2);
+      fx.fill();
+    } else if (dc.type === 1) {
+      // พุ่มไม้
+      fx.fillStyle = '#16302a';
+      for (let k = 0; k < BUSH_BLOBS.length; k++) {
+        fx.beginPath();
+        fx.arc(BUSH_BLOBS[k][0], BUSH_BLOBS[k][1], 8, 0, Math.PI * 2);
+        fx.fill();
+      }
+      fx.fillStyle = 'rgba(90,170,140,0.22)';
+      fx.beginPath();
+      fx.arc(-2, -5, 4, 0, Math.PI * 2);
+      fx.fill();
+    } else {
+      // ต้นไม้
+      fx.fillStyle = '#1c1330';
+      fx.fillRect(-3, -2, 6, 20);
+      fx.fillStyle = '#122a20';
+      for (let k = 0; k < TREE_BLOBS.length; k++) {
+        fx.beginPath();
+        fx.arc(TREE_BLOBS[k][0], TREE_BLOBS[k][1], TREE_BLOBS[k][2], 0, Math.PI * 2);
+        fx.fill();
+      }
+      fx.fillStyle = 'rgba(90,180,150,0.18)';
+      fx.beginPath();
+      fx.arc(-4, -26, 5, 0, Math.PI * 2);
+      fx.fill();
+    }
+    fx.restore();
+  }
+
+  function drawWitch() {
+    const wx = W / 2;
+    const wy = witchWY;
+    // ลำแสงจาง ๆ ลงมา
+    fx.fillStyle = 'rgba(150,120,220,0.05)';
+    fx.beginPath();
+    fx.moveTo(wx - 14, wy + 8);
+    fx.lineTo(wx - 70, wy + 260);
+    fx.lineTo(wx + 70, wy + 260);
+    fx.lineTo(wx + 14, wy + 8);
+    fx.closePath();
+    fx.fill();
+    // แท่นลอย
+    fx.fillStyle = '#221040';
+    fx.beginPath();
+    fx.ellipse(wx, wy + 20, 46, 10, 0, 0, Math.PI * 2);
+    fx.fill();
+    // ตัวแม่มด
+    fx.fillStyle = '#574789';
+    fx.beginPath();
+    fx.moveTo(wx, wy - 6);
+    fx.lineTo(wx - 16, wy + 20);
+    fx.lineTo(wx + 16, wy + 20);
+    fx.closePath();
+    fx.fill();
+    fx.fillStyle = '#d7c4ee';
+    fx.beginPath();
+    fx.arc(wx, wy - 12, 7, 0, Math.PI * 2);
+    fx.fill();
+    fx.fillStyle = '#241041';
+    fx.beginPath();
+    fx.moveTo(wx, wy - 38);
+    fx.lineTo(wx - 16, wy - 12);
+    fx.lineTo(wx + 16, wy - 12);
+    fx.closePath();
+    fx.fill();
+    fx.beginPath();
+    fx.ellipse(wx, wy - 12, 20, 4, 0, 0, Math.PI * 2);
+    fx.fill();
   }
 
   return {

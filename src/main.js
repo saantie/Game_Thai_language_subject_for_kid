@@ -126,8 +126,8 @@ const game = createGame({
   dom,
   onExit: (r) => {
     saveProgress(app.progress); // บันทึกดาวลง localStorage
-    // กลับไปแผนที่ — โฟกัสคริสตอลลูกที่เพิ่งเล่นจบ (ดาวอัปเดต + ลูกถัดไปปลดล็อก)
-    showScreen('map', { focusMatraId: r && r.matraId });
+    // กลับไปแผนที่ — return beat: ดาวไหลเข้าคริสตอล + ลูกถัดไปปลดล็อก
+    showScreen('map', { focusMatraId: r && r.matraId, justCompleted: r });
   },
 });
 
