@@ -188,6 +188,16 @@
     <img id="mahjongHandCursor" class="mj-hand-cursor hidden" src="public/assets/images/Hand%20click.png" alt="" aria-hidden="true" />
     <img class="mj-witch-img hidden" src="public/assets/images/wish%20happy.gif" alt="" aria-hidden="true" />
 
+    <!-- แผนที่มนตรา — วาดบน #fxCanvas (worldMap.js); overlay นี้มีแค่ปุ่ม
+         ห้ามทำเป็น .screen (พื้น gradient ทึบ + backdrop-filter จะบัง canvas) -->
+    <div id="mapScreen" class="map-overlay hidden" aria-hidden="true">
+      <button id="mapHomeBtn" class="btn-back" title="กลับหน้าแรก">
+        <img src="public/assets/images/Arrow.png" alt="กลับ" class="back-arrow-img" />
+      </button>
+      <button id="mapListBtn" class="btn-icon map-list-btn" type="button" title="รายชื่อมาตรา" aria-label="รายชื่อมาตรา">&#9776;</button>
+      <button id="mapAdultBtn" class="btn-link map-adult-btn">สำหรับผู้ปกครอง</button>
+    </div>
+
     <!-- หน้าโหลดก่อนเล่นวิดีโอนำ — โชว์แถบ % ดาวน์โหลดจริงของ Movie 1.mp4 ก่อนเริ่ม
          เล่น กันวิดีโอกระตุก/ค้างระหว่างเล่นบนเน็ตช้า (เดิมรอแค่ canplay เงียบๆ) -->
     <div id="preloadScreen" class="preload-overlay hidden" aria-hidden="true">

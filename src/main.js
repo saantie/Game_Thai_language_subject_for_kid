@@ -6,6 +6,7 @@ import { createPointerInput } from './input/pointer.js';
 import { createHandPinchInput } from './input/handpinch.js';
 import { createGame } from './game.js';
 import { createMahjongWarmup } from './mahjong.js';
+import { createWorldMap } from './worldMap.js';
 import { buildLevelSelect } from './ui/levelSelect.js';
 import { openAdultGate } from './ui/adultPage.js';
 import { watchAuthState, isAdminEmail } from './firebaseAuth.js';
@@ -46,7 +47,9 @@ const app = {
 watchAuthState((user) => {
   app.currentUser = user;
   app.isAdmin = isAdminEmail(user?.email);
-  if (_screen === 'level') buildLevelSelect($('#levelGrid'), app, (id) => startMatraById(id));
+  // isAdmin ปลดล็อกทุกมาตรา — รีเฟรชหน้าที่กำลังเปิดอยู่ให้เห็นผลทันที
+  if (_screen === 'map') worldMap.refresh();
+  else if (_screen === 'level') buildLevelSelect($('#levelGrid'), app, (id) => startMatraById(id));
 });
 
 // ผู้เล่นเก่าที่มีดาวอยู่แล้วก่อนฟีเจอร์นี้มา ไม่ควรต้องมาเจอด่านอุ่นเครื่องผุดขึ้น
@@ -69,6 +72,7 @@ const startScreen = $('#startScreen');
 const levelScreen = $('#levelScreen');
 const adultScreen = $('#adultScreen');
 const mahjongScreen = $('#mahjongScreen');
+const mapScreen = $('#mapScreen'); // overlay ปุ่มของหน้าแผนที่ (แผนที่เองวาดบน #fxCanvas)
 // ย้ายออกมานอก #mahjongScreen แล้ว (ข้อ 5) — .screen มี backdrop-filter ที่ทำให้
 // position:fixed ของลูกผูกกับกล่อง .screen แทน viewport จริงตอนกระดานสูงต้อง
 // scroll ต้อง toggle .hidden เองแทนการอาศัย parent (#mahjongScreen) ซ่อนให้
@@ -120,9 +124,10 @@ const game = createGame({
   audio,
   app,
   dom,
-  onExit: () => {
+  onExit: (r) => {
     saveProgress(app.progress); // บันทึกดาวลง localStorage
-    showScreen('level');
+    // กลับไปแผนที่ — โฟกัสคริสตอลลูกที่เพิ่งเล่นจบ (ดาวอัปเดต + ลูกถัดไปปลดล็อก)
+    showScreen('map', { focusMatraId: r && r.matraId });
   },
 });
 
@@ -139,6 +144,16 @@ const mahjongWarmup = createMahjongWarmup({
   },
 });
 
+// แผนที่มนตรา — แทนหน้าเลือกมาตรา (วาดบน #fxCanvas เหมือน game.js)
+// onPickMatra = เดินไป/แตะคริสตอลที่ปลดล็อก → เข้าเล่นมาตรานั้นด้วย flow เดิม
+const worldMap = createWorldMap({
+  scene,
+  audio,
+  app,
+  dom,
+  onPickMatra: (id) => startMatraById(id),
+});
+
 // input layer: hybrid — pointer (touch/เมาส์) ทำงานเสมอ, AR (handpinch) ซ้อนทับ
 // เมื่อเปิดกล้องสำเร็จ — เด็กจิ้มจอก็เล่นได้ จีบนิ้วหน้ากล้องก็เล่นได้
 // route ตาม _screen ตอนเรียกจริง (ไม่ต้อง rewiring ตอนสลับหน้า) — onHandFrame
@@ -150,9 +165,18 @@ const mahjongWarmup = createMahjongWarmup({
 // ใช้นิ้วโป้งแทนนิ้วชี้ตอนลาก/วางไพ่ (ข้อ 2) ส่วนเกมหยิบฟองยังใช้นิ้วชี้เหมือนเดิมทุก
 // จุด ไม่กระทบพฤติกรรมเดิมที่ปรับจูนมาแล้ว
 const inputHandlers = {
-  onPick:      (x, y, slop, alt) => (_screen === 'mahjong' ? mahjongWarmup.onPick(alt ? alt.x : x, alt ? alt.y : y, slop) : game.onPick(x, y, slop)),
-  onMove:      (x, y, alt) => (_screen === 'mahjong' ? mahjongWarmup.onMove(alt ? alt.x : x, alt ? alt.y : y) : game.onMove(x, y)),
-  onRelease:   (x, y, alt) => (_screen === 'mahjong' ? mahjongWarmup.onRelease(alt ? alt.x : x, alt ? alt.y : y) : game.onRelease(x, y)),
+  onPick:      (x, y, slop, alt) => {
+    if (_screen === 'map') return worldMap.onPick(x, y);
+    return _screen === 'mahjong' ? mahjongWarmup.onPick(alt ? alt.x : x, alt ? alt.y : y, slop) : game.onPick(x, y, slop);
+  },
+  onMove:      (x, y, alt) => {
+    if (_screen === 'map') return worldMap.onMove(x, y);
+    return _screen === 'mahjong' ? mahjongWarmup.onMove(alt ? alt.x : x, alt ? alt.y : y) : game.onMove(x, y);
+  },
+  onRelease:   (x, y, alt) => {
+    if (_screen === 'map') return worldMap.onRelease(x, y);
+    return _screen === 'mahjong' ? mahjongWarmup.onRelease(alt ? alt.x : x, alt ? alt.y : y) : game.onRelease(x, y);
+  },
   onHandFrame: (frame) => (_screen === 'mahjong' ? mahjongWarmup.onHandFrame(frame) : game.onHandFrame(frame)),
 };
 createPointerInput(scene.fxCanvas, inputHandlers);
@@ -245,13 +269,18 @@ function initAR() {
 
 scene.onResize(() => game.relayout());
 scene.onResize(() => mahjongWarmup.relayout());
+scene.onResize(() => worldMap.relayout());
 
 // ---- screen switching ----
 let _inPopstate  = false;
 let _historyInit = false;
 
-function showScreen(which) {
+function showScreen(which, opts) {
   _screen = which;
+  // #fxCanvas ใช้ร่วมกัน 3 โมดูล (game / mahjong / worldMap) — เจ้าของต้องมีตัวเดียว
+  // ต่อครั้ง หยุดตัวที่ไม่ได้ active ก่อนทุกครั้งที่สลับหน้า (ทุก stop() เป็น idempotent)
+  if (which === 'map') { game.stop(); mahjongWarmup.stop(); }
+  else worldMap.stop();
   syncArToScreen();
   // History API — ทำให้ปุ่ม Back บนมือถือย้อนกลับระหว่างหน้าของแอปแทนที่จะออก
   if (!_inPopstate) {
@@ -265,6 +294,7 @@ function showScreen(which) {
   startScreen.classList.toggle('hidden', which !== 'start');
   levelScreen.classList.toggle('hidden', which !== 'level');
   mahjongScreen.classList.toggle('hidden', which !== 'mahjong');
+  mapScreen.classList.toggle('hidden', which !== 'map'); // overlay ปุ่มหน้าแผนที่ (แผนที่วาดบน #fxCanvas)
   mjWitchImg.classList.toggle('hidden', which !== 'mahjong'); // ข้อ 5 — ย้ายออกจาก #mahjongScreen แล้ว ต้อง toggle เอง
   magicOrbs.classList.toggle('hidden', which !== 'level');
   resetBtn.classList.toggle('hidden', which !== 'level');
@@ -277,6 +307,7 @@ function showScreen(which) {
   // ข้อ 9-10: ไม่ซ้อนภาพกล้อง/ฉากป่าหลังมินิเกมไพ่ — เหลือแค่ fxCanvas (particle)
   // กับพื้นม่วงของ .screen เอง (CSS #sceneRoot.mahjong-mode ซ่อนลูกอื่นทั้งหมด)
   sceneRoot.classList.toggle('mahjong-mode', which === 'mahjong');
+  sceneRoot.classList.toggle('map-mode', which === 'map'); // ซ่อน หม้อ/แม่มด/เจ้าหญิง/ฉาก เหลือ #fxCanvas
   // สลับ BGM ตามหน้า — startLevelBgm() เรียกจาก call site เพื่อควบคุมจังหวะ
   if (which === 'level') {
     audio.stopLevelBgm();   // level select เงียบ — BGM เริ่มเมื่อเกมเริ่ม
@@ -285,6 +316,11 @@ function showScreen(which) {
     audio.stopLevelBgm();
   } else if (which === 'start') {
     audio.stopLevelBgm();
+  } else if (which === 'map') {
+    // แผนที่เป็นที่ที่เด็กใช้เวลาเดินสำรวจ — เปิด BGM เบา ๆ (ต่างจากหน้ากริดเดิมที่เงียบ)
+    if (app.settings.bgm) audio.startLevelBgm(); else audio.stopLevelBgm();
+    // เรียก enter หลัง toggle class แล้ว — canvas พร้อมและ scene.W/H เป็นค่าจริง
+    worldMap.enter(opts || {});
   } else if (which === 'mahjong') {
     // เพลงเดียวกับทั้งแอปแต่ลดเสียงลง 50% — เสียงอ่านสะกดคำ/เสียงแตกต้องได้ยินชัด
     if (app.settings.bgm) audio.startMahjongBgm(); else audio.stopLevelBgm();
@@ -298,12 +334,13 @@ window.addEventListener('popstate', (e) => {
   _inPopstate = true;
   game.stop();
   mahjongWarmup.stop(); // no-op เฉยๆ ถ้าไม่ใช่โมดูลที่กำลัง active
+  worldMap.stop();      // ""
   if (to === 'game' || to === 'mahjong') {
-    // game/mahjong state ไม่สามารถ resume — เปลี่ยน entry นี้เป็น level แทน
-    history.replaceState({ screen: 'level' }, '');
-    showScreen('level');
+    // game/mahjong state ไม่สามารถ resume — เปลี่ยน entry นี้เป็นแผนที่แทน
+    history.replaceState({ screen: 'map' }, '');
+    showScreen('map');
   } else {
-    showScreen(to);
+    showScreen(to); // 'map' resume ได้ (เหมือน 'level'/'start')
   }
   _inPopstate = false;
 });
@@ -485,9 +522,9 @@ $('#startBtn').addEventListener('click', () => {
     initAR(); // ไม่ทำอะไรถ้าปุ่ม AR ปิดอยู่
   });
   audio.stopLevelBgm();
-  // หน้าโหลด (แถบ %) → วิดีโอนำ → หน้าม่วงแม่มดน้อยชวนปราบแม่มดใจร้าย → หน้าเลือกมาตรา
+  // หน้าโหลด (แถบ %) → วิดีโอนำ → หน้าม่วงแม่มดน้อยชวนปราบแม่มดใจร้าย → แผนที่มนตรา
   showPreloadScreen(INTRO_VIDEO_SRC, (resolvedSrc) => {
-    playIntroVideo(resolvedSrc, () => showIntroSpeech(() => showScreen('level')));
+    playIntroVideo(resolvedSrc, () => showIntroSpeech(() => showScreen('map')));
   });
 });
 
@@ -560,15 +597,21 @@ $('#levelAdultBtn').addEventListener('click', () => openAdultGate(app, adultScre
 
 $('#backBtn').addEventListener('click', () => {
   game.stop();
-  showScreen('level');
+  showScreen('map');
 });
 
 $('#mahjongBackBtn').addEventListener('click', () => {
   mahjongWarmup.stop();
-  showScreen('level');
+  showScreen('map');
 });
 
-$('#levelBackBtn').addEventListener('click', () => showScreen('start'));
+// list view (#levelScreen) — เข้าจากปุ่ม ☰ บนแผนที่ ปุ่ม back กลับแผนที่
+$('#levelBackBtn').addEventListener('click', () => showScreen('map'));
+
+// ---- ปุ่ม overlay ของหน้าแผนที่ ----
+$('#mapHomeBtn').addEventListener('click', () => showScreen('start'));
+$('#mapListBtn').addEventListener('click', () => showScreen('level'));
+$('#mapAdultBtn').addEventListener('click', () => openAdultGate(app, adultScreen));
 
 $('#mahjongShuffleBtn').addEventListener('click', () => mahjongWarmup.shuffle());
 
@@ -589,6 +632,7 @@ resetBtn.addEventListener('click', () => {
     saveMahjongSeen({});
     dom.totalBadgeValue.textContent = 0;
     buildLevelSelect($('#levelGrid'), app, (id) => startMatraById(id));
+    worldMap.refresh(); // แผนที่: ล็อกคริสตอลกลับ + ล้างดาว
   }
 });
 

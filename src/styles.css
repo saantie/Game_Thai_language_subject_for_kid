@@ -1349,6 +1349,41 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
   display: none !important;
 }
 
+/* ================================================================
+   แผนที่มนตรา (worldMap.js) — วาดทั้งหมดบน #fxCanvas
+   ================================================================ */
+/* overlay มีแค่ปุ่ม — โปร่ง คลิกทะลุไป #fxCanvas ได้ (ต่างจาก .mahjong-mode
+   ที่ปิด pointer-events เพราะไพ่เป็น DOM; แผนที่ต้องให้ canvas รับแตะ)
+   ไม่ยก z-index #fxCanvas ด้วย — ไม่มี DOM อื่นมาทับ particle เหมือนไพ่ */
+.map-overlay { position: fixed; inset: 0; z-index: 8; pointer-events: none; }
+.map-overlay > * { pointer-events: auto; }
+#mapHomeBtn {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top, 12px));
+  left: max(12px, env(safe-area-inset-left, 12px));
+}
+.map-list-btn {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top, 12px));
+  left: 68px;
+}
+.map-adult-btn {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: max(14px, env(safe-area-inset-bottom, 14px));
+  margin-top: 0;
+}
+
+/* map-mode — ซ่อน DOM ของฉากเดิม เหลือแค่ #fxCanvas (แผนที่วาดเต็มพื้นเอง)
+   #toast ไม่ซ่อน — worldMap.js ใช้บอก "คริสตอลนี้ยังล็อกอยู่" */
+#sceneRoot.map-mode #bgCanvas,
+#sceneRoot.map-mode #camVideo,
+#sceneRoot.map-mode #camShade,
+#sceneRoot.map-mode .cauldron-img,
+#sceneRoot.map-mode .witch,
+#sceneRoot.map-mode .princess-img {
+  display: none !important;
+}
+
 /* ถาด — ชิดติดกันเลย (ไม่มีช่องว่างระหว่างช่อง) ขนาดคำนวณจาก JS ให้พอดีทุก
    อุปกรณ์เสมอ (ดู computeTileSize ใน mahjong.js) กันล้นจอมือถือ */
 .mj-tray {
