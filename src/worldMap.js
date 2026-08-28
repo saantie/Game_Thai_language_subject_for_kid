@@ -121,7 +121,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       idx: i,
       // เส้นทาง "ดู" คดเคี้ยวด้วย sine — แต่กล้องเลื่อนแนวตั้งอย่างเดียว (ตัด edge case)
       wx: midX + Math.sin(i * 0.62) * amp,
-      wy: pad + i * spacing,
+      // มาตราแรก (i=0) อยู่ "ล่างสุด" ของโลก — เดินขึ้นบนเมื่อคืบหน้า (ปีนเขา)
+      wy: pad + (N - 1 - i) * spacing,
       shake: 0,
     }));
     bgGrad = null;
