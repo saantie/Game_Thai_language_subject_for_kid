@@ -230,6 +230,16 @@ export const audio = {
         this._blip(150, 0.05, 'square', t);
         this._blip(90, 0.08, 'square', t + 0.045);
         break;
+      // แผนที่มนตรา: ลูกสมุนโดนตี — เสียงร้อง "โอ๊ย!" การ์ตูน (เสียงต่ำ บีบขึ้นแล้วตกเร็ว)
+      case 'minion_cry':
+        this._bendBlip(300, 520, 0.05, 'sawtooth', t);
+        this._bendBlip(500, 170, 0.17, 'square', t + 0.05);
+        break;
+      // แผนที่มนตรา: เจ้าหญิงโดนกัด — เสียงร้อง "อ๊ะ!" เสียงสูงใส ตกลงเร็ว
+      case 'hero_cry':
+        this._bendBlip(760, 940, 0.04, 'triangle', t);
+        this._bendBlip(900, 540, 0.16, 'sine', t + 0.04);
+        break;
       default:
         break;
     }
@@ -262,6 +272,18 @@ export const audio = {
     o.type = type;
     o.frequency.setValueAtTime(freq, t);
     const g = this._gain(t, 0.25, dur);
+    o.connect(g);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  },
+
+  // blip ที่กวาด pitch f0 → f1 ระหว่าง dur — ใช้ทำเสียงร้อง "โอ๊ย/อ๊ะ" ให้ฟังเป็นเสียงคน
+  _bendBlip(f0, f1, dur, type, t) {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+    const g = this._gain(t, 0.22, dur);
     o.connect(g);
     o.start(t);
     o.stop(t + dur + 0.02);

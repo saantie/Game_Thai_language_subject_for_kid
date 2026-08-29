@@ -59,7 +59,8 @@ const CR_DH = 218 * CR_SCALE;
 const MAX_MINIONS = 6;
 const MINION_HP = 2;           // ลูกสมุนปกติ ตี 2 ครั้งตาย
 const BOSS_HP = 4;             // บอส (มาตรา 5+) ตี 4 ครั้งตาย
-const PATROL_R = NODE_R + 56;  // รัศมีลาดตระเวนรอบคริสตอล
+const SCATTER_R = NODE_R + 84; // รัศมีที่ลูกสมุนเดินเตร่กระจายอยู่รอบคริสตอล
+const WANDER_SPEED = 0.5;      // px/เฟรม — เดินเตร่ช้า ๆ
 const MINION_STAGGER = 16;     // เฟรมสะดุดหลังโดนตี (กัดไม่ได้)
 const MINION_REENGAGE = 26;    // เฟรมหลังสะดุด ที่ยังไม่กลับมาเป็น active
 const MINION_PTS = 3;          // แต้มต่อลูกสมุน 1 ตัว
@@ -134,9 +135,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
   let nodes = [];      // [{ matraId, name, idx, wx, wy, shake }]  พิกัด world
   let worldH = 0;
+  let worldW = 0;      // โลกกว้างกว่าจอ → กล้องแพนแนวนอนตามคริสตอล/ฮีโร่
 
-  const cam = { y: 0 };
-  let camTarget = 0;
+  const cam = { x: 0, y: 0 };
+  let camTargetX = 0;
+  let camTargetY = 0;
   let camLockIdx = -1; // >=0 = กล้องล็อกที่โหนดนี้จนกว่าจะแตะพื้นครั้งแรก
 
   const hero = {
@@ -160,6 +163,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   let biomeBands = []; // { yLo, yHi, grad }  world-space (cache ต่อ resize)
   let decor = [];      // { wx, wy, type, s, flip }  0=หิน 1=พุ่ม 2=ต้นไม้
   let witchWY = 0;     // world y ของแม่มดปลายแผนที่ (เหนือมาตราสุดท้าย)
+  let witchWX = 0;     // world x ของแม่มด (เหนือมาตราสุดท้าย)
   let returnAnim = null; // { idx, from, to, shown, phase:'absorb'|'unlock'|'done', t, nextIdx }
 
   const unlocked = Object.create(null); // matraId -> bool
@@ -202,9 +206,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     W = scene.W;
     H = scene.H;
     const N = MATRA.length;
-    const marginX = Math.max(40, W * 0.16);
-    const amp = Math.max(28, (W - marginX * 2) / 2);
-    const midX = W / 2;
+    // สวิงกว้างกว่าจอ → กล้องแพนแนวนอนตามคริสตอลเป้าหมายให้อยู่กลางจอได้
+    const amp = Math.max(70, W * 0.42);
+    const midX = W / 2 + amp;          // กึ่งกลางโลก (เผื่อสวิงซ้าย-ขวาเท่า ๆ กัน)
+    worldW = W + amp * 2;              // คริสตอลสุดขอบ → cam.x ∈ [0, worldW - W]
     const pad = H * 0.55;
     const spacing = Math.max(190, H * 0.42);
     worldH = pad + spacing * (N - 1) + pad;
@@ -213,7 +218,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       matraId: m.id,
       name: m.name,
       idx: i,
-      // เส้นทาง "ดู" คดเคี้ยวด้วย sine — แต่กล้องเลื่อนแนวตั้งอย่างเดียว (ตัด edge case)
+      // เส้นทางคดเคี้ยวด้วย sine — กล้องแพนตามให้คริสตอลอยู่กลางจอ
       wx: midX + Math.sin(i * 0.62) * amp,
       // มาตราแรก (i=0) อยู่ "ล่างสุด" ของโลก — เดินขึ้นบนเมื่อคืบหน้า (ปีนเขา)
       wy: pad + (N - 1 - i) * spacing,
@@ -253,18 +258,19 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
     // แม่มดอยู่เหนือมาตราสุดท้าย (index N-1 = wy น้อยสุด)
     witchWY = nodes[N - 1].wy - spacing * 0.95;
+    witchWX = nodes[N - 1].wx;
 
     // ของประดับ — หิน/พุ่ม/ต้นไม้ กระจาย deterministic (เลี่ยงกลางเส้นทาง)
     decor.length = 0;
-    const decorN = Math.max(8, Math.round(worldH / 240));
+    const decorN = Math.max(8, Math.round(worldH / 220));
     for (let i = 0; i < decorN; i++) {
       const r1 = h01(i * 3 + 1);
       const r2 = h01(i * 3 + 2);
       const r3 = h01(i * 3 + 3);
       const side = r1 < 0.5 ? -1 : 1;
-      // ออกห่างจากแกนกลาง (เส้นทาง) อย่างน้อย amp*0.55 แล้วสุ่มต่อไปทางขอบ
-      let dx = side * (amp * 0.55 + r2 * (W * 0.42));
-      const wx = Math.max(20, Math.min(W - 20, midX + dx));
+      // ออกห่างจากแกนกลาง (เส้นทาง) อย่างน้อย amp*0.55 แล้วสุ่มต่อไปทางขอบโลก
+      const dx = side * (amp * 0.55 + r2 * (worldW * 0.32));
+      const wx = Math.max(20, Math.min(worldW - 20, midX + dx));
       const wy = ((i + r3) / decorN) * worldH;
       const type = r3 < 0.42 ? 0 : r3 < 0.78 ? 1 : 2;
       decor.push({ wx, wy, type, s: 0.75 + r2 * 0.7, flip: r1 < 0.5 ? -1 : 1 });
@@ -321,6 +327,12 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   function clampCam(y) {
     return Math.max(0, Math.min(y, Math.max(0, worldH - H)));
   }
+  function clampCamX(x) {
+    return Math.max(0, Math.min(x, Math.max(0, worldW - W)));
+  }
+  // world → screen (หัก cam ออก) — ใช้ตอน spawn particle ที่วาดในพิกัดจอ
+  function sX(wx) { return wx - cam.x; }
+  function sY(wy) { return wy - cam.y; }
 
   function heroRestY(node) {
     // ยืนใต้คริสตอลนิดหน่อย — ไกลพอที่ arrival check จะไม่ยิงทันทีตอน enter()
@@ -355,9 +367,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const node = nodes[fi];
 
     hero.wx = node.wx;
-    // เริ่มห่างจากวงลาดตระเวนลงมา — เด็กต้องเดินเข้าไปสู้ลูกสมุนเอง
+    // เริ่มห่างจากโซนลูกสมุนลงมา — เด็กต้องเดินเข้าไปสู้เอง
     hero.wy = nodeSealed(fi)
-      ? Math.min(worldH - 20, node.wy + PATROL_R + HERO_START_GAP)
+      ? Math.min(worldH - 20, node.wy + SCATTER_R + HERO_START_GAP)
       : heroRestY(node);
     hero.tx = hero.wx;
     hero.ty = hero.wy;
@@ -371,8 +383,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     hero.hurtT = 0;
     hero.fainting = 0;
 
+    cam.x = clampCamX(node.wx - W / 2);
     cam.y = clampCam(node.wy - H / 2);
-    camTarget = cam.y;
+    camTargetX = cam.x;
+    camTargetY = cam.y;
     camLockIdx = fi;
 
     enterLatch = false;
@@ -450,8 +464,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       hero.tx = hero.wx;
       hero.ty = hero.wy;
       hero.moving = false;
+      cam.x = clampCamX(node.wx - W / 2);
       cam.y = clampCam(node.wy - H / 2);
-      camTarget = cam.y;
+      camTargetX = cam.x;
+      camTargetY = cam.y;
       camLockIdx = focusIdx;
       enterLatch = false;
     }
@@ -459,7 +475,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
   // ---------- input ----------
   function toWorld(x, y) {
-    return { wx: x, wy: y + cam.y };
+    return { wx: x + cam.x, wy: y + cam.y };
   }
   function nodeAt(wx, wy) {
     const r2 = (NODE_R + 8) * (NODE_R + 8);
@@ -544,7 +560,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       !hero.moving &&
       hero.fainting === 0 &&
       particleFx.count === 0 &&
-      Math.abs(camTarget - cam.y) < 0.5 &&
+      Math.abs(camTargetY - cam.y) < 0.5 &&
+      Math.abs(camTargetX - cam.x) < 0.5 &&
       !returnAnim &&
       !anyShake() &&
       !minionsBusy();
@@ -609,18 +626,23 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         if (Math.abs(dx) > 0.8) hero.facing = dx < 0 ? -1 : 1;
         hero.bob += 0.28;
       }
-      hero.wx = Math.max(22, Math.min(W - 22, hero.wx));
+      hero.wx = Math.max(22, Math.min(worldW - 22, hero.wx));
       hero.wy = Math.max(18, Math.min(worldH - 18, hero.wy));
     }
 
-    // ---- กล้อง ----
+    // ---- กล้อง (แพนทั้งแนวตั้ง + แนวนอน) ----
     if (camLockIdx >= 0 && nodes[camLockIdx]) {
-      camTarget = clampCam(nodes[camLockIdx].wy - H / 2);
+      camTargetX = clampCamX(nodes[camLockIdx].wx - W / 2);
+      camTargetY = clampCam(nodes[camLockIdx].wy - H / 2);
     } else {
-      camTarget = clampCam(hero.wy - H / 2);
+      camTargetX = clampCamX(hero.wx - W / 2);
+      camTargetY = clampCam(hero.wy - H / 2);
     }
-    cam.y += (camTarget - cam.y) * (REDUCED_MOTION ? 1 : CAM_LERP);
-    if (Math.abs(camTarget - cam.y) < 0.3) cam.y = camTarget;
+    const camLerp = REDUCED_MOTION ? 1 : CAM_LERP;
+    cam.x += (camTargetX - cam.x) * camLerp;
+    cam.y += (camTargetY - cam.y) * camLerp;
+    if (Math.abs(camTargetX - cam.x) < 0.3) cam.x = camTargetX;
+    if (Math.abs(camTargetY - cam.y) < 0.3) cam.y = camTargetY;
 
     // ---- เดินถึงคริสตอลที่ปลดล็อก → เก็บ ----
     if (!enterLatch && !pressed) {
@@ -736,14 +758,20 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
           biteHero(m);
         }
       } else {
-        // ลาดตระเวนวนรอบคริสตอล (วงรีแบน) — เดินกลับเข้าวงถ้าอยู่นอก
+        // เดินเตร่ช้า ๆ กระจายอยู่ใกล้ ๆ คริสตอล (ไม่วนเป็นวง) — สุ่มจุดใหม่เป็นระยะ
         m.spin = 0;
-        m.patrolA += m.patrolDir * 0.028;
-        const tx = gnode.wx + Math.cos(m.patrolA) * PATROL_R;
-        const ty = gnode.wy + Math.sin(m.patrolA) * PATROL_R * 0.62;
-        m.wx += (tx - m.wx) * 0.11;
-        m.wy += (ty - m.wy) * 0.11;
-        m.facing = tx < m.wx ? -1 : 1;
+        m.wanderT--;
+        if (m.wanderT <= 0) pickWanderTarget(m, gnode);
+        const wdx = m.wanderX - m.wx;
+        const wdy = m.wanderY - m.wy;
+        const wd = Math.hypot(wdx, wdy);
+        if (wd > 3) {
+          const step = Math.min(wd, WANDER_SPEED);
+          m.wx += (wdx / wd) * step;
+          m.wy += (wdy / wd) * step;
+          if (Math.abs(wdx) > 0.3) m.facing = wdx < 0 ? -1 : 1;
+        }
+        // ถ้าถึงจุดก่อนหมดเวลา = ยืนแช่ (idle bob) จนกว่า wanderT จะหมดแล้วสุ่มใหม่
       }
       m.bob += 0.12;
 
@@ -762,12 +790,13 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         hero.attackCd = ATTACK_CD;
         hero.swingT = SWING_T;
         hero.facing = dhx < 0 ? -1 : 1;
-        particleFx.spawnExplosion(m.wx, m.wy - cam.y);
+        particleFx.spawnExplosion(sX(m.wx), sY(m.wy));
         audio.sfx('swing');
+        audio.sfx('minion_cry'); // เสียงร้องลูกสมุนโดนตี
         if (m.isBoss && m.hp > 0) mapSay('ตีบอสอีก ' + m.hp + ' ครั้ง!');
         if (m.hp <= 0) {
           const gid = gnode.matraId;
-          particleFx.spawnCelebrationBurst(m.wx, m.wy - cam.y, {
+          particleFx.spawnCelebrationBurst(sX(m.wx), sY(m.wy), {
             hueMin: m.isBoss ? 280 : 90, hueRange: 40,
           });
           audio.sfx('star');
@@ -776,7 +805,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
           if (guardKills[gid] >= enemyTotal(diff) && !clearedGuards[gid]) {
             // เคลียร์ศัตรูครบ (ลูกสมุน + บอส) → คริสตอลเปิด!
             clearedGuards[gid] = true;
-            particleFx.spawnCelebrationBurst(gnode.wx, gnode.wy - cam.y, { hueMin: 186, hueRange: 40 });
+            particleFx.spawnCelebrationBurst(sX(gnode.wx), sY(gnode.wy), { hueMin: 186, hueRange: 40 });
             audio.sfx('ting');
             mapSay('เปิดแล้ว! เดินไปเก็บคริสตอลได้เลย');
           } else if (diff.boss && guardKills[gid] === diff.minions) {
@@ -803,32 +832,37 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     hero.tx = hero.wx;
     hero.ty = hero.wy;
     audio.sfx('bite');
-    particleFx.spawnExplosion(hero.wx, hero.wy - cam.y);
+    audio.sfx('hero_cry'); // เสียงร้องเจ้าหญิงโดนกัด
+    particleFx.spawnExplosion(sX(hero.wx), sY(hero.wy));
     if (hero.hp <= 0) {
       hero.hp = 0;
       hero.fainting = FAINT_T;
       hero.hurtT = 0;
-      particleFx.spawnExplosion(hero.wx, hero.wy - cam.y);
+      particleFx.spawnExplosion(sX(hero.wx), sY(hero.wy));
     }
   }
 
   function heroRespawn() {
     const node = nodes[focusIdx] || nodes[0];
-    // ฟื้นห่างจากวงลาดตระเวนลงมา (ไม่ตกกลางวงลูกสมุน → กันสลบวนไม่จบ)
+    // ฟื้นห่างจากโซนลูกสมุนลงมา (ไม่ตกกลางวง → กันสลบวนไม่จบ)
     hero.wx = node.wx;
-    hero.wy = Math.min(worldH - 20, node.wy + PATROL_R + HERO_START_GAP);
+    hero.wy = Math.min(worldH - 20, node.wy + SCATTER_R + HERO_START_GAP);
     hero.tx = hero.wx;
     hero.ty = hero.wy;
     hero.moving = false;
     hero.hp = HERO_MAX_HP;
     hero.invuln = 150; // ~2.5s อมตะให้ตั้งหลัก
     hero.hurtT = 0;
-    // ดันลูกสมุนไปฝั่งตรงข้าม + กลับไปลาดตระเวน + หน่วงนาน
+    // ดันลูกสมุนกระจายไปด้านบน/ข้างคริสตอล (พ้นจากฮีโร่ที่ฟื้นด้านล่าง) + หน่วงนาน
     for (let i = 0; i < minions.length; i++) {
       const m = minions[i];
-      m.patrolA += Math.PI; // ย้ายไปครึ่งวงฝั่งตรงข้าม
-      m.wx = node.wx + Math.cos(m.patrolA) * PATROL_R;
-      m.wy = node.wy + Math.sin(m.patrolA) * PATROL_R * 0.62;
+      const ang = Math.random() * Math.PI * 2;
+      const rad = SCATTER_R * (0.5 + Math.random() * 0.5);
+      m.wx = node.wx + Math.cos(ang) * rad;
+      m.wy = node.wy + Math.sin(ang) * rad * 0.75 - 24; // เอนขึ้นบน หนีฮีโร่
+      m.wanderX = m.wx;
+      m.wanderY = m.wy;
+      m.wanderT = 60;
       m.stagger = 0;
       m.active = false;
       m.reengageCd = 90;
@@ -836,7 +870,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       m.vx = 0;
       m.vy = 0;
     }
-    camTarget = clampCam(node.wy - H / 2);
+    camTargetX = clampCamX(node.wx - W / 2);
+    camTargetY = clampCam(node.wy - H / 2);
     mapSay('ล้มแล้ว! พักแป๊บนึงแล้วลองใหม่นะ');
   }
 
@@ -847,17 +882,27 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (dom.totalBadgeValue) dom.totalBadgeValue.textContent = app.totalScore;
   }
 
-  // ศัตรูเฝ้าคริสตอล gnode — เกิดที่ขอบวงลาดตระเวน (isBoss = บอส hp เยอะ ตัวใหญ่)
+  // เลือกจุดเดินเตร่ใหม่ใกล้ ๆ คริสตอล gnode (กระจายทั่ว ไม่เป็นวง)
+  function pickWanderTarget(m, gnode) {
+    const ang = Math.random() * Math.PI * 2;
+    const rad = SCATTER_R * (0.25 + Math.random() * 0.75);
+    m.wanderX = gnode.wx + Math.cos(ang) * rad;
+    m.wanderY = gnode.wy + Math.sin(ang) * rad * 0.75; // แบนนิดหน่อย (มุมมอง)
+    m.wanderT = 80 + (Math.random() * 120 | 0);         // เดิน/ยืนแช่ ~1.5–3.5 วิ
+  }
+
+  // ศัตรูเฝ้าคริสตอล gnode — เกิดกระจายรอบ ๆ (isBoss = บอส hp เยอะ ตัวใหญ่)
   function spawnGuard(gnode, idx, isBoss) {
     const m = minionPool.pop() || {};
-    const spread = Math.max(1, enemyTotal(diff));
-    const a = (idx / spread) * Math.PI * 2 + h01((performance.now() | 0) + idx * 53) * 1.5;
+    const ang = h01((performance.now() | 0) + idx * 53) * Math.PI * 2;
+    const rad = SCATTER_R * (0.4 + h01(idx * 7 + 3) * 0.6);
     m.guardIdx = focusIdx;
     m.isBoss = !!isBoss;
-    m.patrolA = a;
-    m.patrolDir = h01((performance.now() | 0) * 3 + idx) < 0.5 ? -1 : 1;
-    m.wx = gnode.wx + Math.cos(a) * PATROL_R;
-    m.wy = gnode.wy + Math.sin(a) * PATROL_R * 0.62;
+    m.wx = gnode.wx + Math.cos(ang) * rad;
+    m.wy = gnode.wy + Math.sin(ang) * rad * 0.75;
+    m.wanderX = m.wx;
+    m.wanderY = m.wy;
+    m.wanderT = 20 + idx * 8; // เหลื่อมกันเล็กน้อยตอนเพิ่งเกิด
     m.vx = 0;
     m.vy = 0;
     m.hp = isBoss ? BOSS_HP : MINION_HP;
@@ -884,9 +929,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       const p = Math.min(1, ra.t / 42);
       ra.shown = ra.from + (ra.to - ra.from) * p;
       if (ra.t % 14 === 6) {
-        particleFx.spawnCelebrationBurst(node.wx, node.wy - cam.y, { hueMin: 186, hueRange: 40 });
+        particleFx.spawnCelebrationBurst(sX(node.wx), sY(node.wy), { hueMin: 186, hueRange: 40 });
       }
-      camTarget = clampCam(node.wy - H / 2);
+      camTargetX = clampCamX(node.wx - W / 2);
+      camTargetY = clampCam(node.wy - H / 2);
       if (ra.t >= 46) {
         ra.shown = ra.to;
         if (ra.nextIdx >= 0) { ra.phase = 'unlock'; ra.t = 0; }
@@ -895,15 +941,17 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     } else if (ra.phase === 'unlock') {
       // แพนไปลูกถัดไป กุญแจแตก
       const nn = nodes[ra.nextIdx];
-      camTarget = clampCam(nn.wy - H / 2);
+      camTargetX = clampCamX(nn.wx - W / 2);
+      camTargetY = clampCam(nn.wy - H / 2);
       if (ra.t === 20) {
-        particleFx.spawnGlassShards(nn.wx, nn.wy - cam.y, '#c3b4e8');
+        particleFx.spawnGlassShards(sX(nn.wx), sY(nn.wy), '#c3b4e8');
         audio.sfx('ting');
       }
       if (ra.t >= 44) { ra.phase = 'done'; ra.t = 0; }
     } else {
       // กลับมาที่ลูกที่เพิ่งผ่าน แล้วเลื่อนเป้าหมายไปคริสตอลถัดไป (ที่ยังมีลูกสมุนเฝ้า)
-      camTarget = clampCam(node.wy - H / 2);
+      camTargetX = clampCamX(node.wx - W / 2);
+      camTargetY = clampCam(node.wy - H / 2);
       if (ra.t >= 26) {
         returnAnim = null;
         const nextFocus = computeFocusIdx();
@@ -911,11 +959,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
           focusIdx = nextFocus;
           camLockIdx = focusIdx;
           resetGuardWave();
-          // วางฮีโร่ใต้วงลูกสมุนของลูกถัดไป
+          // วางฮีโร่ใต้โซนลูกสมุนของลูกถัดไป
           const nn = nodes[focusIdx];
           hero.wx = nn.wx;
           hero.wy = nodeSealed(focusIdx)
-            ? Math.min(worldH - 20, nn.wy + PATROL_R + HERO_START_GAP)
+            ? Math.min(worldH - 20, nn.wy + SCATTER_R + HERO_START_GAP)
             : heroRestY(nn);
           hero.tx = hero.wx;
           hero.ty = hero.wy;
@@ -940,7 +988,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   // ---------- render ----------
   function render(now) {
     // กล้องสั่นตอนสลบ
-    const cy = cam.y + (hero.fainting > 0 ? Math.sin(now * 0.55) * 4 : 0);
+    const shake = hero.fainting > 0 ? Math.sin(now * 0.55) * 4 : 0;
+    const cx = cam.x + shake;
+    const cy = cam.y + shake;
     scene.clearFx();
 
     // ฐานสีเข้ม เผื่อช่องว่างบน/ล่างสุด
@@ -949,23 +999,25 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
     // ---- world layer: biome / ดาว / แม่มด / ประดับ / เส้นทาง ----
     fx.save();
-    fx.translate(0, -cy);
+    fx.translate(-cx, -cy);
 
     for (let b = 0; b < biomeBands.length; b++) {
       const band = biomeBands[b];
       if (band.yHi < cy - 20 || band.yLo > cy + H + 20) continue;
       fx.fillStyle = band.grad; // gradient ผูกพิกัด world — ต้องอยู่ใน transform นี้
-      fx.fillRect(0, band.yLo, W, band.yHi - band.yLo);
+      fx.fillRect(0, band.yLo, worldW, band.yHi - band.yLo);
     }
 
     if (!REDUCED_MOTION) {
-      // ประกายจาง — parallax เลื่อนช้ากว่ากล้อง
+      // ประกายจาง — parallax เลื่อนช้ากว่ากล้อง (wrap เป็น tile ขนาดจอตามกล้อง)
       fx.fillStyle = 'rgba(150,130,220,0.22)';
-      const pOff = cy * 0.45;
+      const pX = cx * 0.5;
+      const pY = cy * 0.5;
       for (let i = 0; i < decorDots.length; i++) {
         const d = decorDots[i];
-        const y = cy + (((d.y - pOff) % H) + H) % H; // wrap ในช่วง 1 จอรอบกล้อง
-        fx.fillRect(d.x, y, 1.5, 1.5);
+        const x = cx + (((d.x - pX) % W) + W) % W;
+        const y = cy + (((d.y - pY) % H) + H) % H;
+        fx.fillRect(x, y, 1.5, 1.5);
       }
     }
 
@@ -1006,14 +1058,15 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       const n = nodes[i];
       const sy = n.wy - cy;
       if (sy < -80 || sy > H + 80) continue;
-      let sx = n.wx;
+      let sx = n.wx - cx;
+      if (sx < -120 || sx > W + 120) continue;
       if (n.shake > 0) sx += Math.sin(now * 0.05) * 5 * n.shake;
       drawNode(n, sx, sy, i, now);
     }
 
-    for (let i = 0; i < minions.length; i++) drawMinion(minions[i], cy, now);
+    for (let i = 0; i < minions.length; i++) drawMinion(minions[i], cx, cy, now);
 
-    drawHero(cy, now);
+    drawHero(cx, cy, now);
 
     particleFx.draw();
 
@@ -1024,6 +1077,14 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   function drawHpBar() {
     const x0 = 20;
     const y0 = 66;
+    // แผ่นรองจาง ๆ — กันหัวใจจมกับคริสตอล/ของประดับที่อาจเลื่อนมาอยู่หลังมุมนี้
+    const bx = x0 - 12;
+    const bw = (HERO_MAX_HP - 1) * 18 + 26;
+    fx.fillStyle = 'rgba(18,10,38,0.5)';
+    fx.beginPath();
+    if (fx.roundRect) fx.roundRect(bx, y0 - 14, bw, 26, 12);
+    else fx.rect(bx, y0 - 14, bw, 26);
+    fx.fill();
     for (let i = 0; i < HERO_MAX_HP; i++) {
       const cx = x0 + i * 18;
       const on = i < hero.hp;
@@ -1149,8 +1210,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.fill();
   }
 
-  function drawHero(cy, now) {
-    const sx = hero.wx;
+  function drawHero(cx, cy, now) {
+    const sx = hero.wx - cx;
     const sy = hero.wy - cy;
     const fainting = hero.fainting > 0;
     const bob = hero.moving && !fainting && !REDUCED_MOTION ? Math.sin(hero.bob) * 3 : 0;
@@ -1207,8 +1268,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   }
 
   // ---------- Phase 2/3 draw helpers ----------
-  function drawMinion(m, cy, now) {
-    const sx = m.wx;
+  function drawMinion(m, cx, cy, now) {
+    const sx = m.wx - cx;
     const sy = m.wy - cy;
     const staggered = m.stagger > 0;
     const bs = m.isBoss ? 1.65 : 1; // บอสตัวใหญ่กว่า
@@ -1332,7 +1393,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   }
 
   function drawWitch() {
-    const wx = W / 2;
+    const wx = witchWX;
     const wy = witchWY;
 
     // รูปแม่มดจริง (public/assets/images/map witch.png) — ถ้ายังไม่มีไฟล์ ตกไปวาดเอง
