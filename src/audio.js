@@ -220,6 +220,16 @@ export const audio = {
         this._blip(340, 0.09, 'square', t);
         this._blip(340, 0.09, 'square', t + 0.12);
         break;
+      // แผนที่มนตรา: เจ้าหญิงเหวี่ยงไม้โดนลูกสมุน — "ฟวับ-ปั้ก" การ์ตูน
+      case 'swing':
+        this._blip(240, 0.05, 'sawtooth', t);
+        this._blip(110, 0.11, 'triangle', t + 0.03);
+        break;
+      // แผนที่มนตรา: ลูกสมุนกัดเจ้าหญิง — "ง่ับ" ต่ำ ๆ 2 จังหวะ
+      case 'bite':
+        this._blip(150, 0.05, 'square', t);
+        this._blip(90, 0.08, 'square', t + 0.045);
+        break;
       default:
         break;
     }

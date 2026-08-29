@@ -50,23 +50,32 @@ const CR_DW = 400 * CR_SCALE;
 const CR_DH = 218 * CR_SCALE;
 
 // ---- Phase 2: ลูกสมุนเฝ้าคริสตอล + ระบบต่อสู้ ----
+// ลูกสมุน "เข้าทีละตัว" — มีตัวเดียวที่ไล่/กัดได้ (active) ที่เหลือลาดตระเวนรอ
+// ถูกตี → กระเด็นออก + สะดุด + reengageCd (เดินกลับเข้ามาใหม่ / เปิดทางให้ตัวอื่น)
 const MAX_MINIONS = 5;
-const GUARDS_PER_NODE = 2;    // ลูกสมุนเฝ้าคริสตอลเป้าหมายกี่ตัว
-const PATROL_R = NODE_R + 56; // รัศมีลาดตระเวนรอบคริสตอล
-const MINION_SPEED = 2.3;     // ช้ากว่าฮีโร่ (4) — วิ่งหนีได้
-const MINION_HP = 3;          // ต้องตี 3 ครั้งถึงตาย
-const MINION_STAGGER = 13;    // เฟรมสะดุดหลังโดนตี (กัดไม่ได้)
-const MINION_PTS = 3;         // แต้มสะสมต่อการฆ่าลูกสมุน 1 ตัว
-const AGGRO_R = 150;          // ระยะที่ลูกสมุนเริ่มไล่เจ้าหญิง
-const BITE_R = 40;            // ระยะกัด
-const BITE_CD = 80;           // เฟรมระหว่างกัด (~1.3s)
+const PATROL_R = NODE_R + 56;   // รัศมีลาดตระเวนรอบคริสตอล
+const MINION_STAGGER = 16;      // เฟรมสะดุดหลังโดนตี (กัดไม่ได้)
+const MINION_REENGAGE = 26;     // เฟรมหลังสะดุด ที่ยังไม่กลับมาเป็น active (เดินกลับเข้ามาก่อน)
+const MINION_PTS = 3;           // แต้มสะสมต่อการฆ่าลูกสมุน 1 ตัว
+const BITE_R = 40;              // ระยะกัด
 const BITE_DMG = 1;
 
-// ระยะตีของเจ้าหญิงต้องใกล้พอ ๆ กับระยะกัด (ไม่งั้นฟันไล่ได้เรื่อย ๆ ไม่มีวันโดนกัด)
-const ATTACK_R = 54;          // ระยะที่เจ้าหญิงเหวี่ยงไม้ใส่ลูกสมุนเอง
-const ATTACK_CD = 30;         // เฟรม cooldown ระหว่างเหวี่ยง — เปิดช่องให้ลูกสมุนเข้ากัด
-const KNOCK = 3.5;            // แรงกระเด็นตอนโดนตี (เบา ๆ ไม่ถีบออกไกล)
-const SWING_T = 12;           // เฟรมโชว์รอยไม้เหวี่ยง
+const ATTACK_R = 56;            // ระยะที่เจ้าหญิงเหวี่ยงไม้ใส่ลูกสมุน (ใกล้ ๆ ระยะกัด)
+const ATTACK_CD = 26;           // เฟรม cooldown ระหว่างเหวี่ยง
+const KNOCK = 6.5;              // แรงกระเด็นตอนโดนตี — ทีละตัวแล้วถีบไกลได้
+const SWING_T = 12;             // เฟรมโชว์รอยไม้เหวี่ยง
+
+// ความยากตาม index มาตรา (0 = แม่ ก กา ง่ายสุด, 29 = แม่ กด ยากสุด)
+function difficultyFor(idx, total) {
+  const t = total > 1 ? idx / (total - 1) : 0;
+  return {
+    guards: idx < 4 ? 1 : idx < 16 ? 2 : 3,      // 1 → 2 → 3 ตัว
+    hp: idx < 8 ? 2 : idx < 22 ? 3 : 4,          // ตี 2 → 3 → 4 ครั้ง
+    speed: 1.7 + t * 1.5,                        // 1.7 → 3.2 (ฮีโร่ 4 เสมอ)
+    aggroR: 108 + t * 74,                        // 108 → 182
+    biteCd: Math.round(112 - t * 46),            // 112 → 66 เฟรม
+  };
+}
 
 // ---- แถบพลังเจ้าหญิง ----
 const HERO_MAX_HP = 5;
@@ -131,6 +140,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   let minions = [];
   const minionPool = [];
   let spawnCd = 80;
+  let diff = difficultyFor(0, 30); // ความยากของคริสตอลเป้าหมายปัจจุบัน (อัปเดตใน setFocus)
 
   // Phase 3
   let biomeBands = []; // { yLo, yHi, grad }  world-space (cache ต่อ resize)
@@ -586,6 +596,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
   // ---------- Phase 2: ลูกสมุนเฝ้าคริสตอล + ต่อสู้ ----------
   function updateMinions() {
+    diff = difficultyFor(focusIdx, nodes.length); // ความยากตามคริสตอลเป้าหมาย
     if (hero.attackCd > 0) hero.attackCd--;
     if (hero.swingT > 0) hero.swingT--;
 
@@ -597,10 +608,33 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       let g = 0;
       for (let i = 0; i < minions.length; i++) if (minions[i].guardIdx === focusIdx) g++;
       if (spawnCd > 0) spawnCd--;
-      if (spawnCd <= 0 && g < GUARDS_PER_NODE && minions.length < MAX_MINIONS) {
+      if (spawnCd <= 0 && g < diff.guards && minions.length < MAX_MINIONS) {
         spawnGuard(fnode, g);
-        spawnCd = 26;
+        spawnCd = 30;
       }
+    }
+
+    // ---- เลือก "ตัวที่เข้าปะทะ" ทีละตัว ----
+    // ตัวที่ active = ตัวเดียวที่ไล่/กัดได้ ที่เหลือลาดตระเวนรอ
+    let active = null;
+    for (let i = 0; i < minions.length; i++) {
+      const m = minions[i];
+      if (m.reengageCd > 0) m.reengageCd--;
+      if (m.active) {
+        const d = Math.hypot(hero.wx - m.wx, hero.wy - m.wy);
+        if (m.stagger > 0 || m.reengageCd > 0 || d > diff.aggroR * 1.4 || hero.fainting > 0) m.active = false;
+        else active = m;
+      }
+    }
+    if (!active && hero.fainting === 0) {
+      let bd = Infinity;
+      for (let i = 0; i < minions.length; i++) {
+        const m = minions[i];
+        if (m.stagger > 0 || m.reengageCd > 0) continue;
+        const d = Math.hypot(hero.wx - m.wx, hero.wy - m.wy);
+        if (d < diff.aggroR && d < bd) { bd = d; active = m; }
+      }
+      if (active) active.active = true;
     }
 
     const cullLo = cam.y - H * 1.4;
@@ -610,7 +644,6 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       if (m.biteCd > 0) m.biteCd--;
 
       const gnode = nodes[m.guardIdx];
-      // โหนดที่เฝ้าถูกเก็บไปแล้ว หรือ ลูกสมุนหลุดจอไกลมาก → คืน pool
       if (!gnode || (stars[gnode.matraId] || 0) >= 3 || m.wy < cullLo || m.wy > cullHi) {
         minionPool.push(m);
         minions.splice(i, 1);
@@ -622,50 +655,51 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       const distHero = Math.hypot(dhx, dhy);
 
       if (m.stagger > 0) {
-        // สะดุดหลังโดนตี — กระเด็นด้วยความเร็วที่เหลือ
+        // ถูกตี → กระเด็นออก (แรง) แล้วสะดุด
         m.stagger--;
         m.wx += m.vx;
         m.wy += m.vy;
-        m.vx *= 0.86;
-        m.vy *= 0.86;
+        m.vx *= 0.88;
+        m.vy *= 0.88;
         m.spin += m.spinV;
-      } else if (hero.fainting === 0 && distHero < AGGRO_R) {
-        // ไล่เจ้าหญิง
+        if (m.stagger === 0) m.reengageCd = MINION_REENGAGE; // เดินกลับเข้ามาก่อนค่อยปะทะใหม่
+      } else if (m === active) {
+        // เข้าปะทะ: ไล่ + กัด
         m.spin = 0;
         const d = distHero || 1;
-        m.wx += (dhx / d) * MINION_SPEED;
-        m.wy += (dhy / d) * MINION_SPEED;
+        m.wx += (dhx / d) * diff.speed;
+        m.wy += (dhy / d) * diff.speed;
         m.facing = dhx < 0 ? -1 : 1;
-        // กัด
         if (distHero < BITE_R && m.biteCd <= 0 && hero.invuln <= 0 && hero.fainting === 0) {
           biteHero(m);
         }
       } else {
-        // ลาดตระเวนวนรอบคริสตอล (วงรีแบน)
+        // ลาดตระเวนวนรอบคริสตอล (วงรีแบน) — เดินกลับเข้าวงถ้าอยู่นอก
         m.spin = 0;
-        m.patrolA += m.patrolDir * 0.03;
+        m.patrolA += m.patrolDir * 0.028;
         const tx = gnode.wx + Math.cos(m.patrolA) * PATROL_R;
         const ty = gnode.wy + Math.sin(m.patrolA) * PATROL_R * 0.62;
-        m.wx += (tx - m.wx) * 0.12;
-        m.wy += (ty - m.wy) * 0.12;
+        m.wx += (tx - m.wx) * 0.11;
+        m.wy += (ty - m.wy) * 0.11;
         m.facing = tx < m.wx ? -1 : 1;
       }
       m.bob += 0.12;
 
-      // เจ้าหญิงเหวี่ยงไม้ใส่ลูกสมุนที่ใกล้สุด (พร้อม cooldown, ไม่นับตัวที่สะดุดอยู่)
+      // เจ้าหญิงเหวี่ยงไม้ใส่ลูกสมุน (เฉพาะตัวที่เข้าปะทะ หรือตัวใดที่บังเอิญประชิด)
       if (hero.fainting === 0 && hero.attackCd <= 0 && m.stagger <= 0 &&
-          distHero * distHero <= ATTACK_R * ATTACK_R) {
+          distHero <= ATTACK_R) {
         const d = distHero || 1;
         m.hp--;
         m.stagger = MINION_STAGGER;
+        m.active = false;
         m.vx = (-dhx / d) * KNOCK;
         m.vy = (-dhy / d) * KNOCK;
-        m.spinV = dhx > 0 ? -0.3 : 0.3;
+        m.spinV = dhx > 0 ? -0.32 : 0.32;
         hero.attackCd = ATTACK_CD;
         hero.swingT = SWING_T;
         hero.facing = dhx < 0 ? -1 : 1;
         particleFx.spawnExplosion(m.wx, m.wy - cam.y);
-        audio.sfx('pick');
+        audio.sfx('swing');
         if (m.hp <= 0) {
           particleFx.spawnCelebrationBurst(m.wx, m.wy - cam.y, { hueMin: 90, hueRange: 40 });
           audio.sfx('star');
@@ -682,15 +716,15 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     hero.hp -= BITE_DMG;
     hero.invuln = HERO_INVULN;
     hero.hurtT = 12;
-    m.biteCd = BITE_CD;
-    // ผลักเจ้าหญิงถอยนิดหน่อย + ยกเลิกเป้าหมายเดิน
+    m.biteCd = diff.biteCd;
+    // ผลักเจ้าหญิงถอย + ยกเลิกเป้าหมายเดิน
     const d = Math.hypot(hero.wx - m.wx, hero.wy - m.wy) || 1;
-    hero.wx += ((hero.wx - m.wx) / d) * 10;
-    hero.wy += ((hero.wy - m.wy) / d) * 10;
+    hero.wx += ((hero.wx - m.wx) / d) * 11;
+    hero.wy += ((hero.wy - m.wy) / d) * 11;
     hero.moving = false;
     hero.tx = hero.wx;
     hero.ty = hero.wy;
-    audio.sfx('wrong_soft');
+    audio.sfx('bite');
     particleFx.spawnExplosion(hero.wx, hero.wy - cam.y);
     if (hero.hp <= 0) {
       hero.hp = 0;
@@ -702,18 +736,27 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
   function heroRespawn() {
     const node = nodes[focusIdx] || nodes[0];
+    // ฟื้นห่างจากวงลาดตระเวนลงมา (ไม่ตกกลางวงลูกสมุน → กันสลบวนไม่จบ)
     hero.wx = node.wx;
-    hero.wy = heroRestY(node);
+    hero.wy = Math.min(worldH - 20, node.wy + PATROL_R + 66);
     hero.tx = hero.wx;
     hero.ty = hero.wy;
     hero.moving = false;
     hero.hp = HERO_MAX_HP;
-    hero.invuln = 120;
+    hero.invuln = 150; // ~2.5s อมตะให้ตั้งหลัก
     hero.hurtT = 0;
-    // ดันลูกสมุนกลับไปลาดตระเวน + หน่วงกัด
+    // ดันลูกสมุนไปฝั่งตรงข้าม + กลับไปลาดตระเวน + หน่วงนาน
     for (let i = 0; i < minions.length; i++) {
-      minions[i].stagger = 0;
-      minions[i].biteCd = BITE_CD;
+      const m = minions[i];
+      m.patrolA += Math.PI; // ย้ายไปครึ่งวงฝั่งตรงข้าม
+      m.wx = node.wx + Math.cos(m.patrolA) * PATROL_R;
+      m.wy = node.wy + Math.sin(m.patrolA) * PATROL_R * 0.62;
+      m.stagger = 0;
+      m.active = false;
+      m.reengageCd = 90;
+      m.biteCd = diff.biteCd;
+      m.vx = 0;
+      m.vy = 0;
     }
     camTarget = clampCam(node.wy - H / 2);
     mapSay('ล้มแล้ว! พักแป๊บนึงแล้วลองใหม่นะ');
@@ -729,7 +772,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   // ลูกสมุนเฝ้าคริสตอล gnode — เกิดที่ขอบวงลาดตระเวน
   function spawnGuard(gnode, idx) {
     const m = minionPool.pop() || {};
-    const a = (idx / GUARDS_PER_NODE) * Math.PI * 2 + h01((performance.now() | 0) + idx * 53) * 1.5;
+    const a = (idx / Math.max(1, diff.guards)) * Math.PI * 2 + h01((performance.now() | 0) + idx * 53) * 1.5;
     m.guardIdx = focusIdx;
     m.patrolA = a;
     m.patrolDir = h01((performance.now() | 0) * 3 + idx) < 0.5 ? -1 : 1;
@@ -737,14 +780,16 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     m.wy = gnode.wy + Math.sin(a) * PATROL_R * 0.62;
     m.vx = 0;
     m.vy = 0;
-    m.hp = MINION_HP;
+    m.hp = diff.hp;
+    m.maxHp = diff.hp;
     m.stagger = 0;
-    m.biteCd = 40;
+    m.reengageCd = 0;
+    m.active = false;
+    m.biteCd = 45;
     m.spin = 0;
     m.spinV = 0;
     m.bob = h01((performance.now() | 0) * 7 + idx) * 6;
     m.facing = 1;
-    m.state = 'patrol';
     minions.push(m);
   }
 
@@ -1082,22 +1127,23 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.arc(-3, -1, 1.4, 0, Math.PI * 2);
     fx.arc(3, -1, 1.4, 0, Math.PI * 2);
     fx.fill();
-    // ปาก (กัด) — โผล่ตอนไล่ + biteCd เกือบพร้อม
-    if (!staggered && m.biteCd < 24) {
+    // ปาก (กัด) — โผล่ตอนเข้าปะทะ + biteCd เกือบพร้อม
+    if (!staggered && m.active && m.biteCd < 26) {
       fx.fillStyle = '#3a1520';
       fx.beginPath();
-      fx.arc(0, 5, 2.4, 0, Math.PI);
+      fx.arc(0, 5, 2.6, 0, Math.PI);
       fx.fill();
     }
     fx.restore();
 
     // แถบเลือดลูกสมุน (เฉพาะตอนโดนตีไปแล้ว)
-    if (m.hp < MINION_HP) {
+    const mx = m.maxHp || 3;
+    if (m.hp < mx) {
       const bw = 20;
       fx.fillStyle = 'rgba(0,0,0,0.45)';
       fx.fillRect(sx - bw / 2, sy - 22, bw, 3);
       fx.fillStyle = '#7bd06a';
-      fx.fillRect(sx - bw / 2, sy - 22, bw * (m.hp / MINION_HP), 3);
+      fx.fillRect(sx - bw / 2, sy - 22, bw * (m.hp / mx), 3);
     }
   }
 
