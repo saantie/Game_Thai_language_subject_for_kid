@@ -59,8 +59,11 @@ const CR_DH = 218 * CR_SCALE;
 const MAX_MINIONS = 6;
 const MINION_HP = 2;           // ลูกสมุนปกติ ตี 2 ครั้งตาย
 const BOSS_HP = 4;             // บอส (มาตรา 5+) ตี 4 ครั้งตาย
-const SCATTER_R = NODE_R + 84; // รัศมีที่ลูกสมุนเดินเตร่กระจายอยู่รอบคริสตอล
-const WANDER_SPEED = 0.5;      // px/เฟรม — เดินเตร่ช้า ๆ
+// โซนที่ลูกสมุนเดินเตร่ = วงรีกว้างรอบคริสตอล — กระจายห่างกัน ไม่กระจุกที่ลูกแก้ว
+// แนวนอนกว้าง (จอมีที่เหลือถึงขอบ) แต่แนวตั้งต้องไม่ถึงคริสตอลลูกข้างเคียง (spacing/2 ≈ 177)
+const SCATTER_RX = 176;
+const SCATTER_RY = 150;
+const WANDER_SPEED = 0.75;       // px/เฟรม — เดินเตร่ช้า ๆ
 const MINION_STAGGER = 16;     // เฟรมสะดุดหลังโดนตี (กัดไม่ได้)
 const MINION_REENGAGE = 26;    // เฟรมหลังสะดุด ที่ยังไม่กลับมาเป็น active
 const MINION_PTS = 3;          // แต้มต่อลูกสมุน 1 ตัว
@@ -81,12 +84,12 @@ function difficultyFor(idx, total) {
     minions: Math.min(2 + idx, 5),  // 2,3,4,5,5,5,...
     boss: idx >= 4,                 // มาตรา 5 เป็นต้นไป
     speed: 1.7 + t * 1.5,           // 1.7 → 3.2 (ฮีโร่ 4 เสมอ)
-    aggroR: 96 + t * 80,            // 96 → 176 (เริ่มไล่เมื่อเด็กเดินเข้าไป)
+    aggroR: 120 + t * 90,           // 120 → 210 (ลูกสมุนกระจายไกล — ต้องเห็นเด็กไกลขึ้น)
     biteCd: Math.round(112 - t * 46), // 112 → 66 เฟรม
   };
 }
 function enemyTotal(d) { return d.minions + (d.boss ? 1 : 0); }
-const HERO_START_GAP = 96; // เจ้าหญิงเริ่มห่างวงลาดตระเวนเท่านี้ (ต้องเดินเข้าไปเอง)
+const HERO_START_GAP = 64; // เจ้าหญิงเริ่มห่างจากขอบโซนลูกสมุนเท่านี้ (ต้องเดินเข้าไปเอง)
 
 // ---- แถบพลังเจ้าหญิง ----
 const HERO_MAX_HP = 5;
@@ -136,6 +139,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   let nodes = [];      // [{ matraId, name, idx, wx, wy, shake }]  พิกัด world
   let worldH = 0;
   let worldW = 0;      // โลกกว้างกว่าจอ → กล้องแพนแนวนอนตามคริสตอล/ฮีโร่
+  let nodeSpacing = 190; // ระยะห่างแนวตั้งระหว่างคริสตอล (คำนวณใน computeLayout)
 
   const cam = { x: 0, y: 0 };
   let camTargetX = 0;
@@ -212,6 +216,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     worldW = W + amp * 2;              // คริสตอลสุดขอบ → cam.x ∈ [0, worldW - W]
     const pad = H * 0.55;
     const spacing = Math.max(190, H * 0.42);
+    nodeSpacing = spacing;
     worldH = pad + spacing * (N - 1) + pad;
 
     nodes = MATRA.map((m, i) => ({
@@ -338,6 +343,12 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     // ยืนใต้คริสตอลนิดหน่อย — ไกลพอที่ arrival check จะไม่ยิงทันทีตอน enter()
     return node.wy + NODE_R + HERO_R + 10;
   }
+  // จุดเริ่มของเจ้าหญิงตอนคริสตอลยังผนึก — ใต้โซนลูกสมุน แต่ไม่เลยไปทับคริสตอลลูกถัดไป
+  function heroSealedStartY(node) {
+    const want = node.wy + SCATTER_RY + HERO_START_GAP;
+    const cap = node.wy + nodeSpacing * 0.6; // กันไปยืนทับคริสตอลลูกล่าง
+    return Math.min(worldH - 20, want, cap);
+  }
 
   // ---------- lifecycle ----------
   // opts?: { focusMatraId, justCompleted:{matraId,stars} }
@@ -368,9 +379,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
     hero.wx = node.wx;
     // เริ่มห่างจากโซนลูกสมุนลงมา — เด็กต้องเดินเข้าไปสู้เอง
-    hero.wy = nodeSealed(fi)
-      ? Math.min(worldH - 20, node.wy + SCATTER_R + HERO_START_GAP)
-      : heroRestY(node);
+    hero.wy = nodeSealed(fi) ? heroSealedStartY(node) : heroRestY(node);
     hero.tx = hero.wx;
     hero.ty = hero.wy;
     hero.moving = false;
@@ -846,20 +855,19 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const node = nodes[focusIdx] || nodes[0];
     // ฟื้นห่างจากโซนลูกสมุนลงมา (ไม่ตกกลางวง → กันสลบวนไม่จบ)
     hero.wx = node.wx;
-    hero.wy = Math.min(worldH - 20, node.wy + SCATTER_R + HERO_START_GAP);
+    hero.wy = heroSealedStartY(node);
     hero.tx = hero.wx;
     hero.ty = hero.wy;
     hero.moving = false;
     hero.hp = HERO_MAX_HP;
     hero.invuln = 150; // ~2.5s อมตะให้ตั้งหลัก
     hero.hurtT = 0;
-    // ดันลูกสมุนกระจายไปด้านบน/ข้างคริสตอล (พ้นจากฮีโร่ที่ฟื้นด้านล่าง) + หน่วงนาน
+    // ดึงลูกสมุนกลับเข้าโซนบ้านของตัวเอง เอนขึ้นบน (พ้นจากฮีโร่ที่ฟื้นด้านล่าง) + หน่วงนาน
     for (let i = 0; i < minions.length; i++) {
       const m = minions[i];
-      const ang = Math.random() * Math.PI * 2;
-      const rad = SCATTER_R * (0.5 + Math.random() * 0.5);
-      m.wx = node.wx + Math.cos(ang) * rad;
-      m.wy = node.wy + Math.sin(ang) * rad * 0.75 - 24; // เอนขึ้นบน หนีฮีโร่
+      const f = 0.6 + Math.random() * 0.4;
+      m.wx = node.wx + Math.cos(m.homeA) * SCATTER_RX * f;
+      m.wy = node.wy + Math.sin(m.homeA) * SCATTER_RY * f - 30; // เอนขึ้นบน หนีฮีโร่
       m.wanderX = m.wx;
       m.wanderY = m.wy;
       m.wanderT = 60;
@@ -882,24 +890,31 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (dom.totalBadgeValue) dom.totalBadgeValue.textContent = app.totalScore;
   }
 
-  // เลือกจุดเดินเตร่ใหม่ใกล้ ๆ คริสตอล gnode (กระจายทั่ว ไม่เป็นวง)
+  // เลือกจุดเดินเตร่ใหม่ — แต่ละตัวมี "โซนบ้าน" (m.homeA) ของตัวเอง กระจายห่างกันรอบคริสตอล
+  // เตร่อยู่ในโซนตัวเอง + ระยะไม่น้อยกว่า ~ครึ่งวง (ไม่มุดกลับมากอดลูกแก้ว)
   function pickWanderTarget(m, gnode) {
-    const ang = Math.random() * Math.PI * 2;
-    const rad = SCATTER_R * (0.25 + Math.random() * 0.75);
-    m.wanderX = gnode.wx + Math.cos(ang) * rad;
-    m.wanderY = gnode.wy + Math.sin(ang) * rad * 0.75; // แบนนิดหน่อย (มุมมอง)
-    m.wanderT = 80 + (Math.random() * 120 | 0);         // เดิน/ยืนแช่ ~1.5–3.5 วิ
+    const ang = m.homeA + (Math.random() - 0.5) * 0.8;    // เตร่ในโซนตัวเอง ~±23° (ไม่ล้ำช่องล่าง)
+    const f = 0.55 + Math.random() * 0.45;                 // 0.55–1.0 ของรัศมีวงรี
+    m.wanderX = gnode.wx + Math.cos(ang) * SCATTER_RX * f;
+    m.wanderY = gnode.wy + Math.sin(ang) * SCATTER_RY * f;
+    m.wanderT = 90 + (Math.random() * 130 | 0);            // เดิน/ยืนแช่ ~2–3.7 วิ
   }
 
-  // ศัตรูเฝ้าคริสตอล gnode — เกิดกระจายรอบ ๆ (isBoss = บอส hp เยอะ ตัวใหญ่)
+  // ศัตรูเฝ้าคริสตอล gnode — แต่ละตัวได้ "โซนบ้าน" กระจายเท่า ๆ กันรอบคริสตอล
+  //   เว้นช่องล่างตรง ๆ (ทางที่เด็กเดินขึ้นมา) ไว้ — ลูกสมุนเฝ้าด้านข้าง+ด้านบน+เฉียงล่าง
+  //   เด็กเดินขึ้นทางกลางได้โดยไม่โดนรุมทันที แต่ต้องกวาดให้ครบทุกตัวคริสตอลถึงเปิด
   function spawnGuard(gnode, idx, isBoss) {
     const m = minionPool.pop() || {};
-    const ang = h01((performance.now() | 0) + idx * 53) * Math.PI * 2;
-    const rad = SCATTER_R * (0.4 + h01(idx * 7 + 3) * 0.6);
+    const total = Math.max(1, enemyTotal(diff));
+    const GAP = 1.15;                       // ครึ่งความกว้างช่องล่างที่เว้นไว้ (rad ~66°)
+    const arc = Math.PI * 2 - GAP * 2;      // ส่วนโค้งที่กระจายลูกสมุน (~228°)
+    const slot = idx % total;
+    m.homeA = Math.PI / 2 + GAP + ((slot + 0.5) / total) * arc; // π/2 = ทิศลง (หา่งเด็ก)
+    const f = 0.6 + h01(idx * 7 + 3) * 0.4;
     m.guardIdx = focusIdx;
     m.isBoss = !!isBoss;
-    m.wx = gnode.wx + Math.cos(ang) * rad;
-    m.wy = gnode.wy + Math.sin(ang) * rad * 0.75;
+    m.wx = gnode.wx + Math.cos(m.homeA) * SCATTER_RX * f;
+    m.wy = gnode.wy + Math.sin(m.homeA) * SCATTER_RY * f;
     m.wanderX = m.wx;
     m.wanderY = m.wy;
     m.wanderT = 20 + idx * 8; // เหลื่อมกันเล็กน้อยตอนเพิ่งเกิด
@@ -962,9 +977,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
           // วางฮีโร่ใต้โซนลูกสมุนของลูกถัดไป
           const nn = nodes[focusIdx];
           hero.wx = nn.wx;
-          hero.wy = nodeSealed(focusIdx)
-            ? Math.min(worldH - 20, nn.wy + SCATTER_R + HERO_START_GAP)
-            : heroRestY(nn);
+          hero.wy = nodeSealed(focusIdx) ? heroSealedStartY(nn) : heroRestY(nn);
           hero.tx = hero.wx;
           hero.ty = hero.wy;
         }
@@ -1454,13 +1467,5 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.fill();
   }
 
-  return {
-    enter,
-    onPick,
-    onMove,
-    onRelease,
-    relayout,
-    refresh,
-    stop,
-  };
+  return { enter, onPick, onMove, onRelease, relayout, refresh, stop };
 }
