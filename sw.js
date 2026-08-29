@@ -1,6 +1,6 @@
 // sw.js — Service Worker: cache-first + stale-while-revalidate + auto-reload on update
 // bump CACHE string ทุกครั้งที่ deploy ใหม่ → browser detect diff → install → reload client
-const CACHE = 'witch-cauldron-v176';
+const CACHE = 'witch-cauldron-v177';
 
 const APP_SHELL = [
   './',
@@ -44,6 +44,8 @@ const APP_SHELL = [
   './public/assets/images/Evil%20wish/3-4.gif',
   './public/assets/images/Evil%20wish/4-5.gif',
   './public/assets/images/princess_1.png',
+  // NOTE: './public/assets/images/map%20witch.png' — ยังไม่ precache จนกว่าไฟล์จะมีจริง
+  //       (cache.addAll จะ reject ทั้งชุดถ้ามี URL ที่ 404) — แคชแบบ runtime ผ่าน fetch handler ไปก่อน
   './public/assets/images/princess_2.png',
   './public/assets/images/princess_3.png',
   './public/assets/images/princess_4.png',

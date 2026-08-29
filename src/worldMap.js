@@ -22,6 +22,9 @@ const CRYSTAL_IMG = new Image();
 CRYSTAL_IMG.src = 'public/assets/images/glass%20ball.png';
 const HERO_IMG = new Image();
 HERO_IMG.src = 'public/assets/images/princess_1.png';
+// แม่มดปลายแผนที่ — ถ้าไฟล์ยังไม่มี ใช้รูปทรงวาดเองแทน (drawWitch)
+const MAP_WITCH_IMG = new Image();
+MAP_WITCH_IMG.src = 'public/assets/images/map%20witch.png';
 
 const REDUCED_MOTION =
   typeof window.matchMedia === 'function' &&
@@ -49,33 +52,39 @@ const CR_SCALE = (NODE_R * 2) / 180;
 const CR_DW = 400 * CR_SCALE;
 const CR_DH = 218 * CR_SCALE;
 
-// ---- Phase 2: ลูกสมุนเฝ้าคริสตอล + ระบบต่อสู้ ----
-// ลูกสมุน "เข้าทีละตัว" — มีตัวเดียวที่ไล่/กัดได้ (active) ที่เหลือลาดตระเวนรอ
+// ---- Phase 2: ลูกสมุน + บอส เฝ้าคริสตอล ----
+// ศัตรู "เข้าทีละตัว" — มีตัวเดียวที่ไล่/กัดได้ (active) ที่เหลือลาดตระเวนรอ
 // ถูกตี → กระเด็นออก + สะดุด + reengageCd (เดินกลับเข้ามาใหม่ / เปิดทางให้ตัวอื่น)
-const MAX_MINIONS = 5;
-const PATROL_R = NODE_R + 56;   // รัศมีลาดตระเวนรอบคริสตอล
-const MINION_STAGGER = 16;      // เฟรมสะดุดหลังโดนตี (กัดไม่ได้)
-const MINION_REENGAGE = 26;     // เฟรมหลังสะดุด ที่ยังไม่กลับมาเป็น active (เดินกลับเข้ามาก่อน)
-const MINION_PTS = 3;           // แต้มสะสมต่อการฆ่าลูกสมุน 1 ตัว
-const BITE_R = 40;              // ระยะกัด
+// ศัตรูของแต่ละมาตรา "หมดได้" — ฆ่าแล้วไม่เกิดใหม่ (clearedGuards/guardKills per matraId)
+const MAX_MINIONS = 6;
+const MINION_HP = 2;           // ลูกสมุนปกติ ตี 2 ครั้งตาย
+const BOSS_HP = 4;             // บอส (มาตรา 5+) ตี 4 ครั้งตาย
+const PATROL_R = NODE_R + 56;  // รัศมีลาดตระเวนรอบคริสตอล
+const MINION_STAGGER = 16;     // เฟรมสะดุดหลังโดนตี (กัดไม่ได้)
+const MINION_REENGAGE = 26;    // เฟรมหลังสะดุด ที่ยังไม่กลับมาเป็น active
+const MINION_PTS = 3;          // แต้มต่อลูกสมุน 1 ตัว
+const BOSS_PTS = 12;           // แต้มต่อบอส 1 ตัว
+const BITE_R = 40;             // ระยะกัด
 const BITE_DMG = 1;
 
-const ATTACK_R = 56;            // ระยะที่เจ้าหญิงเหวี่ยงไม้ใส่ลูกสมุน (ใกล้ ๆ ระยะกัด)
-const ATTACK_CD = 26;           // เฟรม cooldown ระหว่างเหวี่ยง
-const KNOCK = 6.5;              // แรงกระเด็นตอนโดนตี — ทีละตัวแล้วถีบไกลได้
-const SWING_T = 12;             // เฟรมโชว์รอยไม้เหวี่ยง
+const ATTACK_R = 56;           // ระยะที่เจ้าหญิงเหวี่ยงไม้ใส่ศัตรู
+const ATTACK_CD = 26;          // เฟรม cooldown ระหว่างเหวี่ยง
+const KNOCK = 6.5;             // แรงกระเด็นตอนโดนตี (บอสโดนถีบครึ่งเดียว)
+const SWING_T = 12;            // เฟรมโชว์รอยไม้เหวี่ยง
 
-// ความยากตาม index มาตรา (0 = แม่ ก กา ง่ายสุด, 29 = แม่ กด ยากสุด)
+// จำนวน/ความยากศัตรูตาม index มาตรา
+//   มาตรา 1 (idx0) = 2 ตัว · เพิ่มมาตราละ 1 ถึง 5 ตัว · มาตรา 5 (idx4) เป็นต้นไป + บอส 1 ตัว
 function difficultyFor(idx, total) {
   const t = total > 1 ? idx / (total - 1) : 0;
   return {
-    guards: idx < 4 ? 1 : idx < 16 ? 2 : 3,      // 1 → 2 → 3 ตัว
-    hp: idx < 8 ? 2 : idx < 22 ? 3 : 4,          // ตี 2 → 3 → 4 ครั้ง
-    speed: 1.7 + t * 1.5,                        // 1.7 → 3.2 (ฮีโร่ 4 เสมอ)
-    aggroR: 96 + t * 80,                         // 96 → 176 (เริ่มไล่เมื่อเด็กเดินเข้าไป)
-    biteCd: Math.round(112 - t * 46),            // 112 → 66 เฟรม
+    minions: Math.min(2 + idx, 5),  // 2,3,4,5,5,5,...
+    boss: idx >= 4,                 // มาตรา 5 เป็นต้นไป
+    speed: 1.7 + t * 1.5,           // 1.7 → 3.2 (ฮีโร่ 4 เสมอ)
+    aggroR: 96 + t * 80,            // 96 → 176 (เริ่มไล่เมื่อเด็กเดินเข้าไป)
+    biteCd: Math.round(112 - t * 46), // 112 → 66 เฟรม
   };
 }
+function enemyTotal(d) { return d.minions + (d.boss ? 1 : 0); }
 const HERO_START_GAP = 96; // เจ้าหญิงเริ่มห่างวงลาดตระเวนเท่านี้ (ต้องเดินเข้าไปเอง)
 
 // ---- แถบพลังเจ้าหญิง ----
@@ -291,14 +300,15 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     return lastUnlocked;
   }
 
-  // เริ่มคลื่นลูกสมุนของคริสตอลเป้าหมายใหม่ (ถ้ายังไม่เคยเคลียร์)
+  // ตั้งจังหวะปล่อยศัตรูของคริสตอลเป้าหมาย
+  //   ***ไม่รีเซ็ต guardKills*** — ศัตรูที่ฆ่าไปแล้วตายถาวรทั้ง session (ศัตรูมีจำนวนจำกัด)
+  //   แค่ทำให้ตัวนับมีค่าเริ่ม + หน่วงก่อนตัวแรกโผล่
   function resetGuardWave() {
     const fn = nodes[focusIdx];
-    if (fn && !clearedGuards[fn.matraId]) {
-      guardKills[fn.matraId] = 0;
-      guardSpawns[fn.matraId] = 0;
-      spawnCd = 60;
-    }
+    if (!fn) return;
+    if (guardKills[fn.matraId] == null) guardKills[fn.matraId] = 0;
+    if (guardSpawns[fn.matraId] == null) guardSpawns[fn.matraId] = 0;
+    spawnCd = 60;
   }
 
   // คริสตอลปิดผนึกอยู่ไหม (ต้องกำจัดลูกสมุนก่อนถึงเก็บได้)
@@ -341,7 +351,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       if (k >= 0) fi = k;
     }
     focusIdx = fi;
-    resetGuardWave(); // เข้าแผนที่ทีไร = คลื่นลูกสมุนเต็มใหม่ (ถ้ายังไม่เคยเคลียร์)
+    resetGuardWave(); // ศัตรูที่เหลือ = enemyTotal - ที่ฆ่าไปแล้ว (ไม่เกิดใหม่)
     const node = nodes[fi];
 
     hero.wx = node.wx;
@@ -509,8 +519,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (nodeSealed(i)) {
       if (viaTap) {
         audio.sfx('tile_blocked');
-        const left = Math.max(0, diff.guards - (guardKills[n.matraId] || 0));
-        mapSay('กำจัดลูกสมุนให้หมดก่อนนะ! เหลืออีก ' + left + ' ตัว');
+        const tot = enemyTotal(difficultyFor(i, nodes.length));
+        const left = Math.max(0, tot - (guardKills[n.matraId] || 0));
+        mapSay('กำจัดศัตรูให้หมดก่อนนะ! เหลืออีก ' + left + ' ตัว');
         n.shake = 1;
       }
       return;
@@ -640,14 +651,28 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const fid = fnode && fnode.matraId;
     const needGuards = fnode && unlocked[fid] && (stars[fid] || 0) < 3 && !clearedGuards[fid];
 
-    // ปล่อยลูกสมุนเฝ้าคริสตอลเป้าหมายจนครบ diff.guards ตัว (ปล่อยครั้งเดียวต่อความพยายาม)
+    // ปล่อยศัตรูทีละตัว — ลูกสมุนปกติก่อนจนหมด แล้วบอส 1 ตัว (idx>=4)
+    //   ศัตรูมีจำนวนจำกัด: จำนวนที่ยังต้องเจอ = diff.minions - ที่ฆ่าไปแล้ว (+ บอสถ้ามี)
     if (!REDUCED_MOTION && !returnAnim && hero.fainting === 0 && needGuards) {
-      const spawned = guardSpawns[fid] || 0;
+      const killed = guardKills[fid] || 0;
+      const normalsKilled = Math.min(killed, diff.minions);
+      let normalsAlive = 0;
+      let bossAlive = false;
+      for (let k = 0; k < minions.length; k++) {
+        if (minions[k].isBoss) bossAlive = true;
+        else normalsAlive++;
+      }
       if (spawnCd > 0) spawnCd--;
-      if (spawnCd <= 0 && spawned < diff.guards && minions.length < MAX_MINIONS) {
-        spawnGuard(fnode, spawned);
-        guardSpawns[fid] = spawned + 1;
-        spawnCd = 34;
+      if (spawnCd <= 0 && minions.length < MAX_MINIONS) {
+        if (normalsKilled + normalsAlive < diff.minions) {
+          spawnGuard(fnode, guardSpawns[fid] || 0, false);
+          guardSpawns[fid] = (guardSpawns[fid] || 0) + 1;
+          spawnCd = 34;
+        } else if (diff.boss && normalsKilled >= diff.minions && !bossAlive && killed < diff.minions + 1) {
+          spawnGuard(fnode, guardSpawns[fid] || 0, true);
+          guardSpawns[fid] = (guardSpawns[fid] || 0) + 1;
+          spawnCd = 44;
+        }
       }
     }
 
@@ -722,34 +747,40 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       }
       m.bob += 0.12;
 
-      // เจ้าหญิงเหวี่ยงไม้ใส่ลูกสมุน — เฉพาะตัวที่เข้าปะทะ (active) หรือตัวที่ประชิดตัวจริง ๆ
+      // เจ้าหญิงเหวี่ยงไม้ใส่ศัตรู — เฉพาะตัวที่เข้าปะทะ (active) หรือตัวที่ประชิดตัวจริง ๆ
       // (ไม่เหวี่ยงมั่วใส่ตัวที่แค่ลาดตระเวนผ่าน — เด็กต้องเดินเข้าไปสู้เอง)
       if (hero.fainting === 0 && hero.attackCd <= 0 && m.stagger <= 0 &&
           distHero <= ATTACK_R && (m === active || distHero <= BITE_R + 10)) {
         const d = distHero || 1;
+        const knock = m.isBoss ? KNOCK * 0.5 : KNOCK; // บอสหนัก ถีบไม่ค่อยไป
         m.hp--;
         m.stagger = MINION_STAGGER;
         m.active = false;
-        m.vx = (-dhx / d) * KNOCK;
-        m.vy = (-dhy / d) * KNOCK;
+        m.vx = (-dhx / d) * knock;
+        m.vy = (-dhy / d) * knock;
         m.spinV = dhx > 0 ? -0.32 : 0.32;
         hero.attackCd = ATTACK_CD;
         hero.swingT = SWING_T;
         hero.facing = dhx < 0 ? -1 : 1;
         particleFx.spawnExplosion(m.wx, m.wy - cam.y);
         audio.sfx('swing');
+        if (m.isBoss && m.hp > 0) mapSay('ตีบอสอีก ' + m.hp + ' ครั้ง!');
         if (m.hp <= 0) {
-          particleFx.spawnCelebrationBurst(m.wx, m.wy - cam.y, { hueMin: 90, hueRange: 40 });
-          audio.sfx('star');
-          addPoints(MINION_PTS);
           const gid = gnode.matraId;
+          particleFx.spawnCelebrationBurst(m.wx, m.wy - cam.y, {
+            hueMin: m.isBoss ? 280 : 90, hueRange: 40,
+          });
+          audio.sfx('star');
+          addPoints(m.isBoss ? BOSS_PTS : MINION_PTS);
           guardKills[gid] = (guardKills[gid] || 0) + 1;
-          if (guardKills[gid] >= diff.guards && !clearedGuards[gid]) {
-            // เคลียร์ลูกสมุนครบ → คริสตอลเปิด!
+          if (guardKills[gid] >= enemyTotal(diff) && !clearedGuards[gid]) {
+            // เคลียร์ศัตรูครบ (ลูกสมุน + บอส) → คริสตอลเปิด!
             clearedGuards[gid] = true;
             particleFx.spawnCelebrationBurst(gnode.wx, gnode.wy - cam.y, { hueMin: 186, hueRange: 40 });
             audio.sfx('ting');
             mapSay('เปิดแล้ว! เดินไปเก็บคริสตอลได้เลย');
+          } else if (diff.boss && guardKills[gid] === diff.minions) {
+            mapSay('บอสมาแล้ว! ระวังตัวนะ');
           }
           minionPool.push(m);
           minions.splice(i, 1);
@@ -816,23 +847,25 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (dom.totalBadgeValue) dom.totalBadgeValue.textContent = app.totalScore;
   }
 
-  // ลูกสมุนเฝ้าคริสตอล gnode — เกิดที่ขอบวงลาดตระเวน
-  function spawnGuard(gnode, idx) {
+  // ศัตรูเฝ้าคริสตอล gnode — เกิดที่ขอบวงลาดตระเวน (isBoss = บอส hp เยอะ ตัวใหญ่)
+  function spawnGuard(gnode, idx, isBoss) {
     const m = minionPool.pop() || {};
-    const a = (idx / Math.max(1, diff.guards)) * Math.PI * 2 + h01((performance.now() | 0) + idx * 53) * 1.5;
+    const spread = Math.max(1, enemyTotal(diff));
+    const a = (idx / spread) * Math.PI * 2 + h01((performance.now() | 0) + idx * 53) * 1.5;
     m.guardIdx = focusIdx;
+    m.isBoss = !!isBoss;
     m.patrolA = a;
     m.patrolDir = h01((performance.now() | 0) * 3 + idx) < 0.5 ? -1 : 1;
     m.wx = gnode.wx + Math.cos(a) * PATROL_R;
     m.wy = gnode.wy + Math.sin(a) * PATROL_R * 0.62;
     m.vx = 0;
     m.vy = 0;
-    m.hp = diff.hp;
-    m.maxHp = diff.hp;
+    m.hp = isBoss ? BOSS_HP : MINION_HP;
+    m.maxHp = m.hp;
     m.stagger = 0;
     m.reengageCd = 0;
     m.active = false;
-    m.biteCd = 45;
+    m.biteCd = isBoss ? 30 : 45;
     m.spin = 0;
     m.spinV = 0;
     m.bob = h01((performance.now() | 0) * 7 + idx) * 6;
@@ -936,7 +969,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       }
     }
 
-    if (witchWY > cy - 160 && witchWY < cy + H + 40) drawWitch();
+    if (witchWY > cy - 340 && witchWY < cy + H + 60) drawWitch();
 
     for (let i = 0; i < decor.length; i++) {
       const dc = decor[i];
@@ -1087,9 +1120,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.arc(sx, sy, NODE_R + 12, 0, Math.PI * 2);
       fx.fillStyle = 'rgba(90,70,170,0.14)';
       fx.fill();
-      const left = Math.max(0, diff.guards - (guardKills[n.matraId] || 0));
+      const left = Math.max(0, enemyTotal(diff) - (guardKills[n.matraId] || 0));
       fx.fillStyle = '#e7ddff';
-      fx.fillText('ลูกสมุนเหลือ ' + left, sx, sy - NODE_R - 12);
+      fx.fillText('ศัตรูเหลือ ' + left, sx, sy - NODE_R - 12);
     }
 
     // ชื่อมาตรา (fx.font set แล้วใน render() ก่อนวน loop)
@@ -1178,30 +1211,47 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const sx = m.wx;
     const sy = m.wy - cy;
     const staggered = m.stagger > 0;
+    const bs = m.isBoss ? 1.65 : 1; // บอสตัวใหญ่กว่า
     fx.save();
     fx.translate(sx, sy);
     if (staggered) fx.rotate(m.spin);
     else fx.translate(0, Math.sin(m.bob) * 2);
-    fx.scale(m.facing || 1, 1);
+    fx.scale((m.facing || 1) * bs, bs);
     // เงา
     fx.fillStyle = 'rgba(0,0,0,0.22)';
     fx.beginPath();
     fx.ellipse(0, 11, 9, 3, 0, 0, Math.PI * 2);
     fx.fill();
     // หมวก
-    fx.fillStyle = '#4a2f6b';
+    fx.fillStyle = m.isBoss ? '#6a1f4a' : '#4a2f6b';
     fx.beginPath();
     fx.moveTo(0, -16);
     fx.lineTo(-8, -3);
     fx.lineTo(8, -3);
     fx.closePath();
     fx.fill();
+    // มงกุฎทองของบอส
+    if (m.isBoss) {
+      fx.fillStyle = '#ffd86b';
+      fx.beginPath();
+      fx.moveTo(-9, -2);
+      fx.lineTo(-9, -11);
+      fx.lineTo(-4.5, -6);
+      fx.lineTo(0, -14);
+      fx.lineTo(4.5, -6);
+      fx.lineTo(9, -11);
+      fx.lineTo(9, -2);
+      fx.closePath();
+      fx.fill();
+    }
     // ตัว (แดงวูบตอนโดนตี)
-    fx.fillStyle = staggered && ((now / 60) | 0) % 2 ? '#ffb0b0' : '#86c97f';
+    fx.fillStyle = staggered && ((now / 60) | 0) % 2
+      ? '#ffb0b0'
+      : (m.isBoss ? '#c97fb0' : '#86c97f');
     fx.beginPath();
     fx.arc(0, 1, 8.5, 0, Math.PI * 2);
     fx.fill();
-    fx.fillStyle = '#a9dda2';
+    fx.fillStyle = m.isBoss ? '#e6b3de' : '#a9dda2';
     fx.beginPath();
     fx.arc(0, 2.5, 4.2, 0, Math.PI * 2);
     fx.fill();
@@ -1220,14 +1270,15 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     }
     fx.restore();
 
-    // แถบเลือดลูกสมุน (เฉพาะตอนโดนตีไปแล้ว)
-    const mx = m.maxHp || 3;
-    if (m.hp < mx) {
-      const bw = 20;
+    // แถบเลือด — บอสโชว์ตลอด, ลูกสมุนโชว์เมื่อโดนตีไปแล้ว
+    const mx = m.maxHp || 2;
+    if (m.isBoss || m.hp < mx) {
+      const bw = m.isBoss ? 34 : 20;
+      const by = sy - (m.isBoss ? 30 : 22);
       fx.fillStyle = 'rgba(0,0,0,0.45)';
-      fx.fillRect(sx - bw / 2, sy - 22, bw, 3);
-      fx.fillStyle = '#7bd06a';
-      fx.fillRect(sx - bw / 2, sy - 22, bw * (m.hp / mx), 3);
+      fx.fillRect(sx - bw / 2, by, bw, m.isBoss ? 4 : 3);
+      fx.fillStyle = m.isBoss ? '#ff7ac0' : '#7bd06a';
+      fx.fillRect(sx - bw / 2, by, bw * Math.max(0, m.hp / mx), m.isBoss ? 4 : 3);
     }
   }
 
@@ -1283,6 +1334,27 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   function drawWitch() {
     const wx = W / 2;
     const wy = witchWY;
+
+    // รูปแม่มดจริง (public/assets/images/map witch.png) — ถ้ายังไม่มีไฟล์ ตกไปวาดเอง
+    if (MAP_WITCH_IMG.complete && MAP_WITCH_IMG.naturalWidth) {
+      const iw = MAP_WITCH_IMG.naturalWidth;
+      const ih = MAP_WITCH_IMG.naturalHeight;
+      const dh = Math.min(260, H * 0.42);
+      const dw = dh * (iw / ih);
+      const topY = wy - dh * 0.32; // เผยตัวเหนือมาตราสุดท้าย
+      // ลำแสง/เงามนตราแผ่ลงมา
+      fx.fillStyle = 'rgba(150,120,220,0.06)';
+      fx.beginPath();
+      fx.moveTo(wx - dw * 0.16, topY + dh * 0.5);
+      fx.lineTo(wx - dw * 0.75, topY + dh + 220);
+      fx.lineTo(wx + dw * 0.75, topY + dh + 220);
+      fx.lineTo(wx + dw * 0.16, topY + dh * 0.5);
+      fx.closePath();
+      fx.fill();
+      fx.drawImage(MAP_WITCH_IMG, wx - dw / 2, topY, dw, dh);
+      return;
+    }
+
     // ลำแสงจาง ๆ ลงมา
     fx.fillStyle = 'rgba(150,120,220,0.05)';
     fx.beginPath();
