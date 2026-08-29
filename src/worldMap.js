@@ -72,10 +72,11 @@ function difficultyFor(idx, total) {
     guards: idx < 4 ? 1 : idx < 16 ? 2 : 3,      // 1 → 2 → 3 ตัว
     hp: idx < 8 ? 2 : idx < 22 ? 3 : 4,          // ตี 2 → 3 → 4 ครั้ง
     speed: 1.7 + t * 1.5,                        // 1.7 → 3.2 (ฮีโร่ 4 เสมอ)
-    aggroR: 108 + t * 74,                        // 108 → 182
+    aggroR: 96 + t * 80,                         // 96 → 176 (เริ่มไล่เมื่อเด็กเดินเข้าไป)
     biteCd: Math.round(112 - t * 46),            // 112 → 66 เฟรม
   };
 }
+const HERO_START_GAP = 96; // เจ้าหญิงเริ่มห่างวงลาดตระเวนเท่านี้ (ต้องเดินเข้าไปเอง)
 
 // ---- แถบพลังเจ้าหญิง ----
 const HERO_MAX_HP = 5;
@@ -140,7 +141,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   let minions = [];
   const minionPool = [];
   let spawnCd = 80;
-  let diff = difficultyFor(0, 30); // ความยากของคริสตอลเป้าหมายปัจจุบัน (อัปเดตใน setFocus)
+  let diff = difficultyFor(0, 30); // ความยากของคริสตอลเป้าหมายปัจจุบัน (อัปเดตใน updateMinions)
+  // คริสตอลเป้าหมาย "ปิดผนึก" จนกว่าจะกำจัดลูกสมุนที่เฝ้าครบ (keyed by matraId, per session)
+  const clearedGuards = Object.create(null); // matraId -> true = เคลียร์แล้ว เปิดเก็บได้
+  const guardKills = Object.create(null);    // matraId -> จำนวนลูกสมุนที่ฆ่าในความพยายามนี้
+  const guardSpawns = Object.create(null);   // matraId -> จำนวนลูกสมุนที่ปล่อยออกมาแล้ว
 
   // Phase 3
   let biomeBands = []; // { yLo, yHi, grad }  world-space (cache ต่อ resize)
@@ -270,6 +275,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       minions.forEach((m) => minionPool.push(m));
       minions.length = 0;
       spawnCd = 40;
+      resetGuardWave();
     }
   }
 
@@ -283,6 +289,23 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       if ((getStars(app, nodes[i].matraId) || 0) === 0) return i;
     }
     return lastUnlocked;
+  }
+
+  // เริ่มคลื่นลูกสมุนของคริสตอลเป้าหมายใหม่ (ถ้ายังไม่เคยเคลียร์)
+  function resetGuardWave() {
+    const fn = nodes[focusIdx];
+    if (fn && !clearedGuards[fn.matraId]) {
+      guardKills[fn.matraId] = 0;
+      guardSpawns[fn.matraId] = 0;
+      spawnCd = 60;
+    }
+  }
+
+  // คริสตอลปิดผนึกอยู่ไหม (ต้องกำจัดลูกสมุนก่อนถึงเก็บได้)
+  function nodeSealed(i) {
+    if (REDUCED_MOTION) return false;      // โหมดสงบ — ไม่มีลูกสมุน เปิดตลอด
+    if (i !== focusIdx) return false;      // มีลูกสมุนเฝ้าเฉพาะคริสตอลเป้าหมาย
+    return !clearedGuards[nodes[i].matraId];
   }
 
   function clampCam(y) {
@@ -318,10 +341,14 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       if (k >= 0) fi = k;
     }
     focusIdx = fi;
+    resetGuardWave(); // เข้าแผนที่ทีไร = คลื่นลูกสมุนเต็มใหม่ (ถ้ายังไม่เคยเคลียร์)
     const node = nodes[fi];
 
     hero.wx = node.wx;
-    hero.wy = heroRestY(node);
+    // เริ่มห่างจากวงลาดตระเวนลงมา — เด็กต้องเดินเข้าไปสู้ลูกสมุนเอง
+    hero.wy = nodeSealed(fi)
+      ? Math.min(worldH - 20, node.wy + PATROL_R + HERO_START_GAP)
+      : heroRestY(node);
     hero.tx = hero.wx;
     hero.ty = hero.wy;
     hero.moving = false;
@@ -479,6 +506,15 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       }
       return;
     }
+    if (nodeSealed(i)) {
+      if (viaTap) {
+        audio.sfx('tile_blocked');
+        const left = Math.max(0, diff.guards - (guardKills[n.matraId] || 0));
+        mapSay('กำจัดลูกสมุนให้หมดก่อนนะ! เหลืออีก ' + left + ' ตัว');
+        n.shake = 1;
+      }
+      return;
+    }
     if (enterLatch) return;
     enterLatch = true;
     hero.moving = false;
@@ -601,16 +637,17 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (hero.swingT > 0) hero.swingT--;
 
     const fnode = nodes[focusIdx];
-    const guardCollectible = fnode && unlocked[fnode.matraId] && (stars[fnode.matraId] || 0) < 3;
+    const fid = fnode && fnode.matraId;
+    const needGuards = fnode && unlocked[fid] && (stars[fid] || 0) < 3 && !clearedGuards[fid];
 
-    // เกิดลูกสมุนเฝ้าคริสตอลเป้าหมาย (ไม่เกิดตอน return beat / สลบ / reduced-motion)
-    if (!REDUCED_MOTION && !returnAnim && hero.fainting === 0 && guardCollectible) {
-      let g = 0;
-      for (let i = 0; i < minions.length; i++) if (minions[i].guardIdx === focusIdx) g++;
+    // ปล่อยลูกสมุนเฝ้าคริสตอลเป้าหมายจนครบ diff.guards ตัว (ปล่อยครั้งเดียวต่อความพยายาม)
+    if (!REDUCED_MOTION && !returnAnim && hero.fainting === 0 && needGuards) {
+      const spawned = guardSpawns[fid] || 0;
       if (spawnCd > 0) spawnCd--;
-      if (spawnCd <= 0 && g < diff.guards && minions.length < MAX_MINIONS) {
-        spawnGuard(fnode, g);
-        spawnCd = 30;
+      if (spawnCd <= 0 && spawned < diff.guards && minions.length < MAX_MINIONS) {
+        spawnGuard(fnode, spawned);
+        guardSpawns[fid] = spawned + 1;
+        spawnCd = 34;
       }
     }
 
@@ -685,9 +722,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       }
       m.bob += 0.12;
 
-      // เจ้าหญิงเหวี่ยงไม้ใส่ลูกสมุน (เฉพาะตัวที่เข้าปะทะ หรือตัวใดที่บังเอิญประชิด)
+      // เจ้าหญิงเหวี่ยงไม้ใส่ลูกสมุน — เฉพาะตัวที่เข้าปะทะ (active) หรือตัวที่ประชิดตัวจริง ๆ
+      // (ไม่เหวี่ยงมั่วใส่ตัวที่แค่ลาดตระเวนผ่าน — เด็กต้องเดินเข้าไปสู้เอง)
       if (hero.fainting === 0 && hero.attackCd <= 0 && m.stagger <= 0 &&
-          distHero <= ATTACK_R) {
+          distHero <= ATTACK_R && (m === active || distHero <= BITE_R + 10)) {
         const d = distHero || 1;
         m.hp--;
         m.stagger = MINION_STAGGER;
@@ -704,6 +742,15 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
           particleFx.spawnCelebrationBurst(m.wx, m.wy - cam.y, { hueMin: 90, hueRange: 40 });
           audio.sfx('star');
           addPoints(MINION_PTS);
+          const gid = gnode.matraId;
+          guardKills[gid] = (guardKills[gid] || 0) + 1;
+          if (guardKills[gid] >= diff.guards && !clearedGuards[gid]) {
+            // เคลียร์ลูกสมุนครบ → คริสตอลเปิด!
+            clearedGuards[gid] = true;
+            particleFx.spawnCelebrationBurst(gnode.wx, gnode.wy - cam.y, { hueMin: 186, hueRange: 40 });
+            audio.sfx('ting');
+            mapSay('เปิดแล้ว! เดินไปเก็บคริสตอลได้เลย');
+          }
           minionPool.push(m);
           minions.splice(i, 1);
           continue;
@@ -738,7 +785,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const node = nodes[focusIdx] || nodes[0];
     // ฟื้นห่างจากวงลาดตระเวนลงมา (ไม่ตกกลางวงลูกสมุน → กันสลบวนไม่จบ)
     hero.wx = node.wx;
-    hero.wy = Math.min(worldH - 20, node.wy + PATROL_R + 66);
+    hero.wy = Math.min(worldH - 20, node.wy + PATROL_R + HERO_START_GAP);
     hero.tx = hero.wx;
     hero.ty = hero.wy;
     hero.moving = false;
@@ -822,9 +869,25 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       }
       if (ra.t >= 44) { ra.phase = 'done'; ra.t = 0; }
     } else {
-      // กลับมาที่ลูกที่เพิ่งผ่าน
+      // กลับมาที่ลูกที่เพิ่งผ่าน แล้วเลื่อนเป้าหมายไปคริสตอลถัดไป (ที่ยังมีลูกสมุนเฝ้า)
       camTarget = clampCam(node.wy - H / 2);
-      if (ra.t >= 26) returnAnim = null;
+      if (ra.t >= 26) {
+        returnAnim = null;
+        const nextFocus = computeFocusIdx();
+        if (nextFocus !== focusIdx) {
+          focusIdx = nextFocus;
+          camLockIdx = focusIdx;
+          resetGuardWave();
+          // วางฮีโร่ใต้วงลูกสมุนของลูกถัดไป
+          const nn = nodes[focusIdx];
+          hero.wx = nn.wx;
+          hero.wy = nodeSealed(focusIdx)
+            ? Math.min(worldH - 20, nn.wy + PATROL_R + HERO_START_GAP)
+            : heroRestY(nn);
+          hero.tx = hero.wx;
+          hero.ty = hero.wy;
+        }
+      }
     }
   }
 
@@ -833,7 +896,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const r2 = R * R;
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
-      if (!unlocked[n.matraId]) continue;
+      if (!unlocked[n.matraId] || nodeSealed(i)) continue; // ปิดผนึก = เดินทับก็ยังเก็บไม่ได้
       const dx = hero.wx - n.wx;
       const dy = hero.wy - n.wy;
       if (dx * dx + dy * dy <= r2) return i;
@@ -954,14 +1017,17 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
   function drawNode(n, sx, sy, i, now) {
     const locked = !unlocked[n.matraId];
+    const sealed = !locked && nodeSealed(i);
 
-    // วงกระเพื่อมที่ลูกปัจจุบัน
+    // วงกระเพื่อมที่ลูกปัจจุบัน (เปิดแล้ว = ฟ้าสว่าง, ยังปิดผนึก = โล่ม่วง)
     if (i === focusIdx && !locked) {
       const t = (now % 1400) / 1400;
       fx.beginPath();
       fx.arc(sx, sy, NODE_R + 5 + t * 9, 0, Math.PI * 2);
-      fx.strokeStyle = 'rgba(130,230,255,' + (0.55 * (1 - t)).toFixed(3) + ')';
-      fx.lineWidth = 2.5;
+      fx.strokeStyle = sealed
+        ? 'rgba(180,150,240,' + (0.5 * (1 - t)).toFixed(3) + ')'
+        : 'rgba(130,230,255,' + (0.6 * (1 - t)).toFixed(3) + ')';
+      fx.lineWidth = sealed ? 2 : 3;
       fx.stroke();
     }
 
@@ -971,9 +1037,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.fillStyle = locked ? 'rgba(58,42,94,0.45)' : 'rgba(120,220,255,0.16)';
     fx.fill();
 
-    // ตัวคริสตอล (คงสัดส่วนภาพ วางกึ่งกลางโหนด)
+    // ตัวคริสตอล (คงสัดส่วนภาพ วางกึ่งกลางโหนด) — ปิดผนึก = หรี่ลง
     if (CRYSTAL_IMG.complete && CRYSTAL_IMG.naturalWidth) {
       if (locked) fx.globalAlpha = 0.42;
+      else if (sealed) fx.globalAlpha = 0.7;
       fx.drawImage(CRYSTAL_IMG, sx - CR_DW / 2, sy - CR_DH / 2, CR_DW, CR_DH);
       fx.globalAlpha = 1;
     } else {
@@ -1006,6 +1073,23 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         const fillAmt = Math.max(0, Math.min(1, sc - s));
         drawPip(sx - 14 + s * 14, py, fillAmt);
       }
+    }
+
+    // โล่ปิดผนึก + จำนวนลูกสมุนที่เหลือ
+    if (sealed) {
+      const t = (now % 1600) / 1600;
+      fx.beginPath();
+      fx.arc(sx, sy, NODE_R + 12 + Math.sin(t * Math.PI * 2) * 2, 0, Math.PI * 2);
+      fx.strokeStyle = 'rgba(150,120,235,0.35)';
+      fx.lineWidth = 3;
+      fx.stroke();
+      fx.beginPath();
+      fx.arc(sx, sy, NODE_R + 12, 0, Math.PI * 2);
+      fx.fillStyle = 'rgba(90,70,170,0.14)';
+      fx.fill();
+      const left = Math.max(0, diff.guards - (guardKills[n.matraId] || 0));
+      fx.fillStyle = '#e7ddff';
+      fx.fillText('ลูกสมุนเหลือ ' + left, sx, sy - NODE_R - 12);
     }
 
     // ชื่อมาตรา (fx.font set แล้วใน render() ก่อนวน loop)
