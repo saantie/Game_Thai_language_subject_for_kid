@@ -572,10 +572,13 @@ export const audio = {
       const path   = `public/assets/audio/${folder}/${encodeURIComponent(syll)}.mp3`;
       const afterMp3 = () => { if (!this._spellCancelled) setTimeout(next, 160); };
       // TTS fallback: พูดพยางค์ที่เหลือทั้งหมดในครั้งเดียว → ไม่มี startup latency ซ้ำ
+      //   word.say: บางคำ TTS อ่านเพี้ยน (สระ เอะ/แอะ สั้น เช่น "เปะ"→"ปะ") — แทนคำเต็มด้วย say
+      //   (ไม่กระทบ path MP3 ที่ยัง key ด้วย display เดิม — ไฟล์เสียงอัดจริงยังใช้ได้)
       const ttsFallback = () => {
         if (this._spellCancelled) return;
-        const remaining = parts.slice(idx).join(' ');
-        this.speak(remaining, { rate: 0.72, onEnd: done });
+        const rem = parts.slice(idx);
+        if (word.say) rem[rem.length - 1] = word.say;
+        this.speak(rem.join(' '), { rate: 0.72, onEnd: done });
       };
       this._playMp3(path, ttsFallback, afterMp3);
     };
