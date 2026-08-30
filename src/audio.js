@@ -240,6 +240,11 @@ export const audio = {
         this._bendBlip(760, 940, 0.04, 'triangle', t);
         this._bendBlip(900, 540, 0.16, 'sine', t + 0.04);
         break;
+      // แผนที่มนตรา: เก็บพลอยเติมหัวใจ — โน้ตคู่สั้นสดใสไล่ขึ้น
+      case 'gem':
+        this._blip(1047, 0.06, 'triangle', t);
+        this._blip(1568, 0.10, 'triangle', t + 0.05);
+        break;
       default:
         break;
     }
