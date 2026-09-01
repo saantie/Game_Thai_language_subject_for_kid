@@ -72,6 +72,12 @@ const WANDER_SPEED = 0.5;        // px/เฟรม — เดินเตร่
 // ---- พลอยเติมพลัง (เดินทับ = +1 หัวใจ) ----
 const GEM_PICK_R = 26;           // รัศมีเก็บพลอย
 const GEM_RESPAWN = 720;         // เฟรมก่อนพลอยเกิดใหม่ (~12 วิ) — เก็บซ้ำได้แต่ไม่รัว
+// โซนสุ่มตำแหน่งพลอยรอบคริสตอล (วงรี) — แนวตั้งต้องไม่เกินครึ่งระยะห่างคริสตอล
+// ไม่งั้นพลอยของลูกนี้ไปโผล่ในโซนลูกข้างเคียง
+const GEM_PER_NODE = 2;          // จำนวนพลอยต่อคริสตอล (คงเดิม — งบฮีลไม่เปลี่ยน)
+const GEM_RX = 200;
+const GEM_RY = 150;
+const GEM_MIN_F = 0.45;          // ใกล้สุด 45% ของรัศมี — ไม่ให้ทับตัวคริสตอล
 const MINION_STAGGER = 16;     // เฟรมสะดุดหลังโดนตี (กัดไม่ได้)
 const MINION_REENGAGE = 26;    // เฟรมหลังสะดุด ที่ยังไม่กลับมาเป็น active
 const MINION_PTS = 3;          // แต้มต่อลูกสมุน 1 ตัว
@@ -219,6 +225,17 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     mapSay._t = setTimeout(() => dom.toast.classList.remove('show'), 3000);
   }
 
+  // สุ่มตำแหน่งพลอยรอบคริสตอล — แต่ละเม็ดสุ่มใน "ช่อง" ของตัวเอง (แบ่งวงตาม GEM_PER_NODE)
+  // สุ่มจริงแต่ไม่ทับกันเอง · ใช้ Math.random ไม่ใช่ h01 เพราะพลอยเป็นของ gameplay ที่
+  // เปลี่ยนตำแหน่งได้ (แนวเดียวกับ pickWanderTarget) ต่างจากของประดับที่ต้องอยู่นิ่ง
+  function placeGem(g, node) {
+    const ang = ((g.slot + Math.random()) / GEM_PER_NODE) * Math.PI * 2;
+    const f = GEM_MIN_F + Math.random() * (1 - GEM_MIN_F);
+    g.wx = Math.max(22, Math.min(worldW - 22, node.wx + Math.cos(ang) * GEM_RX * f));
+    g.wy = node.wy + Math.sin(ang) * GEM_RY * f;
+    g.bob = Math.random() * 6;
+  }
+
   // ---------- layout ----------
   function computeLayout() {
     W = scene.W;
@@ -298,9 +315,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     // พลอยเติมพลัง — 2 เม็ดต่อคริสตอล (ซ้าย-ขวาล่าง ในโซนที่เด็กสู้) ตำแหน่งตายตัว
     gems.length = 0;
     for (let i = 0; i < nodes.length; i++) {
-      const n = nodes[i];
-      gems.push({ wx: n.wx - 82, wy: n.wy + 64, taken: false, respawn: 0, bob: h01(i * 5 + 1) * 6 });
-      gems.push({ wx: n.wx + 82, wy: n.wy + 64, taken: false, respawn: 0, bob: h01(i * 5 + 2) * 6 });
+      for (let k = 0; k < GEM_PER_NODE; k++) {
+        const g = { nodeIdx: i, slot: k, wx: 0, wy: 0, taken: false, respawn: 0, bob: 0 };
+        placeGem(g, nodes[i]);
+        gems.push(g);
+      }
     }
   }
 
@@ -990,7 +1009,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     for (let i = 0; i < gems.length; i++) {
       const g = gems[i];
       if (g.taken) {
-        if (--g.respawn <= 0) g.taken = false;
+        // เกิดใหม่ = สุ่มที่ใหม่ ไม่โผล่จุดเดิม (เดิมเด็กจำตำแหน่งได้ ไม่ต้องสำรวจ)
+        if (--g.respawn <= 0) { g.taken = false; placeGem(g, nodes[g.nodeIdx]); }
         continue;
       }
       if (!canHeal) continue;
