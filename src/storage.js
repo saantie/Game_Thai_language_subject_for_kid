@@ -107,3 +107,26 @@ export function saveArFlickHintShown() {
     localStorage.setItem(AR_FLICK_HINT_KEY, '1');
   } catch (e) {}
 }
+
+// ---- RPG: XP + ระดับสกิล (ระบบเลเวล/สกิลบนแผนที่มนตรา — ดู src/rpg.js) ----
+const RPG_KEY = 'witch_rpg';
+
+export function loadRpg() {
+  try {
+    return JSON.parse(localStorage.getItem(RPG_KEY) || 'null');
+  } catch (e) {
+    return null;
+  }
+}
+
+export function saveRpg(state) {
+  try {
+    localStorage.setItem(RPG_KEY, JSON.stringify(state));
+  } catch (e) {}
+}
+
+export function clearRpg() {
+  try {
+    localStorage.removeItem(RPG_KEY);
+  } catch (e) {}
+}

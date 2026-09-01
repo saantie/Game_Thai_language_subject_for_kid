@@ -1,6 +1,6 @@
 // sw.js — Service Worker: cache-first + stale-while-revalidate + auto-reload on update
 // bump CACHE string ทุกครั้งที่ deploy ใหม่ → browser detect diff → install → reload client
-const CACHE = 'witch-cauldron-v182';
+const CACHE = 'witch-cauldron-v183';
 
 const APP_SHELL = [
   './',
@@ -13,6 +13,7 @@ const APP_SHELL = [
   './src/game.js',
   './src/mahjong.js',
   './src/worldMap.js',
+  './src/rpg.js',
   './src/particles.js',
   './src/scene.js',
   './src/audio.js',
@@ -23,6 +24,7 @@ const APP_SHELL = [
   './src/input/handpinch.js',
   './src/input/speech.js',
   './src/ui/levelSelect.js',
+  './src/ui/skillPage.js',
   './src/ui/adultPage.js',
   './public/assets/images/glass%20ball.png',
   './public/assets/images/How%20to%20fight%20wish%20book.png',
@@ -43,6 +45,7 @@ const APP_SHELL = [
   './public/assets/images/Evil%20wish/2%20-%203.gif',
   './public/assets/images/Evil%20wish/3-4.gif',
   './public/assets/images/Evil%20wish/4-5.gif',
+  './public/assets/images/witch.png', // ตัวผู้เล่นบนแผนที่ (แม่มดน้อย)
   './public/assets/images/princess_1.png',
   // NOTE: './public/assets/images/map%20witch.png' — ยังไม่ precache จนกว่าไฟล์จะมีจริง
   //       (cache.addAll จะ reject ทั้งชุดถ้ามี URL ที่ 404) — แคชแบบ runtime ผ่าน fetch handler ไปก่อน

@@ -8,6 +8,7 @@
 
 import { createRecognizer, matchWord } from './input/speech.js';
 import { saveTotalScore } from './storage.js';
+import { addXp, XP_PERFECT, XP_RETRY } from './rpg.js';
 import { createParticleSystem } from './particles.js';
 
 const TWO_PART = 'TWO_PART';
@@ -29,6 +30,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
   let roundIndex = 0;
   let currentWord = null;
   let perfectCount = 0;
+  let _pendingLevelUp = 0; // เลเวลใหม่ที่เพิ่งขึ้นระหว่างมาตรานี้ — โชว์บนหน้าสรุปดาว (0 = ไม่ขึ้น)
   let readAttempts = 0;
   let micMissCount = 0; // จำนวนครั้งที่ไมค์ตัดจบโดยไม่ได้ยิน (ต่อรอบพูด) — auto เปิดใหม่
                         // ให้ไม่เกิน MIC_AUTO_RETRY_MAX ครั้ง กัน loop ไม่รู้จบถ้ามือถือ
@@ -139,6 +141,7 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     matra = m;
     roundIndex = 0;
     perfectCount = 0;
+    _pendingLevelUp = 0;
     score = 0;
     totalScoreAtStart = app.totalScore;
     updateScore();
@@ -568,8 +571,13 @@ export function createGame({ scene, audio, app, dom, onExit }) {
 
   function reward() {
     setState('REWARD');
-    if (readAttempts === 0) perfectCount++;
-    const points = readAttempts === 0 ? 100 : 50;
+    const perfect = readAttempts === 0;
+    if (perfect) perfectCount++;
+    const points = perfect ? 100 : 50;
+    // XP ระบบสกิล (rpg.js) — อ่านถูกรอบเดียวได้เต็ม, อ่านถูกหลังลองใหม่ได้น้อยกว่า
+    // (ยังให้ทั้งคู่ ไม่ลงโทษเด็กที่พลาด แต่ต่างกันพอให้อยากตั้งใจรอบเดียว)
+    const xp = addXp(perfect ? XP_PERFECT : XP_RETRY);
+    if (xp.leveledUp) _pendingLevelUp = xp.level;
     score += points;
     // updateScore จะถูกเรียกตอนการ์ดถึงป้ายคะแนน (onArrive) ไม่ใช่ตอนนี้
     scene.setCauldronFrame(4, 'reward'); // ควันม่วง — ฉลองอ่านถูก
@@ -642,7 +650,10 @@ export function createGame({ scene, audio, app, dom, onExit }) {
     const showResult = () => {
       const msg = stars === 3 ? 'ยอดเยี่ยม! ครบทุกตัว!' : stars === 2 ? 'เก่งมากจ้า!' : 'ดีนะ ฝึกอีกครั้งนะ!';
       renderResultStars(dom.resultStars, stars, 3);
-      dom.resultMsg.textContent = msg;
+      // เลเวลอัประหว่างมาตรานี้ → บอกให้เด็กรู้ว่ามีแต้มสกิลรออยู่ (แรงจูงใจให้ไปหน้าสกิล)
+      dom.resultMsg.innerHTML = _pendingLevelUp
+        ? msg + '<br><span class="result-levelup">&#11088; เลเวล ' + _pendingLevelUp + '! ได้แต้มสกิลเพิ่ม</span>'
+        : msg;
       if (dom.resultCharImg) dom.resultCharImg.src = scene.getCharacterSrc();
       show(dom.resultScreen, true);
       // ตัวเลขคะแนนสะสมวิ่งขึ้นจากยอดก่อนเริ่มรอบ → ยอดปัจจุบัน (โชว์ผลรวมที่เพิ่งได้ทั้งรอบ)

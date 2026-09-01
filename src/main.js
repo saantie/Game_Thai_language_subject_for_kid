@@ -7,6 +7,8 @@ import { createHandPinchInput } from './input/handpinch.js';
 import { createGame } from './game.js';
 import { createMahjongWarmup } from './mahjong.js';
 import { createWorldMap } from './worldMap.js';
+import { buildSkillPage, setSkillPageBack } from './ui/skillPage.js';
+import { getRpg, resetRpg } from './rpg.js';
 import { buildLevelSelect } from './ui/levelSelect.js';
 import { openAdultGate } from './ui/adultPage.js';
 import { watchAuthState, isAdminEmail } from './firebaseAuth.js';
@@ -73,6 +75,8 @@ const levelScreen = $('#levelScreen');
 const adultScreen = $('#adultScreen');
 const mahjongScreen = $('#mahjongScreen');
 const mapScreen = $('#mapScreen'); // overlay ปุ่มของหน้าแผนที่ (แผนที่เองวาดบน #fxCanvas)
+const skillScreen = $('#skillScreen');
+const mapSkillDot = $('#mapSkillDot'); // จุดแดงบนปุ่ม ⚔️ — โชว์เมื่อมีแต้มสกิลว่าง
 // ย้ายออกมานอก #mahjongScreen แล้ว (ข้อ 5) — .screen มี backdrop-filter ที่ทำให้
 // position:fixed ของลูกผูกกับกล่อง .screen แทน viewport จริงตอนกระดานสูงต้อง
 // scroll ต้อง toggle .hidden เองแทนการอาศัย parent (#mahjongScreen) ซ่อนให้
@@ -275,6 +279,11 @@ scene.onResize(() => worldMap.relayout());
 let _inPopstate  = false;
 let _historyInit = false;
 
+// จุดแดงบนปุ่มสกิล = มีแต้มว่างรออัป (เด็กเห็นแล้วอยากกดเข้าไปดู)
+function syncSkillDot() {
+  if (mapSkillDot) mapSkillDot.classList.toggle('hidden', getRpg().pointsLeft < 1);
+}
+
 function showScreen(which, opts) {
   _screen = which;
   // #fxCanvas ใช้ร่วมกัน 3 โมดูล (game / mahjong / worldMap) — เจ้าของต้องมีตัวเดียว
@@ -295,6 +304,7 @@ function showScreen(which, opts) {
   levelScreen.classList.toggle('hidden', which !== 'level');
   mahjongScreen.classList.toggle('hidden', which !== 'mahjong');
   mapScreen.classList.toggle('hidden', which !== 'map'); // overlay ปุ่มหน้าแผนที่ (แผนที่วาดบน #fxCanvas)
+  skillScreen.classList.toggle('hidden', which !== 'skill');
   mjWitchImg.classList.toggle('hidden', which !== 'mahjong'); // ข้อ 5 — ย้ายออกจาก #mahjongScreen แล้ว ต้อง toggle เอง
   magicOrbs.classList.toggle('hidden', which !== 'level');
   resetBtn.classList.toggle('hidden', which !== 'level');
@@ -321,6 +331,11 @@ function showScreen(which, opts) {
     if (app.settings.bgm) audio.startLevelBgm(); else audio.stopLevelBgm();
     // เรียก enter หลัง toggle class แล้ว — canvas พร้อมและ scene.W/H เป็นค่าจริง
     worldMap.enter(opts || {});
+    syncSkillDot(); // เพิ่งเล่นมาตราจบอาจเลเวลขึ้น → โชว์จุดแดงบนปุ่ม ⚔️
+  } else if (which === 'skill') {
+    // สร้างใหม่ทุกครั้งที่เปิด — XP/แต้มเปลี่ยนได้หลังเล่นมาตรา
+    buildSkillPage(skillScreen);
+    setSkillPageBack(skillScreen, () => showScreen('map'));
   } else if (which === 'mahjong') {
     // เพลงเดียวกับทั้งแอปแต่ลดเสียงลง 50% — เสียงอ่านสะกดคำ/เสียงแตกต้องได้ยินชัด
     if (app.settings.bgm) audio.startMahjongBgm(); else audio.stopLevelBgm();
@@ -612,6 +627,7 @@ $('#levelBackBtn').addEventListener('click', () => showScreen('map'));
 $('#mapHomeBtn').addEventListener('click', () => showScreen('start'));
 $('#mapListBtn').addEventListener('click', () => showScreen('level'));
 $('#mapAdultBtn').addEventListener('click', () => openAdultGate(app, adultScreen));
+$('#mapSkillBtn').addEventListener('click', () => { audio.sfx('ting'); showScreen('skill'); });
 
 $('#mahjongShuffleBtn').addEventListener('click', () => mahjongWarmup.shuffle());
 
@@ -630,6 +646,8 @@ resetBtn.addEventListener('click', () => {
     saveTotalScore(0);
     app.mahjongSeen = {};
     saveMahjongSeen({});
+    resetRpg(); // ล้าง XP + สกิลด้วย ไม่งั้นสกิลค้างแต่ดาวหาย = สถานะไม่สอดคล้อง
+    syncSkillDot();
     dom.totalBadgeValue.textContent = 0;
     buildLevelSelect($('#levelGrid'), app, (id) => startMatraById(id));
     worldMap.refresh(); // แผนที่: ล็อกคริสตอลกลับ + ล้างดาว

@@ -1,11 +1,11 @@
 // worldMap.js — "แผนที่มนตรา" แทนหน้าเลือกมาตรา (Phase 1–3)
 //
-// เดินฮีโร่ (เจ้าหญิง) บนแผนที่ป่าเวทมนตร์เลื่อนแนวตั้ง (มาตราแรกล่างสุด เดินขึ้นบน)
+// เดินฮีโร่ (แม่มดน้อย) บนแผนที่ป่าเวทมนตร์เลื่อนแนวตั้ง (มาตราแรกล่างสุด เดินขึ้นบน)
 // คริสตอล 1 ลูก = 1 มาตรา · แตะ/ลากพื้นให้เดิน · เดิน/แตะคริสตอลปลดล็อก → onPickMatra
 //
-// Phase 2: ลูกสมุนแม่มดลาดตระเวนเฝ้าคริสตอลเป้าหมาย — ไล่กัดเจ้าหญิงเมื่อเข้าใกล้
-//          เจ้าหญิงมีแถบพลัง 5 หัวใจ · โดนกัด -1 · หมด = สลบแล้วฟื้นที่คริสตอลเดิม
-//          เจ้าหญิงเหวี่ยงไม้ใส่เอง ตี 3 ครั้งลูกสมุนตาย (+แต้ม)
+// Phase 2: ลูกสมุนแม่มดลาดตระเวนเฝ้าคริสตอลเป้าหมาย — ไล่กัดแม่มดน้อยเมื่อเข้าใกล้
+//          แม่มดน้อยมีแถบพลัง 5 หัวใจ · โดนกัด -1 · หมด = สลบแล้วฟื้นที่คริสตอลเดิม
+//          แม่มดน้อยเหวี่ยงไม้ใส่เอง ตี 3 ครั้งลูกสมุนตาย (+แต้ม)
 // Phase 3: biome สี 6 โซนตามกลุ่มสระ · โขดหิน/พุ่ม/ต้นไม้ วาด procedural · แม่มดปลายแผนที่
 //          return beat ตอนกลับจากมาตรา (ดาวไหลเข้าคริสตอล → กุญแจลูกถัดไปแตก)
 //
@@ -16,12 +16,14 @@ import { MATRA } from './data/matra.js';
 import { isUnlocked, getStars } from './ui/levelSelect.js';
 import { createParticleSystem } from './particles.js';
 import { saveTotalScore } from './storage.js';
+import { getSkillEffects } from './rpg.js';
 
 // asset ที่มีอยู่แล้วใน APP_SHELL — encode ช่องว่างเหมือนที่อื่นในโปรเจกต์
 const CRYSTAL_IMG = new Image();
 CRYSTAL_IMG.src = 'public/assets/images/glass%20ball.png';
 const HERO_IMG = new Image();
-HERO_IMG.src = 'public/assets/images/princess_1.png';
+HERO_IMG.src = 'public/assets/images/witch.png'; // แม่มดน้อย = ตัวที่เด็กบังคับ
+// (แม่มดแก่ปลายแผนที่ = MAP_WITCH_IMG คนละตัว — คนละหน้าตา ไม่สับสน)
 // แม่มดปลายแผนที่ — ถ้าไฟล์ยังไม่มี ใช้รูปทรงวาดเองแทน (drawWitch)
 const MAP_WITCH_IMG = new Image();
 MAP_WITCH_IMG.src = 'public/assets/images/map%20witch.png';
@@ -33,8 +35,9 @@ const REDUCED_MOTION =
 // ---- ปรับจูน ----
 const NODE_R = 30;        // รัศมีคริสตอล (วาด + hit test)
 const HERO_R = 26;        // ครึ่งความสูงฮีโร่โดยประมาณ (เงา/ระยะถึงโหนด)
-const HERO_SPEED = 2.6;   // px ต่อเฟรม — ไม่สเกลด้วย dt (แนวเดียวกับ game.js)
-//   ***ต้องมากกว่า diff.speed สูงสุดของลูกสมุนเสมอ*** ไม่งั้นลูกสมุนไล่ทัน เด็กหนีไม่ได้
+// ความเร็วเดิน / cooldown ตี / พลังหัวใจ / เวลาอมตะ — มาจากสกิล (rpg.js) ผ่านตัวแปร sk
+//   ***ห้ามประกาศค่าฐานซ้ำที่นี่*** ค่าเดียวกันอยู่ 2 ที่แล้วแก้ที่เดียว = เพี้ยนแน่นอน
+//   แหล่งเดียวคือ rpg.js SKILLS[*].levels[0]
 const ARRIVE_EPS = 3;
 const TAP_SLOP = 10;      // แตะ vs ลาก (เลียน game.js dragged check)
 const CAM_LERP = 0.12;
@@ -76,8 +79,7 @@ const BOSS_PTS = 12;           // แต้มต่อบอส 1 ตัว
 const BITE_R = 40;             // ระยะกัด
 const BITE_DMG = 1;
 
-const ATTACK_R = 56;           // ระยะที่เจ้าหญิงเหวี่ยงไม้ใส่ศัตรู
-const ATTACK_CD = 26;          // เฟรม cooldown ระหว่างเหวี่ยง
+const ATTACK_R = 56;           // ระยะที่แม่มดน้อยเหวี่ยงไม้ใส่ศัตรู
 const KNOCK = 6.5;             // แรงกระเด็นตอนโดนตี (บอสโดนถีบครึ่งเดียว)
 const SWING_T = 12;            // เฟรมโชว์รอยไม้เหวี่ยง
 
@@ -88,17 +90,15 @@ function difficultyFor(idx, total) {
   return {
     minions: Math.min(2 + idx, 5),  // 2,3,4,5,5,5,...
     boss: idx >= 4,                 // มาตรา 5 เป็นต้นไป
-    speed: 1.15 + t * 0.95,         // 1.15 → 2.1 (ต่ำกว่า HERO_SPEED 2.6 เสมอ)
+    speed: 1.15 + t * 0.95,         // 1.15 → 2.1 (ต่ำกว่าความเร็วเดินต่ำสุดของสกิล 👟 = 2.6 เสมอ)
     aggroR: 120 + t * 90,           // 120 → 210 (ลูกสมุนกระจายไกล — ต้องเห็นเด็กไกลขึ้น)
     biteCd: Math.round(112 - t * 46), // 112 → 66 เฟรม
   };
 }
 function enemyTotal(d) { return d.minions + (d.boss ? 1 : 0); }
-const HERO_START_GAP = 64; // เจ้าหญิงเริ่มห่างจากขอบโซนลูกสมุนเท่านี้ (ต้องเดินเข้าไปเอง)
+const HERO_START_GAP = 64; // แม่มดน้อยเริ่มห่างจากขอบโซนลูกสมุนเท่านี้ (ต้องเดินเข้าไปเอง)
 
-// ---- แถบพลังเจ้าหญิง ----
-const HERO_MAX_HP = 5;
-const HERO_INVULN = 46;       // เฟรมอมตะหลังโดนกัด (กันโดนรัว)
+// ---- แถบพลังแม่มดน้อย ----
 const FAINT_T = 66;           // เฟรมช่วงสลบก่อนฟื้น
 
 // ---- Phase 3: biome (กลุ่มสระใน matra.js header — const ในไฟล์ ไม่แตะ matra.js) ----
@@ -146,6 +146,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   let worldW = 0;      // โลกกว้างกว่าจอ → กล้องแพนแนวนอนตามคริสตอล/ฮีโร่
   let nodeSpacing = 190; // ระยะห่างแนวตั้งระหว่างคริสตอล (คำนวณใน computeLayout)
 
+  // ค่าจากสกิล (rpg.js) — อ่านใหม่ทุกครั้งที่ enter() เพราะเด็กอัปสกิลแล้วกลับมาแผนที่ได้
+  // ห้ามอ่านครั้งเดียวตอนสร้างโมดูล ไม่งั้นสกิลที่เพิ่งอัปจะไม่มีผลจนกว่าจะรีโหลดแอป
+  let sk = getSkillEffects();
+
   const cam = { x: 0, y: 0 };
   let camTargetX = 0;
   let camTargetY = 0;
@@ -154,8 +158,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   const hero = {
     wx: 0, wy: 0, tx: 0, ty: 0, moving: false, facing: 1, bob: 0,
     attackCd: 0, swingT: 0,
-    hp: HERO_MAX_HP, invuln: 0, hurtT: 0, fainting: 0,
-    atk: null, // ลูกสมุนที่เด็ก "กดสั่งตี" — เจ้าหญิงไม่ตีอัตโนมัติ ตีเฉพาะตัวนี้
+    hp: sk.maxHp, invuln: 0, hurtT: 0, fainting: 0,
+    atk: null, // ลูกสมุนที่เด็ก "กดสั่งตี" — แม่มดน้อยไม่ตีอัตโนมัติ ตีเฉพาะตัวนี้
   };
   let enterLatch = false; // true = ตัดสินใจเข้าโหนดแล้ว รอ stop() (กันเข้าซ้ำ tap+เดินถึง)
 
@@ -367,7 +371,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     // ยืนใต้คริสตอลนิดหน่อย — ไกลพอที่ arrival check จะไม่ยิงทันทีตอน enter()
     return node.wy + NODE_R + HERO_R + 10;
   }
-  // จุดเริ่มของเจ้าหญิงตอนคริสตอลยังผนึก — ใต้โซนลูกสมุน แต่ไม่เลยไปทับคริสตอลลูกถัดไป
+  // จุดเริ่มของแม่มดน้อยตอนคริสตอลยังผนึก — ใต้โซนลูกสมุน แต่ไม่เลยไปทับคริสตอลลูกถัดไป
   function heroSealedStartY(node) {
     const want = node.wy + SCATTER_RY + HERO_START_GAP;
     const cap = node.wy + nodeSpacing * 0.6; // กันไปยืนทับคริสตอลลูกล่าง
@@ -383,6 +387,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const oldStars = jc ? (stars[jc.matraId] || 0) : 0;
     const prevUnlocked = Object.assign(Object.create(null), unlocked);
 
+    sk = getSkillEffects(); // อัปสกิลแล้วกลับมา → มีผลทันที
     computeLayout();
     refresh();
 
@@ -411,7 +416,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     hero.bob = 0;
     hero.attackCd = 0;
     hero.swingT = 0;
-    hero.hp = HERO_MAX_HP; // เข้ามาตราแล้วกลับมา = พลังเต็ม
+    hero.hp = sk.maxHp; // เข้ามาตราแล้วกลับมา = พลังเต็ม (ตามสกิล ❤️)
     hero.invuln = 0;
     hero.hurtT = 0;
     hero.fainting = 0;
@@ -555,7 +560,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     pressY = y;
     const w = toWorld(x, y);
 
-    // กดโดนลูกสมุน → สั่งให้เจ้าหญิงไปตีตัวนั้น (ไม่ตีอัตโนมัติ)
+    // กดโดนลูกสมุน → สั่งให้แม่มดน้อยไปตีตัวนั้น (ไม่ตีอัตโนมัติ)
     const m = minionAt(w.wx, w.wy);
     if (m) {
       hero.atk = m;
@@ -668,7 +673,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   }
 
   function update() {
-    // ---- ตัวจับเวลาเจ้าหญิง ----
+    // ---- ตัวจับเวลาแม่มดน้อย ----
     if (hero.invuln > 0) hero.invuln--;
     if (hero.hurtT > 0) hero.hurtT--;
 
@@ -708,7 +713,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         hero.wy = hero.ty;
         hero.moving = false;
       } else {
-        const step = Math.min(d, HERO_SPEED);
+        const step = Math.min(d, sk.heroSpeed); // สกิล 👟
         hero.wx += (dx / d) * step;
         hero.wy += (dy / d) * step;
         if (Math.abs(dx) > 0.8) hero.facing = dx < 0 ? -1 : 1;
@@ -868,7 +873,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       }
       m.bob += 0.12;
 
-      // เจ้าหญิงเหวี่ยงไม้ใส่ศัตรู — ***เฉพาะตัวที่เด็กกดสั่งตี (hero.atk)*** ไม่ตีอัตโนมัติ
+      // แม่มดน้อยเหวี่ยงไม้ใส่ศัตรู — ***เฉพาะตัวที่เด็กกดสั่งตี (hero.atk)*** ไม่ตีอัตโนมัติ
       if (m === hero.atk && hero.fainting === 0 && hero.attackCd <= 0 &&
           m.stagger <= 0 && distHero <= ATTACK_R) {
         const d = distHero || 1;
@@ -879,7 +884,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         m.vx = (-dhx / d) * knock;
         m.vy = (-dhy / d) * knock;
         m.spinV = dhx > 0 ? -0.32 : 0.32;
-        hero.attackCd = ATTACK_CD;
+        hero.attackCd = sk.attackCd; // สกิล ⚔️ — ยิ่งอัปยิ่งตีถี่
         hero.swingT = SWING_T;
         hero.facing = dhx < 0 ? -1 : 1;
         particleFx.spawnExplosion(sX(m.wx), sY(m.wy));
@@ -914,10 +919,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
   function biteHero(m) {
     hero.hp -= BITE_DMG;
-    hero.invuln = HERO_INVULN;
+    hero.invuln = sk.invuln; // สกิล 🛡️
     hero.hurtT = 12;
     m.biteCd = diff.biteCd;
-    // ผลักเจ้าหญิงถอย + ยกเลิกเป้าหมายเดิน
+    // ผลักแม่มดน้อยถอย + ยกเลิกเป้าหมายเดิน
     const d = Math.hypot(hero.wx - m.wx, hero.wy - m.wy) || 1;
     hero.wx += ((hero.wx - m.wx) / d) * 11;
     hero.wy += ((hero.wy - m.wy) / d) * 11;
@@ -925,7 +930,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     hero.tx = hero.wx;
     hero.ty = hero.wy;
     audio.sfx('bite');
-    audio.sfx('hero_cry'); // เสียงร้องเจ้าหญิงโดนกัด
+    audio.sfx('hero_cry'); // เสียงร้องแม่มดน้อยโดนกัด
     particleFx.spawnExplosion(sX(hero.wx), sY(hero.wy));
     if (hero.hp <= 0) {
       hero.hp = 0;
@@ -946,7 +951,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     hero.tx = hero.wx;
     hero.ty = hero.wy;
     hero.moving = false;
-    hero.hp = HERO_MAX_HP;
+    hero.hp = sk.maxHp;
     hero.invuln = 150; // ~2.5s อมตะให้ตั้งหลัก
     hero.hurtT = 0;
     // ดึงลูกสมุนกลับเข้าโซนบ้านของตัวเอง เอนขึ้นบน (พ้นจากฮีโร่ที่ฟื้นด้านล่าง) + หน่วงนาน
@@ -980,7 +985,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
   // เก็บพลอย = +1 หัวใจ (ตอนพลังไม่เต็มเท่านั้น) · เก็บแล้วเกิดใหม่ใน GEM_RESPAWN เฟรม
   function updateGems() {
-    const canHeal = hero.hp < HERO_MAX_HP && hero.fainting === 0;
+    const canHeal = hero.hp < sk.maxHp && hero.fainting === 0;
     const pr2 = GEM_PICK_R * GEM_PICK_R;
     for (let i = 0; i < gems.length; i++) {
       const g = gems[i];
@@ -995,7 +1000,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       if (dx * dx + dy * dy <= pr2) {
         g.taken = true;
         g.respawn = GEM_RESPAWN;
-        hero.hp = Math.min(HERO_MAX_HP, hero.hp + 1);
+        hero.hp = Math.min(sk.maxHp, hero.hp + 1);
         audio.sfx('gem');
         particleFx.spawnCelebrationBurst(sX(g.wx), sY(g.wy), { hueMin: 315, hueRange: 30 });
         break; // เก็บทีละเม็ดต่อเฟรม
@@ -1206,7 +1211,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
     particleFx.draw();
 
-    // ---- HUD: แถบพลังเจ้าหญิง (มุมซ้ายบน ใต้ปุ่ม) ----
+    // ---- HUD: แถบพลังแม่มดน้อย (มุมซ้ายบน ใต้ปุ่ม) ----
     if (!REDUCED_MOTION) drawHpBar();
   }
 
@@ -1215,13 +1220,13 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const y0 = 66;
     // แผ่นรองจาง ๆ — กันหัวใจจมกับคริสตอล/ของประดับที่อาจเลื่อนมาอยู่หลังมุมนี้
     const bx = x0 - 12;
-    const bw = (HERO_MAX_HP - 1) * 18 + 26;
+    const bw = (sk.maxHp - 1) * 18 + 26;
     fx.fillStyle = 'rgba(18,10,38,0.5)';
     fx.beginPath();
     if (fx.roundRect) fx.roundRect(bx, y0 - 14, bw, 26, 12);
     else fx.rect(bx, y0 - 14, bw, 26);
     fx.fill();
-    for (let i = 0; i < HERO_MAX_HP; i++) {
+    for (let i = 0; i < sk.maxHp; i++) {
       const cx = x0 + i * 18;
       const on = i < hero.hp;
       // หัวใจ = 2 วงกลม + สามเหลี่ยม
@@ -1362,7 +1367,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.fill();
 
     const hh = HERO_R * 2.4;
-    const hw = hh * 0.86; // สัดส่วน princess_1.png (272x318) — ไม่บีบให้เพี้ยน
+    // สัดส่วนอ่านจากขนาดจริงของไฟล์ ไม่ฮาร์ดโค้ด — เปลี่ยนรูปตัวละครแล้วไม่บีบเพี้ยน
+    // (เคยฮาร์ดโค้ด 0.86 ของ princess_1.png ไว้ พอเปลี่ยนเป็นแม่มดน้อยก็ผิดทันที)
+    const hw = HERO_IMG.naturalHeight
+      ? hh * (HERO_IMG.naturalWidth / HERO_IMG.naturalHeight)
+      : hh * 0.8;
     fx.save();
     fx.globalAlpha = blink ? 0.4 : 1;
     if (HERO_IMG.complete && HERO_IMG.naturalWidth) {
