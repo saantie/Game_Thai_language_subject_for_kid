@@ -61,8 +61,29 @@ const CR_DH = 218 * CR_SCALE;
 // ถูกตี → กระเด็นออก + สะดุด + reengageCd (เดินกลับเข้ามาใหม่ / เปิดทางให้ตัวอื่น)
 // ศัตรูของแต่ละมาตรา "หมดได้" — ฆ่าแล้วไม่เกิดใหม่ (clearedGuards/guardKills per matraId)
 const MAX_MINIONS = 6;
-const MINION_HP = 2;           // ลูกสมุนปกติ ตี 2 ครั้งตาย
 const BOSS_HP = 4;             // บอส (มาตรา 5+) ตี 4 ครั้งตาย
+
+// ---- สายพันธุ์ลูกสมุน — แหล่งความจริงเดียวของสี/พลัง/ความเร็ว/บิน ----
+// เพิ่มสายพันธุ์ใหม่ = เพิ่มแถวที่นี่พอ ไม่ต้องแตะโค้ดวาด (drawMinion อ่าน m.kind หมด)
+//   speed = ตัวคูณความเร็วไล่ ***ห้ามทำให้เร็วเกินเด็ก*** — มี clamp ตอนรันอีกชั้นกันพลาด
+//   hp    = ต้องตีกี่ครั้งถึงตาย (ไม่กระทบจำนวนตัวที่ต้องฆ่าเพื่อเปิดคริสตอล — นับเป็นตัว)
+const MINION_KINDS = [
+  { id: 'green',  body: '#86c97f', light: '#a9dda2', hat: '#4a2f6b', wing: null,      hp: 2, speed: 1.00, fly: false },
+  { id: 'blue',   body: '#7fb8e8', light: '#b3d9f5', hat: '#2a3f6b', wing: null,      hp: 2, speed: 1.15, fly: false },
+  { id: 'orange', body: '#e8a05c', light: '#f5cfa3', hat: '#6b3f1f', wing: null,      hp: 3, speed: 0.85, fly: false },
+  { id: 'bat',    body: '#b98be0', light: '#dcc4f2', hat: '#3b1f5e', wing: '#6f4a9e', hp: 1, speed: 1.20, fly: true  },
+];
+// บอสเป็น kind หนึ่งเหมือนกัน — drawMinion จะได้อ่านสีจากที่เดียว ไม่ต้อง if isBoss ทุกจุด
+const BOSS_KIND = { id: 'boss', body: '#c97fb0', light: '#e6b3de', hat: '#6a1f4a', wing: null, hp: BOSS_HP, speed: 0.90, fly: false };
+
+// สายพันธุ์ที่โผล่ได้ตาม index มาตรา — ค่อย ๆ เพิ่มความหลากหลายตามความยาก
+// มาตรา 1-4 เขียวล้วน · 5-10 +น้ำเงิน · 11-18 +ส้ม · 19+ +ตัวบิน
+function kindsFor(idx) {
+  const n = idx < 4 ? 1 : idx < 10 ? 2 : idx < 18 ? 3 : 4;
+  return MINION_KINDS.slice(0, n);
+}
+const FLY_HOVER = 13;          // ตัวบินลอยเหนือพื้นกี่ px (เงายังอยู่ที่พื้น)
+const FLY_WANDER_MUL = 1.4;    // ตัวบินเดินเตร่เร็วกว่าตัวเดิน
 // โซนที่ลูกสมุนเดินเตร่ = วงรีกว้างรอบคริสตอล — กระจายห่างกัน ไม่กระจุกที่ลูกแก้ว
 // แนวนอนกว้าง (จอมีที่เหลือถึงขอบ) แต่แนวตั้งต้องไม่ถึงคริสตอลลูกข้างเคียง (spacing/2 ≈ 177)
 const SCATTER_RX = 176;
@@ -868,8 +889,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         // เข้าปะทะ: ไล่ + กัด
         m.spin = 0;
         const d = distHero || 1;
-        m.wx += (dhx / d) * diff.speed;
-        m.wy += (dhy / d) * diff.speed;
+        // ***invariant: ห้ามเร็วเกินเด็ก*** ไม่งั้นหนีไม่ได้เลย — clamp ตอนรันกันไว้
+        // อีกชั้น เผื่อมีคนแก้ speed ในตาราง MINION_KINDS ทีหลังจนทะลุเพดาน
+        const msp = Math.min(diff.speed * (m.kind.speed || 1), sk.heroSpeed - 0.2);
+        m.wx += (dhx / d) * msp;
+        m.wy += (dhy / d) * msp;
         m.facing = dhx < 0 ? -1 : 1;
         if (distHero < BITE_R && m.biteCd <= 0 && hero.invuln <= 0 && hero.fainting === 0) {
           biteHero(m);
@@ -883,7 +907,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         const wdy = m.wanderY - m.wy;
         const wd = Math.hypot(wdx, wdy);
         if (wd > 3) {
-          const step = Math.min(wd, WANDER_SPEED);
+          const step = Math.min(wd, WANDER_SPEED * (m.kind.fly ? FLY_WANDER_MUL : 1));
           m.wx += (wdx / wd) * step;
           m.wy += (wdy / wd) * step;
           if (Math.abs(wdx) > 0.3) m.facing = wdx < 0 ? -1 : 1;
@@ -1051,6 +1075,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const f = 0.6 + h01(idx * 7 + 3) * 0.4;
     m.guardIdx = focusIdx;
     m.isBoss = !!isBoss;
+    // สายพันธุ์: วนตามช่องที่เกิด → คลื่นเดียวมีหลายแบบปนกัน ไม่ใช่สุ่มจนซ้ำทั้งคลื่น
+    const kinds = kindsFor(focusIdx);
+    m.kind = isBoss ? BOSS_KIND : kinds[idx % kinds.length];
     m.wx = gnode.wx + Math.cos(m.homeA) * SCATTER_RX * f;
     m.wy = gnode.wy + Math.sin(m.homeA) * SCATTER_RY * f;
     m.wanderX = m.wx;
@@ -1058,7 +1085,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     m.wanderT = 20 + idx * 8; // เหลื่อมกันเล็กน้อยตอนเพิ่งเกิด
     m.vx = 0;
     m.vy = 0;
-    m.hp = isBoss ? BOSS_HP : MINION_HP;
+    m.hp = m.kind.hp;
     m.maxHp = m.hp;
     m.stagger = 0;
     m.reengageCd = 0;
@@ -1436,26 +1463,51 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   function drawMinion(m, cx, cy, now) {
     const sx = m.wx - cx;
     const sy = m.wy - cy;
+    const k = m.kind || MINION_KINDS[0];
     const staggered = m.stagger > 0;
-    const bs = m.isBoss ? 1.65 : 1; // บอสตัวใหญ่กว่า
+    const bs = m.isBoss ? 1.65 : 1;        // บอสตัวใหญ่กว่า
+    // ตัวบินลอยเหนือพื้น + ขยับขึ้นลง (โดนตีแล้วร่วงลงพื้น = เห็นชัดว่าโดน)
+    const hover = k.fly && !staggered ? -FLY_HOVER + Math.sin(m.bob * 1.3) * 3 : 0;
+
+    // เงา — วาดที่ "พื้น" เสมอ ไม่ลอยตามตัว นี่คือสิ่งที่ทำให้อ่านออกว่าตัวไหนบิน
     fx.save();
     fx.translate(sx, sy);
+    fx.scale(bs, bs);
+    fx.fillStyle = k.fly ? 'rgba(0,0,0,0.13)' : 'rgba(0,0,0,0.22)';
+    fx.beginPath();
+    fx.ellipse(0, 11, k.fly ? 6 : 9, k.fly ? 2 : 3, 0, 0, Math.PI * 2);
+    fx.fill();
+    fx.restore();
+
+    fx.save();
+    fx.translate(sx, sy + hover);
     if (staggered) fx.rotate(m.spin);
     else fx.translate(0, Math.sin(m.bob) * 2);
     fx.scale((m.facing || 1) * bs, bs);
-    // เงา
-    fx.fillStyle = 'rgba(0,0,0,0.22)';
-    fx.beginPath();
-    fx.ellipse(0, 11, 9, 3, 0, 0, Math.PI * 2);
-    fx.fill();
+
+    // ปีก (ตัวบิน) — วาดก่อนตัว จะได้อยู่ข้างหลัง กระพือตาม bob
+    if (k.fly) {
+      const flap = Math.sin(m.bob * 2.4);
+      fx.fillStyle = k.wing;
+      for (let s2 = -1; s2 <= 1; s2 += 2) {
+        fx.save();
+        fx.scale(s2, 1);
+        fx.beginPath();
+        fx.ellipse(10, -3, 7.5, 3.4 + flap * 2, -0.55, 0, Math.PI * 2);
+        fx.fill();
+        fx.restore();
+      }
+    }
+
     // หมวก
-    fx.fillStyle = m.isBoss ? '#6a1f4a' : '#4a2f6b';
+    fx.fillStyle = k.hat;
     fx.beginPath();
     fx.moveTo(0, -16);
     fx.lineTo(-8, -3);
     fx.lineTo(8, -3);
     fx.closePath();
     fx.fill();
+
     // มงกุฎทองของบอส
     if (m.isBoss) {
       fx.fillStyle = '#ffd86b';
@@ -1470,23 +1522,24 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.closePath();
       fx.fill();
     }
+
     // ตัว (แดงวูบตอนโดนตี)
-    fx.fillStyle = staggered && ((now / 60) | 0) % 2
-      ? '#ffb0b0'
-      : (m.isBoss ? '#c97fb0' : '#86c97f');
+    fx.fillStyle = staggered && ((now / 60) | 0) % 2 ? '#ffb0b0' : k.body;
     fx.beginPath();
     fx.arc(0, 1, 8.5, 0, Math.PI * 2);
     fx.fill();
-    fx.fillStyle = m.isBoss ? '#e6b3de' : '#a9dda2';
+    fx.fillStyle = k.light;
     fx.beginPath();
     fx.arc(0, 2.5, 4.2, 0, Math.PI * 2);
     fx.fill();
+
     // ตา
     fx.fillStyle = '#1c0f34';
     fx.beginPath();
     fx.arc(-3, -1, 1.4, 0, Math.PI * 2);
     fx.arc(3, -1, 1.4, 0, Math.PI * 2);
     fx.fill();
+
     // ปาก (กัด) — โผล่ตอนเข้าปะทะ + biteCd เกือบพร้อม
     if (!staggered && m.active && m.biteCd < 26) {
       fx.fillStyle = '#3a1520';
@@ -1497,10 +1550,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.restore();
 
     // แถบเลือด — บอสโชว์ตลอด, ลูกสมุนโชว์เมื่อโดนตีไปแล้ว
+    // ต้องบวก hover ด้วย ไม่งั้นแถบของตัวบินจะค้างอยู่ต่ำกว่าตัวมันเอง
     const mx = m.maxHp || 2;
     if (m.isBoss || m.hp < mx) {
       const bw = m.isBoss ? 34 : 20;
-      const by = sy - (m.isBoss ? 30 : 22);
+      const by = sy + hover - (m.isBoss ? 30 : 22);
       fx.fillStyle = 'rgba(0,0,0,0.45)';
       fx.fillRect(sx - bw / 2, by, bw, m.isBoss ? 4 : 3);
       fx.fillStyle = m.isBoss ? '#ff7ac0' : '#7bd06a';
