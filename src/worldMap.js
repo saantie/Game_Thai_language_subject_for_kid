@@ -26,7 +26,7 @@ HERO_IMG.src = 'public/assets/images/witch.png'; // แม่มดน้อย 
 // (แม่มดแก่ปลายแผนที่ = MAP_WITCH_IMG คนละตัว — คนละหน้าตา ไม่สับสน)
 // แม่มดปลายแผนที่ — ถ้าไฟล์ยังไม่มี ใช้รูปทรงวาดเองแทน (drawWitch)
 const MAP_WITCH_IMG = new Image();
-MAP_WITCH_IMG.src = 'public/assets/images/map%20witch.png';
+MAP_WITCH_IMG.src = 'public/assets/images/Evil%20wish/0-1.gif';
 
 const REDUCED_MOTION =
   typeof window.matchMedia === 'function' &&
@@ -1579,12 +1579,17 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const wx = witchWX;
     const wy = witchWY;
 
-    // รูปแม่มดจริง (public/assets/images/map witch.png) — ถ้ายังไม่มีไฟล์ ตกไปวาดเอง
+    // รูปแม่มดใจร้ายจริง — ถ้าโหลดไม่ได้ ตกไปวาดรูปทรงเองด้านล่าง
     if (MAP_WITCH_IMG.complete && MAP_WITCH_IMG.naturalWidth) {
       const iw = MAP_WITCH_IMG.naturalWidth;
       const ih = MAP_WITCH_IMG.naturalHeight;
-      const dh = Math.min(260, H * 0.42);
-      const dw = dh * (iw / ih);
+      // จัดขนาดแบบ contain — พอดีทั้งกว้างและสูง รองรับทั้งภาพแนวตั้งและแนวนอน
+      // (0-1.gif เป็น 1920x1080 แนวนอน ถ้าคิดจากความสูงอย่างเดียวแบบเดิมจะกว้างล้นจอ)
+      const boxW = W * 0.88;
+      const boxH = Math.min(260, H * 0.42);
+      const scale = Math.min(boxW / iw, boxH / ih);
+      const dw = iw * scale;
+      const dh = ih * scale;
       const topY = wy - dh * 0.32; // เผยตัวเหนือมาตราสุดท้าย
       // ลำแสง/เงามนตราแผ่ลงมา
       fx.fillStyle = 'rgba(150,120,220,0.06)';

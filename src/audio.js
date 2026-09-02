@@ -33,13 +33,23 @@ const VOICE = {
   // เปิด AR ในเกมไพ่ครั้งแรก (ข้อ 2) — สอนท่าดีดนิ้วชี้แทนท่าจีบที่ใช้ในเกมหยิบฟอง
   // พูดครั้งเดียวตลอดการเล่น (ดู loadArFlickHintShown ใน storage.js)
   mahjong_flick_hint: ['ลองดีดนิ้วชี้เพื่อเลือกไพ่ใบที่ชอบดูนะจ๊ะ'],
-  // ไพ่อิโมจิจับคู่กัน (ข้อ 7) — ไม่มีคำจริงให้อ่าน ใช้คำชมสุ่มแทน (noRepeat กัน
-  // ชมประโยคเดิมซ้ำติดกัน) ตั้งใจให้ต่างจากพูล correct ของด่านอ่านออกเสียง
-  mahjong_emoji_match: ['เก่งมากเลยจ้า!', 'จับคู่เก่งจัง!', 'สุดยอดไปเลย!', 'ไชโย เจอคู่แล้ว!', 'ยอดเยี่ยมมากค่ะ!', 'มหัศจรรย์จริงๆ!'],
 };
 const _lastVoiceIdx = new Map(); // key -> index ล่าสุดที่สุ่มได้ (สำหรับ noRepeat)
 
 let thaiVoice = null;
+let enVoice = null;
+// เสียงอังกฤษสำหรับไพ่ภาพในเกมจับคู่ (อ่านชื่อภาพให้เด็กออกเสียงตาม)
+// เลือก en-US ก่อน แล้วค่อย en-* อื่น — ถ้าเครื่องไม่มีเลย ปล่อย null แล้วตั้งแค่
+// u.lang='en-US' ให้ engine เลือกเอง (ยังดีกว่าใช้เสียงไทยอ่านคำอังกฤษ)
+function pickEnVoice() {
+  if (!('speechSynthesis' in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  enVoice =
+    voices.find((v) => v.lang && v.lang.toLowerCase() === 'en-us') ||
+    voices.find((v) => v.lang && v.lang.toLowerCase().startsWith('en')) ||
+    null;
+  return enVoice;
+}
 function pickThaiVoice() {
   if (!('speechSynthesis' in window)) return null;
   const voices = window.speechSynthesis.getVoices();
@@ -52,7 +62,8 @@ function pickThaiVoice() {
 }
 if ('speechSynthesis' in window) {
   pickThaiVoice();
-  window.speechSynthesis.onvoiceschanged = pickThaiVoice;
+  pickEnVoice();
+  window.speechSynthesis.onvoiceschanged = () => { pickThaiVoice(); pickEnVoice(); };
 }
 
 // ---------- AudioBufferCache ----------
@@ -525,17 +536,20 @@ export const audio = {
   },
 
   // พูดข้อความใด ๆ ด้วย TTS ภาษาไทย (fallback / ใช้ตรงกรณีพิเศษ)
+  // lang: 'th-TH' (default) | 'en-US' — ไพ่ภาพในเกมจับคู่อ่านชื่อภาพเป็นอังกฤษ
   speak(text, opts = {}) {
-    const { rate = 0.85, pitch = 1.0, onEnd } = opts;
+    const { rate = 0.85, pitch = 1.0, onEnd, lang = 'th-TH' } = opts;
     if (!('speechSynthesis' in window) || !text) {
-      // ไม่มี TTS → หน่วงเวลาประมาณการแล้วเรียก onEnd
-      setTimeout(() => onEnd && onEnd(), 600 + text.length * 45);
+      // ไม่มี TTS → หน่วงเวลาประมาณการแล้วเรียก onEnd (ห้ามค้าง — เกมรอ onEnd อยู่)
+      setTimeout(() => onEnd && onEnd(), 600 + String(text || '').length * 45);
       return;
     }
     this.duck();
     const u = new SpeechSynthesisUtterance(text);
-    if (thaiVoice) u.voice = thaiVoice;
-    u.lang = 'th-TH';
+    const isEn = lang.toLowerCase().startsWith('en');
+    const v = isEn ? enVoice : thaiVoice;
+    if (v) u.voice = v;
+    u.lang = lang;
     u.rate = rate;
     u.pitch = pitch;
     u.onend = () => {

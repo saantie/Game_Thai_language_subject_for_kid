@@ -28,17 +28,21 @@ const LAYER_OFFSET_Y_RATIO = 0.32;
 const TILE_TEXT_COLORS = ['#c0264d', '#1f7a4d', '#1d5fb8', '#b8590a', '#7c3aed', '#0f8a8a'];
 const TILE_EMOJIS = ['✨', '⭐', '🌙', '🔮', '🌟', '🎶'];
 
-// อิโมจิแทนคำ (ข้อ 7) — ใช้ตอนมาตรานั้นมีคำจริงไม่พอ pairCount ที่ต้องการ (เช่น
-// กลุ่ม FILL_FINAL ตายตัวมาตราละ 5 คำ แต่ curriculumIndex สูงต้องการมากกว่านั้น
-// มาก) ต้องมีจำนวนมากพอไม่ให้ซ้ำกันเมื่อต้องพากันหลายคู่ในมาตราท้ายๆ (สูงสุด
-// pairCount ~31 ที่มาตราสุดท้าย) — ไพ่กลุ่มนี้จับคู่แล้วไม่อ่านคำ ได้ยินเสียงชม
-// สุ่มแทน (ดู flyToTray/playMatchEffect กับ audio.voice('mahjong_emoji_match'))
-const WORD_EMOJIS = [
-  '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯',
-  '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦄',
-  '🐴', '🦋', '🐢', '🐳', '🐬', '🐙', '🦀', '🐝', '🐞', '🐌',
-  '🍎', '🍌', '🍇', '🍉', '🍓', '🍕', '🍰', '🍦', '🍭', '⚽',
-];
+// ไพ่ภาพ — ใช้เติมตอนมาตรานั้นมีคำจริงไม่พอ pairCount ที่ต้องการ (เช่นกลุ่ม
+// FILL_FINAL ตายตัวมาตราละ 5 คำ) จับคู่สำเร็จแล้ว **อ่านชื่อภาพเป็นภาษาอังกฤษ**
+// (เดิมพูดคำชมภาษาไทยสุ่ม ๆ ซึ่งไม่ได้สอนอะไร) — เด็กได้ฝึกออกเสียงอังกฤษไปด้วย
+// คำต้องเป็นคำที่เด็กอนุบาลรู้จัก + TTS อังกฤษออกเสียงได้ตรง (เลี่ยงคำกำกวม)
+const EMOJI_WORDS = {
+  '🐶': 'dog',     '🐱': 'cat',      '🐭': 'mouse',      '🐹': 'hamster', '🐰': 'rabbit',
+  '🦊': 'fox',     '🐻': 'bear',     '🐼': 'panda',      '🐨': 'koala',   '🐯': 'tiger',
+  '🦁': 'lion',    '🐮': 'cow',      '🐷': 'pig',        '🐸': 'frog',    '🐵': 'monkey',
+  '🐔': 'chicken', '🐧': 'penguin',  '🐦': 'bird',       '🐤': 'chick',   '🦄': 'unicorn',
+  '🐴': 'horse',   '🦋': 'butterfly','🐢': 'turtle',     '🐳': 'whale',   '🐬': 'dolphin',
+  '🐙': 'octopus', '🦀': 'crab',     '🐝': 'bee',        '🐞': 'ladybug', '🐌': 'snail',
+  '🍎': 'apple',   '🍌': 'banana',   '🍇': 'grapes',     '🍉': 'watermelon', '🍓': 'strawberry',
+  '🍕': 'pizza',   '🍰': 'cake',     '🍦': 'ice cream',  '🍭': 'lollipop','⚽': 'ball',
+};
+const WORD_EMOJIS = Object.keys(EMOJI_WORDS);
 
 // ---------- pure logic (พอร์ตจาก prototype, export ไว้เทสต์แยกได้) ----------
 
@@ -143,11 +147,12 @@ export function isTileFree(tile, allTiles) {
 // layerCount ซ้อนได้สูงสุด 4 ชั้น (คู่กับคอลัมน์แคบลงเหลือ 4 ที่ MAX_LAYER_COLS
 // ด้านบน) — กันไพ่ถูกหนีบซ้อนกันเยอะเกินไปในแถวเดียวตอนมาตรายาก ปิรามิดจึงลึก
 // ขึ้น (4 ชั้น) แทนที่จะกว้าง/แบนแบบเดิม
-const BASE_PAIRS = 6; // kaka (idx0) = 6 คู่ (12 ใบ) ตามที่เคยขอไว้ก่อนหน้า
+// ไพ่ 30 ใบ (15 คู่) เท่ากันทุกมาตรา — เดิมเพิ่มตาม curriculumIndex (6→35 คู่)
+// ทำให้มาตราท้าย ๆ กระดานใหญ่จนเล่นนาน/ล้นจอ ตอนนี้คงที่ให้เวลาเล่นต่อด่านเท่ากัน
+const FIXED_PAIRS = 15;
 const MAX_LAYERS = 4;
 export function deriveDifficulty(matra, curriculumIndex) {
-  const pairCount = BASE_PAIRS + curriculumIndex; // เพิ่มอย่างน้อย 1 คู่ (2 ใบ) ทุกมาตรา
-  return { pairCount, layerCount: MAX_LAYERS };
+  return { pairCount: FIXED_PAIRS, layerCount: MAX_LAYERS };
 }
 
 // ขอบเส้นประของ .mj-tray เอง (2px ทั้งสองฝั่ง, ดู .mj-tray ใน styles.css) — ช่องไพ่
@@ -471,6 +476,20 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     return null;
   }
 
+  // กรอบคำยืดหยุ่นตามจำนวนตัวอักษร — คำอังกฤษยาวกว่าคำไทยมาก ("watermelon" 10 ตัว
+  // เทียบ "กา" 2 ตัว) ถ้าใช้ font-size คงที่ 136px กรอบจะกว้างล้นจอมือถือ
+  // ส่งขนาดผ่าน CSS var ให้ .mj-big-word-text (CSS วัดความยาวข้อความเองไม่ได้)
+  // คำไทยสั้น (≤4 ตัว) ได้ค่าเดิมเป๊ะ — ไม่กระทบของเดิมที่จูนมาแล้ว
+  function sizeBigWord(text) {
+    const len = Math.max(1, [...String(text)].length); // นับ code point (อิโมจิ = 1 ตัว)
+    // เป้าหมาย: กว้างราว 82% ของจอ → font ≈ 0.82*W / (len*0.55) ≈ 150/len vw
+    // ส่วน maxPx กันตัวใหญ่เกินบนจอกว้าง (เดิม 80/len ทำให้ vw คับจนชนพื้น 38px)
+    const vw = Math.max(6, Math.min(20, 150 / len));
+    const maxPx = Math.max(38, Math.min(136, 540 / len));
+    dom.mahjongBigWord.style.setProperty('--mj-bw-vw', vw + 'vw');
+    dom.mahjongBigWord.style.setProperty('--mj-bw-max', maxPx + 'px');
+  }
+
   // โชว์คำตัวใหญ่ตรงถาด แล้วอ่านสะกดคำทีละพยางค์ (ใช้ word.spell เดิมจาก matra.js
   // ตัวเดียวกับที่เกมหยิบฟองใช้เฉลยสะกดคำ) — เรียก done() หลังอ่านจบ
   function showBigWord(wordObj, done) {
@@ -478,16 +497,19 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     // เขียนคำลง .mj-big-word-text (ลูกข้างใน) ไม่ใช่ตัว .mj-big-word เอง — แยก
     // element กันพื้นหลังบังตัวอักษร (ดูคอมเมนต์ .mj-big-word ใน styles.css)
     const textEl = dom.mahjongBigWord.querySelector('.mj-big-word-text') || dom.mahjongBigWord;
-    textEl.textContent = wordObj.display;
+    // ไพ่ภาพ: โชว์ "อิโมจิ + คำอังกฤษ" คู่กัน เด็กเชื่อมภาพ↔คำได้เอง
+    const enWord = wordObj.isEmoji ? (EMOJI_WORDS[wordObj.display] || '') : '';
+    const shown = enWord ? `${wordObj.display} ${enWord}` : wordObj.display;
+    textEl.textContent = shown;
+    sizeBigWord(shown);
     dom.mahjongBigWord.classList.remove('show');
     void dom.mahjongBigWord.offsetWidth;
     dom.mahjongBigWord.classList.add('show');
     if (wordObj.isEmoji) {
-      // ไพ่อิโมจิ (ข้อ 7) — ไม่มีคำ/สะกดจริงให้อ่าน โชว์ตัวใหญ่แล้วชมด้วยเสียง
-      // สุ่มแทน (ไม่ซ้ำคำชมเดิมติดกัน — ดู noRepeat ใน audio.voice) รอเสียงชมจบ
-      // ก่อนไปต่อ เหมือนคำจริงที่รอ playSpellReveal จบ
-      audio.voice('mahjong_emoji_match', {
-        noRepeat: true,
+      // ไพ่ภาพ — อ่านชื่อภาพเป็นภาษาอังกฤษ (แทนคำชมภาษาไทยแบบเดิมที่ไม่ได้สอนอะไร)
+      // rate ช้ากว่าปกติเล็กน้อย เด็กจะได้ฟังทันและออกเสียงตาม
+      audio.speak(enWord, {
+        lang: 'en-US', rate: 0.7,
         onEnd: () => { dom.mahjongBigWord.classList.remove('show'); done(); },
       });
       return;
