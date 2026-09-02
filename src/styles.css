@@ -1367,8 +1367,11 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
   top: max(12px, env(safe-area-inset-top, 12px));
   left: 68px;
 }
+/* มุมล่างขวา — เดิมอยู่กลางล่างแล้วไปทับป้ายชื่อคริสตอลลูกล่างสุดของแผนที่ */
 .map-adult-btn {
-  position: absolute; left: 50%; transform: translateX(-50%);
+  position: absolute;
+  left: auto; transform: none;
+  right: max(14px, env(safe-area-inset-right, 14px));
   bottom: max(14px, env(safe-area-inset-bottom, 14px));
   margin-top: 0;
 }

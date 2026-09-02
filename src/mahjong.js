@@ -712,6 +712,11 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
     // จากท่าเดียว จนได้ไพ่คนละใบ (บั๊กที่เจอจริง v146) เช็คว่ามีไพ่กำลังบินอยู่ไหม
     // (ช่วงสั้นๆ FLY_MS) กันไว้ — ไพ่ที่บินไปแล้วเปลี่ยน state ทันทีแบบ sync อยู่แล้ว
     // จึงกันการหยิบซ้ำใบเดิมได้ในตัว ไม่ต้องมี flag แยกอีก
+    // กำลังเล่นเอฟเฟกต์จับคู่ + อ่านคำ/อ่านภาพอยู่ → ยังหยิบใบถัดไปไม่ได้
+    // (เด็กต้องได้ฟังคำที่เพิ่งจับคู่ได้จนจบ ไม่งั้นแตะรัวจนไม่ได้ยินอะไรเลย)
+    // ไม่ใส่เสียง/สั่นตอนถูกบล็อก — จะไปทับเสียงอ่านที่ต้องฟังพอดี
+    // การ์ดคำตัวใหญ่กลางจอทำหน้าที่บอก "รอก่อน" อยู่แล้ว
+    if (matchProcessing) return;
     if (!tiles.length || tiles.some((t) => t.el.classList.contains('flying'))) return;
     const el = document.elementFromPoint(x, y);
     const tileEl = el && el.closest && el.closest('.mj-tile');
@@ -790,7 +795,7 @@ export function createMahjongWarmup({ scene, audio, app, dom, onComplete }) {
   const SHUFFLE_SPIN_INTERVAL_MS = 110;
   let _shuffling = false; // กันกดซ้ำ/เรียกซ้อนระหว่างกำลังหมุนสุ่มอยู่
   function shuffle() {
-    if (_shuffling) return;
+    if (_shuffling || matchProcessing) return; // ระหว่างอ่านคำ ห้ามสลับป้ายด้วย
     const pool = tiles.filter((t) => t.state !== 'matched');
     if (!pool.length) return;
     const canFormTrayMatch = tray.length >= 2;
