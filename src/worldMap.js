@@ -343,20 +343,51 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       decorDots.push({ x: (a / 10007) * W, y: (b / 9973) * H });
     }
 
-    // ถนนดิน = ริบบิ้น polygon ขอบไม่สม่ำเสมอ (world space) — สร้างครั้งเดียว
-    // sample จุดถี่ ๆ ตามแนวเส้นทาง แล้วยื่นซ้าย/ขวาเป็นครึ่งความกว้างที่สุ่มตามระยะ
+    // ถนนดิน = ริบบิ้น polygon คดเคี้ยว ขอบไม่สม่ำเสมอ (world space) — สร้างครั้งเดียว
+    // (1) เส้นกลาง = โค้ง Catmull-Rom ผ่านคริสตอลทุกลูก (ไม่หักมุมที่โหนดแบบเส้นตรง)
+    // (2) ส่ายซ้าย-ขวาเพิ่มตาม value noise — คดเคี้ยวแบบธรรมชาติ แต่หน่วงเป็น 0 ตรงคริสตอล
+    //     เพื่อให้ถนนยังผ่ากลางลูกแก้วพอดี
     {
+      const SEGS = 14;        // ช่วงย่อยต่อ 1 ช่วงคริสตอล
+      const MEANDER = 22;     // px แอมพลิจูดการส่าย
+      const ctrl = nodes;
       const pts = [];
-      for (let i = 0; i < nodes.length - 1; i++) {
-        const a = nodes[i], b = nodes[i + 1];
-        const segLen = Math.hypot(b.wx - a.wx, b.wy - a.wy);
-        const steps = Math.max(2, Math.round(segLen / 26));
-        for (let k = 0; k < steps; k++) {
-          const t = k / steps;
-          pts.push({ x: a.wx + (b.wx - a.wx) * t, y: a.wy + (b.wy - a.wy) * t });
+      for (let i = 0; i < ctrl.length - 1; i++) {
+        const p0 = ctrl[i - 1] || ctrl[i];
+        const p1 = ctrl[i];
+        const p2 = ctrl[i + 1];
+        const p3 = ctrl[i + 2] || ctrl[i + 1];
+        for (let k = 0; k < SEGS; k++) {
+          const t = k / SEGS, tt = t * t, ttt = tt * t;
+          const cx =
+            0.5 * (2 * p1.wx + (-p0.wx + p2.wx) * t +
+              (2 * p0.wx - 5 * p1.wx + 4 * p2.wx - p3.wx) * tt +
+              (-p0.wx + 3 * p1.wx - 3 * p2.wx + p3.wx) * ttt);
+          const cy =
+            0.5 * (2 * p1.wy + (-p0.wy + p2.wy) * t +
+              (2 * p0.wy - 5 * p1.wy + 4 * p2.wy - p3.wy) * tt +
+              (-p0.wy + 3 * p1.wy - 3 * p2.wy + p3.wy) * ttt);
+          pts.push({ x: cx, y: cy });
         }
       }
-      pts.push({ x: nodes[nodes.length - 1].wx, y: nodes[nodes.length - 1].wy });
+      pts.push({ x: ctrl[ctrl.length - 1].wx, y: ctrl[ctrl.length - 1].wy });
+
+      // ส่ายซ้าย-ขวา: offset ตั้งฉากตาม noise เรียบ คูณ damp (0 ที่คริสตอล = j%SEGS==0)
+      const base = pts.map((p) => ({ x: p.x, y: p.y }));
+      for (let j = 1; j < pts.length - 1; j++) {
+        const a = base[j - 1], b = base[j + 1];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const nx = -dy / d, ny = dx / d;
+        const CELL = 9;
+        const g = j / CELL, i0 = Math.floor(g), f = g - i0;
+        const s = f * f * (3 - 2 * f);
+        const n0 = h01(i0 * 911 + 41), n1 = h01((i0 + 1) * 911 + 41);
+        const damp = Math.sin(Math.PI * ((j % SEGS) / SEGS));
+        const off = ((n0 * (1 - s) + n1 * s) - 0.5) * 2 * MEANDER * damp;
+        pts[j].x = base[j].x + nx * off;
+        pts[j].y = base[j].y + ny * off;
+      }
 
       // value noise เรียบ ๆ ต่อ sample — lerp ค่า hash ทุก 6 จุด (ไม่ให้ขอบสั่นจั๊กจี้)
       const roadHW = (k) => {
