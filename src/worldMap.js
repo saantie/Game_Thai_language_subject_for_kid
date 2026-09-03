@@ -281,6 +281,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   let decorDots = [];  // ประกายจาง ๆ พื้นหลัง — คำนวณครั้งเดียวตอน computeLayout (ไม่ alloc ใน loop)
   let roadPoly = null;    // Path2D ริบบิ้นถนนดิน (world space) — สร้างครั้งเดียวตอน computeLayout
   let roadPolyPts = [];   // จุดขอบ polygon (fallback เมื่อไม่มี Path2D)
+  let spine = [];         // เส้นกลางถนน { x, y } ต่อมาตรา — บ้าน/ต้นไม้เยื้องจากเส้นนี้
 
   // ---- cancel-safe timers (คัดลอกจาก mahjong.js — เคยมีบั๊ก timer ค้างยิง
   //      callback หลัง teardown ทำให้เข้ามาตราผิดจังหวะ) ห้ามใช้ setTimeout ตรง ๆ ----
@@ -319,25 +320,44 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     W = scene.W;
     H = scene.H;
     const N = MATRA.length;
-    // สวิงกว้างกว่าจอ → กล้องแพนแนวนอนตามคริสตอลเป้าหมายให้อยู่กลางจอได้
-    const amp = Math.max(70, W * 0.42);
-    const midX = W / 2 + amp;          // กึ่งกลางโลก (เผื่อสวิงซ้าย-ขวาเท่า ๆ กัน)
-    worldW = W + amp * 2;              // คริสตอลสุดขอบ → cam.x ∈ [0, worldW - W]
+    // โลกกว้างกว่าจอมาก — เผื่อบ้านเยื้องออกข้างถนนแล้วกล้องยังเฟรมบ้านได้
+    const amp = Math.max(100, W * 0.6);
+    const midX = W / 2 + amp;          // กึ่งกลางโลก
+    worldW = W + amp * 2;              // บ้านสุดขอบ → cam.x ∈ [0, worldW - W]
     const pad = H * 0.55;
     const spacing = Math.max(190, H * 0.42);
     nodeSpacing = spacing;
     worldH = pad + spacing * (N - 1) + pad;
 
-    nodes = MATRA.map((m, i) => ({
-      matraId: m.id,
-      name: m.name,
-      idx: i,
-      // เส้นทางคดเคี้ยวด้วย sine — กล้องแพนตามให้คริสตอลอยู่กลางจอ
-      wx: midX + Math.sin(i * 0.62) * amp,
-      // มาตราแรก (i=0) อยู่ "ล่างสุด" ของโลก — เดินขึ้นบนเมื่อคืบหน้า (ปีนเขา)
-      wy: pad + (N - 1 - i) * spacing,
-      shake: 0,
-    }));
+    // เส้นกลางถนน (spine) — ไล่ขึ้นแนวตั้ง + ส่ายแนวนอน sine เบา ๆ
+    // i=0 อยู่ล่างสุดของโลก เดินขึ้นบนเมื่อคืบหน้า
+    spine = [];
+    for (let i = 0; i < N; i++) {
+      spine.push({
+        x: midX + Math.sin(i * 0.55) * (amp * 0.34),
+        y: pad + (N - 1 - i) * spacing,
+      });
+    }
+
+    // บ้านมาตรา = จุด spine เยื้องออกข้างถนน สลับ 2 ฝั่งแบบสุ่ม (ไม่ทับถนน)
+    const NODE_OFF = Math.max(110, W * 0.3);
+    nodes = MATRA.map((m, i) => {
+      let sideSign = i % 2 === 0 ? 1 : -1;               // หลัก: สลับซ้าย-ขวา
+      if (h01(i * 23 + 5) < 0.30) sideSign = -sideSign;  // สุ่มพลิกบางลูก → 2 ฝั่งแบบสุ่ม
+      const off = NODE_OFF * (0.88 + 0.24 * h01(i * 31 + 2));
+      let wx = spine[i].x + sideSign * off;
+      const m2 = HOUSE_DW * 0.42 + 12;
+      wx = Math.max(m2, Math.min(worldW - m2, wx));
+      return {
+        matraId: m.id,
+        name: m.name,
+        idx: i,
+        wx,
+        wy: spine[i].y,
+        side: sideSign,
+        shake: 0,
+      };
+    });
 
     // ประกายพื้นหลัง — สุ่มแบบ deterministic (ไม่ใช้ Math.random ใน loop) ใน band สูง 1 จอ
     const DOT_N = 46;
@@ -354,10 +374,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     // (2) ส่ายซ้าย-ขวาแรง ๆ หลายลูกคลื่นต่อช่วงคริสตอล → เลื้อยเหมือนงู
     //     envelope sin²(πt) บีบให้ offset + ความชัน = 0 ตรงคริสตอล (ถนนผ่ากลางลูกแก้ว เรียบ ไม่หักมุม)
     {
-      const SEGS = 22;       // ช่วงย่อยต่อ 1 ช่วงคริสตอล (ถี่ขึ้นเพราะคลื่นเยอะ)
+      const SEGS = 22;       // ช่วงย่อยต่อ 1 ช่วง spine (ถี่ขึ้นเพราะคลื่นเยอะ)
       const AMP = Math.min(78, nodeSpacing * 0.5);  // แอมพลิจูดการเลื้อย (px)
-      const WAVES = 2.4;     // จำนวนครึ่งคลื่นต่อช่วงคริสตอล (>2 = มี S หลายตัว)
-      const ctrl = nodes;
+      const WAVES = 2.4;     // จำนวนครึ่งคลื่นต่อช่วง spine (>2 = มี S หลายตัว)
+      const ctrl = spine.map((s) => ({ wx: s.x, wy: s.y }));  // ถนนตามเส้นกลาง ไม่ใช่ตัวบ้าน
       const pts = [];
       const segT = [];      // { seg, t } ของแต่ละจุด — ใช้คำนวณคลื่นการเลื้อย
       for (let i = 0; i < ctrl.length - 1; i++) {
@@ -433,26 +453,29 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     witchWY = nodes[N - 1].wy - spacing * 0.95;
     witchWX = nodes[N - 1].wx;
 
-    // ของประดับ — หิน/พุ่ม/ต้นไม้ กระจาย deterministic (เลี่ยงกลางเส้นทาง)
+    // ของประดับ — หิน/พุ่ม/ต้นไม้ วางอิง "เส้นกลางถนน" (spine) ให้พ้นถนน+พ้นบ้านเสมอ
     // deterministic (hash ไม่ใช่ Math.random) → resize แล้วตำแหน่งไม่สลับ
     decor.length = 0;
-    const decorN = Math.max(14, Math.round(worldH / 135));
+    const decorN = Math.max(16, Math.round(worldH / 118));
+    // พ้นถนน (spine ± ~30) และพ้นแนวบ้าน (spine ± NODE_OFF, บ้านกว้าง ~HOUSE_DW/2)
+    const decorClear = NODE_OFF + HOUSE_DW * 0.5 + 26;
     for (let i = 0; i < decorN; i++) {
-      const r1 = h01(i * 3 + 1);
       const r2 = h01(i * 3 + 2);
       const r3 = h01(i * 3 + 3);
-      const r4 = h01(i * 7 + 5);   // ชนิด (อิสระจากตำแหน่ง y)
+      const r4 = h01(i * 7 + 5);   // ชนิด
       const r5 = h01(i * 11 + 9);  // สเกล
-      const side = r1 < 0.5 ? -1 : 1;
-      // ระยะห่างจากแกนกลางอิงความกว้างจอ (W) ไม่ใช่ worldW — ให้ต้นไม้อยู่ในกรอบที่มองเห็น
-      // สองข้างทาง ระยะ 0.24W–0.66W จาก midX (เส้นทางคดเคี้ยวผ่านไปมา decor วาดก่อน = อยู่หลัง)
-      const dx = side * (W * 0.24 + r2 * (W * 0.42));
-      const wx = Math.max(20, Math.min(worldW - 20, midX + dx));
+      const r6 = h01(i * 13 + 8);  // ฝั่ง/flip
       const wy = ((i + r3) / decorN) * worldH;
+      const side = r6 < 0.5 ? -1 : 1;
+      const dist = decorClear + r2 * (W * 0.3);
+      let wx = spineXAt(wy) + side * dist;
+      wx = Math.max(14, Math.min(worldW - 14, wx));
       const type = r4 < 0.26 ? 0 : r4 < 0.46 ? 1 : 2;   // ~54% เป็นต้นไม้
       // ต้นไม้ (รูปภาพ) สเกลกว้าง 0.55–1.8 ให้ขนาดต่างกันชัด · หิน/พุ่ม 0.75–1.45
       const s = type === 2 ? 0.55 + r5 * 1.25 : 0.75 + r5 * 0.7;
-      decor.push({ wx, wy, type, s, flip: r1 < 0.5 ? -1 : 1 });
+      const dc = { wx, wy, type, s, flip: r6 < 0.5 ? -1 : 1 };
+      if (type === 2) dc.trunkR = 8 * s;   // รัศมีโคนต้นไม้ (แม่มดชนไม่ทะลุ)
+      decor.push(dc);
     }
 
     // พลอยเติมพลัง — 2 เม็ดต่อคริสตอล (ซ้าย-ขวาล่าง ในโซนที่เด็กสู้) ตำแหน่งตายตัว
@@ -528,6 +551,22 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   // world → screen (หัก cam ออก) — ใช้ตอน spawn particle ที่วาดในพิกัดจอ
   function sX(wx) { return wx - cam.x; }
   function sY(wy) { return wy - cam.y; }
+
+  // x ของเส้นกลางถนนที่ระดับ world y (lerp ระหว่างจุด spine) — วางบ้าน/ต้นไม้เยื้องจากนี้
+  function spineXAt(wy) {
+    const n = spine.length;
+    if (n < 2) return worldW / 2;
+    if (wy >= spine[0].y) return spine[0].x;                 // spine[0] = ล่างสุด (y มาก)
+    if (wy <= spine[n - 1].y) return spine[n - 1].x;
+    for (let i = 0; i < n - 1; i++) {
+      const a = spine[i], b = spine[i + 1];                  // a.y > b.y
+      if (wy <= a.y && wy >= b.y) {
+        const f = (a.y - wy) / (a.y - b.y || 1);
+        return a.x + (b.x - a.x) * f;
+      }
+    }
+    return spine[0].x;
+  }
 
   function heroRestY(node) {
     // ยืนใต้คริสตอลนิดหน่อย — ไกลพอที่ arrival check จะไม่ยิงทันทีตอน enter()
@@ -888,6 +927,34 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       hero.wx = Math.max(22, Math.min(worldW - 22, hero.wx));
       // เดินขึ้นเกินลูกที่ล็อกได้แค่ 2 ลูก (walkCeilY คำนวณใน refresh)
       hero.wy = Math.max(walkCeilY, Math.min(worldH - 18, hero.wy));
+
+      // ---- ชนโคนต้นไม้: ดันออกนอกรัศมีโคน + สไลด์อ้อม (ไม่ทะลุ ไม่ค้าง) ----
+      const foot = 11;
+      for (let d = 0; d < decor.length; d++) {
+        const dc = decor[d];
+        if (!dc.trunkR) continue;
+        if (Math.abs(dc.wy - hero.wy) > 120) continue;   // เช็คเฉพาะต้นที่ใกล้
+        const ddx = hero.wx - dc.wx;
+        const ddy = hero.wy - dc.wy;
+        const rr = dc.trunkR + foot;
+        const dd = Math.hypot(ddx, ddy);
+        if (dd > 0.01 && dd < rr) {
+          const nxr = ddx / dd, nyr = ddy / dd;
+          hero.wx = dc.wx + nxr * rr;           // ดันออกแนวรัศมี
+          hero.wy = dc.wy + nyr * rr;
+          // เป้าอยู่ "หลัง" ต้นไม้ → สไลด์ตามเส้นสัมผัสไปด้านที่ใกล้เป้า (เดินอ้อม)
+          const tgx = hero.tx - hero.wx, tgy = hero.ty - hero.wy;
+          if (tgx * -nxr + tgy * -nyr > 0) {
+            let tx1 = -nyr, ty1 = nxr;
+            if (tgx * tx1 + tgy * ty1 < 0) { tx1 = -tx1; ty1 = -ty1; }
+            const slide = Math.min(sk.heroSpeed, Math.hypot(tgx, tgy));
+            hero.wx += tx1 * slide;
+            hero.wy += ty1 * slide;
+            const nd = Math.hypot(hero.wx - dc.wx, hero.wy - dc.wy) || 1;
+            if (nd < rr) { hero.wx = dc.wx + (hero.wx - dc.wx) / nd * rr; hero.wy = dc.wy + (hero.wy - dc.wy) / nd * rr; }
+          }
+        }
+      }
     }
 
     // ---- เก็บพลอยเติมหัวใจ ----
