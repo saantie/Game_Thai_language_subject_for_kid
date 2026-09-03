@@ -21,8 +21,26 @@ import { getSkillEffects } from './rpg.js';
 // asset ที่มีอยู่แล้วใน APP_SHELL — encode ช่องว่างเหมือนที่อื่นในโปรเจกต์
 const CRYSTAL_IMG = new Image();
 CRYSTAL_IMG.src = 'public/assets/images/glass%20ball.png';
-const HERO_IMG = new Image();
-HERO_IMG.src = 'public/assets/images/witch.png'; // แม่มดน้อย = ตัวที่เด็กบังคับ
+// แม่มดน้อย (ตัวที่เด็กบังคับ) — 3 ท่า สลับตาม state ที่มีอยู่แล้วของ hero
+// GIF เคลื่อนไหวในตัว: ยืน 22 เฟรม / เดิน 4 เฟรม / ต่อสู้ 8 เฟรม
+// สัดส่วนแต่ละไฟล์ต่างกันมาก (64x103 / 95x100 / 106x97) — drawHero คิดความกว้าง
+// จาก naturalWidth/Height ของ "ไฟล์ที่กำลังใช้" ไม่ใช่ค่าตายตัว
+// ***ต้องอ้าง <img> ที่อยู่ใน DOM จริง*** (index.html .hero-sprite) — GIF เดินเฟรม
+// เฉพาะตอนที่ browser เรนเดอร์ element นั้นอยู่ ถ้าใช้ new Image() ที่ไม่ผูก DOM
+// จะวาดแค่เฟรมแรกค้าง (วัดแล้ว: drawImage 6 ครั้งห่างกัน 220ms ได้ภาพเดียวกันหมด)
+// fallback เป็น new Image() เผื่อ element หายไป — ยังเห็นท่าถูก แค่ไม่ขยับ
+function heroImg(id, src) {
+  const el = typeof document !== 'undefined' && document.getElementById(id);
+  if (el) return el;
+  const i = new Image(); i.src = src; return i;
+}
+const HERO_IMGS = {
+  stand: heroImg('heroStandImg', 'public/assets/images/wish%20standing%2030.gif'),
+  walk:  heroImg('heroWalkImg',  'public/assets/images/wish%20walk%2030.gif'),
+  atk:   heroImg('heroAtkImg',   'public/assets/images/wish%20attact%2030.gif'),
+};
+const HERO_POSE_ATK_T = 22;  // เฟรมที่ค้างท่าต่อสู้ — ยาวกว่า SWING_T (12) เพราะ 0.2 วิ
+                             // สั้นเกินกว่าจะทันเห็นท่า (แยกจากเวลาวาดรอยไม้เหวี่ยง)
 // (แม่มดแก่ปลายแผนที่ = MAP_WITCH_IMG คนละตัว — คนละหน้าตา ไม่สับสน)
 // แม่มดปลายแผนที่ — ถ้าไฟล์ยังไม่มี ใช้รูปทรงวาดเองแทน (drawWitch)
 const MAP_WITCH_IMG = new Image();
@@ -187,6 +205,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     attackCd: 0, swingT: 0,
     hp: sk.maxHp, invuln: 0, hurtT: 0, fainting: 0,
     atk: null, // ลูกสมุนที่เด็ก "กดสั่งตี" — แม่มดน้อยไม่ตีอัตโนมัติ ตีเฉพาะตัวนี้
+    poseAtk: 0, // เฟรมที่เหลือของ "ท่าต่อสู้" (ยาวกว่ารอยไม้เหวี่ยง ให้ทันเห็นท่า)
   };
   let enterLatch = false; // true = ตัดสินใจเข้าโหนดแล้ว รอ stop() (กันเข้าซ้ำ tap+เดินถึง)
 
@@ -716,6 +735,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     // ---- ตัวจับเวลาแม่มดน้อย ----
     if (hero.invuln > 0) hero.invuln--;
     if (hero.hurtT > 0) hero.hurtT--;
+    if (hero.poseAtk > 0) hero.poseAtk--;
 
     // ---- สลบ (พลังหมด) ----
     if (hero.fainting > 0) {
@@ -929,6 +949,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         m.spinV = dhx > 0 ? -0.32 : 0.32;
         hero.attackCd = sk.attackCd; // สกิล ⚔️ — ยิ่งอัปยิ่งตีถี่
         hero.swingT = SWING_T;
+        hero.poseAtk = HERO_POSE_ATK_T;
         hero.facing = dhx < 0 ? -1 : 1;
         particleFx.spawnExplosion(sX(m.wx), sY(m.wy));
         audio.sfx('swing');
@@ -1413,19 +1434,25 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.fillStyle = 'rgba(0,0,0,0.28)';
     fx.fill();
 
+    // เลือกท่าตาม state ที่มีอยู่แล้ว — ต่อสู้ > เดิน > ยืน
+    // (ไม่มีท่าโดนกัด/สลบ ใช้ท่ายืน + เอฟเฟกต์กระพริบ/เอียงเหมือนเดิม)
+    const pose = hero.poseAtk > 0 ? 'atk' : (hero.moving && !fainting ? 'walk' : 'stand');
+    let img = HERO_IMGS[pose];
+    if (!img.complete || !img.naturalWidth) img = HERO_IMGS.stand; // ท่านั้นยังโหลดไม่เสร็จ
+
     const hh = HERO_R * 2.4;
-    // สัดส่วนอ่านจากขนาดจริงของไฟล์ ไม่ฮาร์ดโค้ด — เปลี่ยนรูปตัวละครแล้วไม่บีบเพี้ยน
-    // (เคยฮาร์ดโค้ด 0.86 ของ princess_1.png ไว้ พอเปลี่ยนเป็นแม่มดน้อยก็ผิดทันที)
-    const hw = HERO_IMG.naturalHeight
-      ? hh * (HERO_IMG.naturalWidth / HERO_IMG.naturalHeight)
+    // สัดส่วนอ่านจากขนาดจริงของ "ไฟล์ที่กำลังใช้" ไม่ฮาร์ดโค้ด — 3 ท่าครอปไม่เท่ากัน
+    // (เคยฮาร์ดโค้ด 0.86 ของ princess_1.png ไว้ พอเปลี่ยนรูปตัวละครก็ผิดทันที)
+    const hw = img.naturalHeight
+      ? hh * (img.naturalWidth / img.naturalHeight)
       : hh * 0.8;
     fx.save();
     fx.globalAlpha = blink ? 0.4 : 1;
-    if (HERO_IMG.complete && HERO_IMG.naturalWidth) {
+    if (img.complete && img.naturalWidth) {
       fx.translate(sx, sy + bob);
       fx.rotate(faintRot);
       fx.scale(hero.facing, 1);
-      fx.drawImage(HERO_IMG, -hw / 2, -hh + HERO_R * 0.8, hw, hh);
+      fx.drawImage(img, -hw / 2, -hh + HERO_R * 0.8, hw, hh);
     } else {
       fx.beginPath();
       fx.arc(sx, sy - HERO_R * 0.3 + bob, HERO_R * 0.7, 0, Math.PI * 2);

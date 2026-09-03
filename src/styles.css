@@ -1392,6 +1392,14 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
 .skill-dot.hidden { display: none; }
 @keyframes skillDotPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.35); } }
 
+/* แหล่งภาพแม่มดน้อย 3 ท่า — ต้องถูกเรนเดอร์จริง GIF ถึงจะเดินเฟรม
+   (display:none / visibility:hidden จะหยุดแอนิเมชัน ใช้ย่อ+โปร่งแทน) */
+.hero-sprite {
+  position: fixed; left: 0; bottom: 0;
+  width: 2px; height: 2px; opacity: 0.01;
+  pointer-events: none; z-index: -1;
+}
+
 /* ---------- หน้าอัปสกิล (RPG) ---------- */
 /* justify-content:flex-start — เนื้อหายาวกว่าจอบนมือถือ ต้อง scroll จากบนลงล่าง
    ไม่ใช่ center แบบ .screen ปกติ (จะตัดหัว-ท้ายทิ้งเมื่อเนื้อหาสูงเกิน) */

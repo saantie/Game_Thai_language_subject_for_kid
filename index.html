@@ -191,6 +191,14 @@
     <img id="mahjongHandCursor" class="mj-hand-cursor hidden" src="public/assets/images/Hand%20click.png" alt="" aria-hidden="true" />
     <img class="mj-witch-img hidden" src="public/assets/images/wish%20happy.gif" alt="" aria-hidden="true" />
 
+    <!-- แหล่งภาพแม่มดน้อย 3 ท่า สำหรับวาดลง #fxCanvas (แผนที่ RPG)
+         ***ต้องอยู่ใน DOM จริง*** — GIF จะเดินเฟรมก็ต่อเมื่อ browser เรนเดอร์ element นั้น
+         ถ้าใช้ new Image() ที่ไม่ผูก DOM จะได้แค่เฟรมแรกค้าง (วัดแล้ว: snapshot 6 ครั้งได้ภาพเดียว)
+         ย่อ 2px + opacity เกือบ 0 ให้มองไม่เห็น แต่ยังถูกเรนเดอร์อยู่ -->
+    <img id="heroStandImg" class="hero-sprite" src="public/assets/images/wish%20standing%2030.gif" alt="" aria-hidden="true" />
+    <img id="heroWalkImg"  class="hero-sprite" src="public/assets/images/wish%20walk%2030.gif" alt="" aria-hidden="true" />
+    <img id="heroAtkImg"   class="hero-sprite" src="public/assets/images/wish%20attact%2030.gif" alt="" aria-hidden="true" />
+
     <!-- แผนที่มนตรา — วาดบน #fxCanvas (worldMap.js); overlay นี้มีแค่ปุ่ม
          ห้ามทำเป็น .screen (พื้น gradient ทึบ + backdrop-filter จะบัง canvas) -->
     <div id="mapScreen" class="map-overlay hidden" aria-hidden="true">
