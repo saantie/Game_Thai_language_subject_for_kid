@@ -184,23 +184,14 @@ const HERO_START_GAP = 64; // แม่มดน้อยเริ่มห่�
 // ---- แถบพลังแม่มดน้อย ----
 const FAINT_T = 66;           // เฟรมช่วงสลบก่อนฟื้น
 
-// ---- Phase 3: biome (กลุ่มสระใน matra.js header — const ในไฟล์ ไม่แตะ matra.js) ----
-//   0     kaka (โหมโรง)
-//   1–9   สระเดี่ยว คู่สั้น-ยาว
-//   10–15 สระเดี่ยว (ต่อ)
-//   16–18 สระประสม
-//   19–21 สระเกิน
-//   22–29 มาตราตัวสะกดจริง (ยากสุด — อยู่บนสุดของแผนที่)
-const BIOME_STARTS = [0, 1, 10, 16, 19, 22];
-const BIOME_GRAD = [
-  ['#2c1c50', '#1a0e38'],
-  ['#241457', '#160b34'],
-  ['#1b2550', '#0f1733'],
-  ['#2a1a52', '#160d34'],
-  ['#381c48', '#20102e'],
-  ['#3c1230', '#210a1c'],
-];
-const BIOME_BASE = '#140a2c'; // เติมช่องว่างบน/ล่างสุด
+// ---- พื้นแผนที่: หญ้า + ถนนดิน (texture ไฟล์ seamless tile, วาดด้วย createPattern) ----
+// เดิมเป็น biome ไล่สีม่วงตามกลุ่มสระ — เปลี่ยนเป็นหญ้าเขียวโทนเดียวทั้งแผนที่ (ผู้ใช้เลือก)
+// ไฟล์สร้างจาก scripts/gen-textures.mjs — แทนด้วยภาพ AI ได้ถ้า tile ต่อขอบเองและคง 256x256
+const GROUND_IMG = new Image();
+GROUND_IMG.src = 'public/assets/images/ground_grass.png';
+const ROAD_IMG = new Image();
+ROAD_IMG.src = 'public/assets/images/road_dirt.png';
+const GRASS_BASE = '#5c8c3a'; // เติมช่องว่างก่อน texture โหลด / นอกขอบโลก
 
 // พิกัดวงกลมของ decor/minion — hoist ออกนอก loop (อย่า alloc array ทุกเฟรม)
 const BUSH_BLOBS = [[-8, 2], [8, 2], [0, -4], [-3, 4], [4, 5]];
@@ -262,7 +253,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   const guardSpawns = Object.create(null);   // matraId -> จำนวนลูกสมุนที่ปล่อยออกมาแล้ว
 
   // Phase 3
-  let biomeBands = []; // { yLo, yHi, grad }  world-space (cache ต่อ resize)
+  let groundPat = null; // CanvasPattern หญ้า — สร้างครั้งเดียวตอน texture โหลดเสร็จ
+  let roadPat = null;   // CanvasPattern ดิน
   let decor = [];      // { wx, wy, type, s, flip }  0=หิน 1=พุ่ม 2=ต้นไม้
   let witchWY = 0;     // world y ของแม่มดปลายแผนที่ (เหนือมาตราสุดท้าย)
   let witchWX = 0;     // world x ของแม่มด (เหนือมาตราสุดท้าย)
@@ -356,19 +348,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       for (let i = 1; i < nodes.length; i++) roadPath.lineTo(nodes[i].wx, nodes[i].wy);
     }
 
-    // biome bands (world space) — 1 แถบต่อกลุ่ม, gradient cache ในตัว band
-    biomeBands.length = 0;
-    for (let b = 0; b < BIOME_STARTS.length; b++) {
-      const si = BIOME_STARTS[b];
-      const ei = b + 1 < BIOME_STARTS.length ? BIOME_STARTS[b + 1] - 1 : N - 1;
-      // nodes กลับหัว: si มี wy มาก (ล่าง), ei มี wy น้อย (บน)
-      const yLo = nodes[ei].wy - spacing * 0.75;
-      const yHi = nodes[si].wy + spacing * 0.75;
-      const grad = fx.createLinearGradient(0, yLo, 0, yHi);
-      grad.addColorStop(0, BIOME_GRAD[b][0]);
-      grad.addColorStop(1, BIOME_GRAD[b][1]);
-      biomeBands.push({ yLo, yHi, grad });
-    }
+    // พื้นหญ้าเป็น pattern เดียวทั้งแผนที่ — ไม่มี band ต่อกลุ่มแล้ว (สร้าง pattern ใน render)
 
     // แม่มดอยู่เหนือมาตราสุดท้าย (index N-1 = wy น้อยสุด)
     witchWY = nodes[N - 1].wy - spacing * 0.95;
@@ -1230,24 +1210,31 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const cy = cam.y + shake;
     scene.clearFx();
 
-    // ฐานสีเข้ม เผื่อช่องว่างบน/ล่างสุด
-    fx.fillStyle = BIOME_BASE;
+    // สร้าง pattern ครั้งเดียวเมื่อ texture โหลดเสร็จ (createPattern ผูกกับ context นี้)
+    if (!groundPat && GROUND_IMG.complete && GROUND_IMG.naturalWidth) {
+      groundPat = fx.createPattern(GROUND_IMG, 'repeat');
+    }
+    if (!roadPat && ROAD_IMG.complete && ROAD_IMG.naturalWidth) {
+      roadPat = fx.createPattern(ROAD_IMG, 'repeat');
+    }
+
+    // ฐานหญ้า เผื่อช่องว่างก่อน texture โหลด / นอกขอบโลก
+    fx.fillStyle = GRASS_BASE;
     fx.fillRect(0, 0, W, H);
 
-    // ---- world layer: biome / ดาว / แม่มด / ประดับ / เส้นทาง ----
+    // ---- world layer: พื้นหญ้า / ประกาย / แม่มด / ประดับ / ถนนดิน ----
     fx.save();
     fx.translate(-cx, -cy);
 
-    for (let b = 0; b < biomeBands.length; b++) {
-      const band = biomeBands[b];
-      if (band.yHi < cy - 20 || band.yLo > cy + H + 20) continue;
-      fx.fillStyle = band.grad; // gradient ผูกพิกัด world — ต้องอยู่ใน transform นี้
-      fx.fillRect(0, band.yLo, worldW, band.yHi - band.yLo);
+    // พื้นหญ้าเต็มความกว้างโลก เฉพาะช่วงที่กล้องเห็น — pattern ผูกพิกัด world เลื่อนตามกล้องเอง
+    if (groundPat) {
+      fx.fillStyle = groundPat;
+      fx.fillRect(-40, cy - 40, worldW + 80, H + 80);
     }
 
     if (!REDUCED_MOTION) {
-      // ประกายจาง — parallax เลื่อนช้ากว่ากล้อง (wrap เป็น tile ขนาดจอตามกล้อง)
-      fx.fillStyle = 'rgba(150,130,220,0.22)';
+      // ละอองแสง/เกสรลอย — parallax เลื่อนช้ากว่ากล้อง (wrap เป็น tile ขนาดจอตามกล้อง)
+      fx.fillStyle = 'rgba(255,250,205,0.45)';
       const pX = cx * 0.5;
       const pY = cy * 0.5;
       for (let i = 0; i < decorDots.length; i++) {
@@ -1273,15 +1260,16 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.moveTo(nodes[0].wx, nodes[0].wy);
       for (let i = 1; i < nodes.length; i++) fx.lineTo(nodes[i].wx, nodes[i].wy);
     }
-    fx.strokeStyle = 'rgba(14,6,34,0.9)';
+    // ถนนดิน: ขอบเข้มตัดกับหญ้า → เนื้อดิน (pattern) → รอยเท้ากลางถนนจาง ๆ (เส้นประ)
+    fx.strokeStyle = 'rgba(58,40,22,0.5)';
+    fx.lineWidth = 34;
+    strokeRoad();
+    fx.strokeStyle = roadPat || '#8a6a44';
     fx.lineWidth = 26;
     strokeRoad();
-    fx.strokeStyle = 'rgba(255,214,130,0.26)';
-    fx.lineWidth = 10;
-    strokeRoad();
     fx.setLineDash(ROAD_DASH);
-    fx.strokeStyle = 'rgba(255,236,184,0.5)';
-    fx.lineWidth = 2;
+    fx.strokeStyle = 'rgba(225,200,150,0.35)';
+    fx.lineWidth = 3;
     strokeRoad();
     fx.setLineDash(NO_DASH);
 
@@ -1659,43 +1647,48 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.save();
     fx.translate(dc.wx, dc.wy);
     fx.scale(dc.flip * s, s);
+    // เงาที่พื้นหญ้า — ให้ decor ดู "วางอยู่บน" พื้น ไม่ลอย
+    fx.fillStyle = 'rgba(30,50,20,0.20)';
+    fx.beginPath();
+    fx.ellipse(0, 3, 15, 5, 0, 0, Math.PI * 2);
+    fx.fill();
     if (dc.type === 0) {
-      // โขดหิน
-      fx.fillStyle = '#241640';
+      // โขดหิน — หินเทา
+      fx.fillStyle = '#877f77';
       fx.beginPath();
       fx.ellipse(0, 0, 16, 11, 0, 0, Math.PI * 2);
       fx.fill();
-      fx.fillStyle = '#33224f';
+      fx.fillStyle = '#9c948b';
       fx.beginPath();
       fx.ellipse(-4, -4, 9, 7, 0, 0, Math.PI * 2);
       fx.fill();
-      fx.fillStyle = 'rgba(120,100,170,0.28)';
+      fx.fillStyle = 'rgba(255,255,255,0.30)';
       fx.beginPath();
       fx.ellipse(-5, -6, 4, 2.5, 0, 0, Math.PI * 2);
       fx.fill();
     } else if (dc.type === 1) {
-      // พุ่มไม้
-      fx.fillStyle = '#16302a';
+      // พุ่มไม้ — เขียวสด
+      fx.fillStyle = '#3f7d38';
       for (let k = 0; k < BUSH_BLOBS.length; k++) {
         fx.beginPath();
         fx.arc(BUSH_BLOBS[k][0], BUSH_BLOBS[k][1], 8, 0, Math.PI * 2);
         fx.fill();
       }
-      fx.fillStyle = 'rgba(90,170,140,0.22)';
+      fx.fillStyle = 'rgba(190,235,150,0.40)';
       fx.beginPath();
       fx.arc(-2, -5, 4, 0, Math.PI * 2);
       fx.fill();
     } else {
-      // ต้นไม้
-      fx.fillStyle = '#1c1330';
+      // ต้นไม้ — ลำต้นน้ำตาล พุ่มเขียว
+      fx.fillStyle = '#6b4a2f';
       fx.fillRect(-3, -2, 6, 20);
-      fx.fillStyle = '#122a20';
+      fx.fillStyle = '#356b2f';
       for (let k = 0; k < TREE_BLOBS.length; k++) {
         fx.beginPath();
         fx.arc(TREE_BLOBS[k][0], TREE_BLOBS[k][1], TREE_BLOBS[k][2], 0, Math.PI * 2);
         fx.fill();
       }
-      fx.fillStyle = 'rgba(90,180,150,0.18)';
+      fx.fillStyle = 'rgba(170,225,140,0.35)';
       fx.beginPath();
       fx.arc(-4, -26, 5, 0, Math.PI * 2);
       fx.fill();
