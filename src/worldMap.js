@@ -6,7 +6,7 @@
 // Phase 2: ลูกสมุนแม่มดลาดตระเวนเฝ้าคริสตอลเป้าหมาย — ไล่กัดแม่มดน้อยเมื่อเข้าใกล้
 //          แม่มดน้อยมีแถบพลัง 5 หัวใจ · โดนกัด -1 · หมด = สลบแล้วฟื้นที่คริสตอลเดิม
 //          แม่มดน้อยเหวี่ยงไม้ใส่เอง ตี 3 ครั้งลูกสมุนตาย (+แต้ม)
-// Phase 3: biome สี 6 โซนตามกลุ่มสระ · โขดหิน/พุ่ม/ต้นไม้ วาด procedural · แม่มดปลายแผนที่
+// Phase 3: พื้นหญ้า+ถนนดินเลื้อย · โขดหิน/พุ่ม วาดเอง · ต้นไม้เป็นรูปภาพ (tree.png) สุ่มสองข้างทาง
 //          return beat ตอนกลับจากมาตรา (ดาวไหลเข้าคริสตอล → กุญแจลูกถัดไปแตก)
 //
 // โครงเลียนแบบ src/mahjong.js — วาดบน #fxCanvas ที่ใช้ร่วมกับ game.js/mahjong.js
@@ -193,6 +193,10 @@ GROUND_IMG.src = 'public/assets/images/ground_grass.png';
 const ROAD_IMG = new Image();
 ROAD_IMG.src = 'public/assets/images/road_dirt.png';
 const GRASS_BASE = '#5c8c3a'; // เติมช่องว่างก่อน texture โหลด / นอกขอบโลก
+// ต้นไม้ประดับ — รูปภาพจริง (โปร่งใส) วางสุ่มสองข้างทาง, ขนาดต่างกัน
+// โคนลำต้นในภาพอยู่ที่ ~y 0.84 ของกรอบ → drawDecor จัดให้ตรงพื้น
+const TREE_IMG = new Image();
+TREE_IMG.src = 'public/assets/images/tree.png';
 
 // พิกัดวงกลมของ decor/minion — hoist ออกนอก loop (อย่า alloc array ทุกเฟรม)
 const BUSH_BLOBS = [[-8, 2], [8, 2], [0, -4], [-3, 4], [4, 5]];
@@ -428,19 +432,25 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     witchWX = nodes[N - 1].wx;
 
     // ของประดับ — หิน/พุ่ม/ต้นไม้ กระจาย deterministic (เลี่ยงกลางเส้นทาง)
+    // deterministic (hash ไม่ใช่ Math.random) → resize แล้วตำแหน่งไม่สลับ
     decor.length = 0;
-    const decorN = Math.max(8, Math.round(worldH / 220));
+    const decorN = Math.max(14, Math.round(worldH / 135));
     for (let i = 0; i < decorN; i++) {
       const r1 = h01(i * 3 + 1);
       const r2 = h01(i * 3 + 2);
       const r3 = h01(i * 3 + 3);
+      const r4 = h01(i * 7 + 5);   // ชนิด (อิสระจากตำแหน่ง y)
+      const r5 = h01(i * 11 + 9);  // สเกล
       const side = r1 < 0.5 ? -1 : 1;
-      // ออกห่างจากแกนกลาง (เส้นทาง) อย่างน้อย amp*0.55 แล้วสุ่มต่อไปทางขอบโลก
-      const dx = side * (amp * 0.55 + r2 * (worldW * 0.32));
+      // ระยะห่างจากแกนกลางอิงความกว้างจอ (W) ไม่ใช่ worldW — ให้ต้นไม้อยู่ในกรอบที่มองเห็น
+      // สองข้างทาง ระยะ 0.24W–0.66W จาก midX (เส้นทางคดเคี้ยวผ่านไปมา decor วาดก่อน = อยู่หลัง)
+      const dx = side * (W * 0.24 + r2 * (W * 0.42));
       const wx = Math.max(20, Math.min(worldW - 20, midX + dx));
       const wy = ((i + r3) / decorN) * worldH;
-      const type = r3 < 0.42 ? 0 : r3 < 0.78 ? 1 : 2;
-      decor.push({ wx, wy, type, s: 0.75 + r2 * 0.7, flip: r1 < 0.5 ? -1 : 1 });
+      const type = r4 < 0.26 ? 0 : r4 < 0.46 ? 1 : 2;   // ~54% เป็นต้นไม้
+      // ต้นไม้ (รูปภาพ) สเกลกว้าง 0.55–1.8 ให้ขนาดต่างกันชัด · หิน/พุ่ม 0.75–1.45
+      const s = type === 2 ? 0.55 + r5 * 1.25 : 0.75 + r5 * 0.7;
+      decor.push({ wx, wy, type, s, flip: r1 < 0.5 ? -1 : 1 });
     }
 
     // พลอยเติมพลัง — 2 เม็ดต่อคริสตอล (ซ้าย-ขวาล่าง ในโซนที่เด็กสู้) ตำแหน่งตายตัว
@@ -1325,7 +1335,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
     for (let i = 0; i < decor.length; i++) {
       const dc = decor[i];
-      if (dc.wy < cy - 140 || dc.wy > cy + H + 70) continue;
+      // margin ล่างเผื่อสูง — ต้นไม้พุ่งขึ้นจากโคน โคนอยู่ใต้จอก็ยังเห็นยอด
+      if (dc.wy < cy - 80 || dc.wy > cy + H + 280) continue;
       drawDecor(dc);
     }
 
@@ -1720,11 +1731,31 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.save();
     fx.translate(dc.wx, dc.wy);
     fx.scale(dc.flip * s, s);
-    // เงาที่พื้นหญ้า — ให้ decor ดู "วางอยู่บน" พื้น ไม่ลอย
+    // เงาที่พื้นหญ้า — ให้ decor ดู "วางอยู่บน" พื้น ไม่ลอย (ต้นไม้เงากว้างกว่า)
     fx.fillStyle = 'rgba(30,50,20,0.20)';
     fx.beginPath();
-    fx.ellipse(0, 3, 15, 5, 0, 0, Math.PI * 2);
+    fx.ellipse(0, dc.type === 2 ? 0 : 3, dc.type === 2 ? 22 : 15, dc.type === 2 ? 7 : 5, 0, 0, Math.PI * 2);
     fx.fill();
+    if (dc.type === 2) {
+      // ต้นไม้ — รูปภาพจริง (tree.png) โคนลำต้นอยู่ที่ origin, พุ่มชี้ขึ้น
+      if (TREE_IMG.complete && TREE_IMG.naturalWidth) {
+        const h = 120;
+        const w = h * (TREE_IMG.naturalWidth / TREE_IMG.naturalHeight);
+        fx.drawImage(TREE_IMG, -w / 2, -h * 0.84, w, h);
+      } else {
+        // fallback วาดเอง (ภาพยังโหลดไม่เสร็จ)
+        fx.fillStyle = '#6b4a2f';
+        fx.fillRect(-3, -2, 6, 20);
+        fx.fillStyle = '#356b2f';
+        for (let k = 0; k < TREE_BLOBS.length; k++) {
+          fx.beginPath();
+          fx.arc(TREE_BLOBS[k][0], TREE_BLOBS[k][1], TREE_BLOBS[k][2], 0, Math.PI * 2);
+          fx.fill();
+        }
+      }
+      fx.restore();
+      return;
+    }
     if (dc.type === 0) {
       // โขดหิน — หินเทา
       fx.fillStyle = '#877f77';
@@ -1739,8 +1770,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.beginPath();
       fx.ellipse(-5, -6, 4, 2.5, 0, 0, Math.PI * 2);
       fx.fill();
-    } else if (dc.type === 1) {
-      // พุ่มไม้ — เขียวสด
+    } else {
+      // พุ่มไม้ (type 1) — เขียวสด
       fx.fillStyle = '#3f7d38';
       for (let k = 0; k < BUSH_BLOBS.length; k++) {
         fx.beginPath();
@@ -1750,20 +1781,6 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.fillStyle = 'rgba(190,235,150,0.40)';
       fx.beginPath();
       fx.arc(-2, -5, 4, 0, Math.PI * 2);
-      fx.fill();
-    } else {
-      // ต้นไม้ — ลำต้นน้ำตาล พุ่มเขียว
-      fx.fillStyle = '#6b4a2f';
-      fx.fillRect(-3, -2, 6, 20);
-      fx.fillStyle = '#356b2f';
-      for (let k = 0; k < TREE_BLOBS.length; k++) {
-        fx.beginPath();
-        fx.arc(TREE_BLOBS[k][0], TREE_BLOBS[k][1], TREE_BLOBS[k][2], 0, Math.PI * 2);
-        fx.fill();
-      }
-      fx.fillStyle = 'rgba(170,225,140,0.35)';
-      fx.beginPath();
-      fx.arc(-4, -26, 5, 0, Math.PI * 2);
       fx.fill();
     }
     fx.restore();
