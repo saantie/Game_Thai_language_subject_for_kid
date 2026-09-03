@@ -343,15 +343,17 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       decorDots.push({ x: (a / 10007) * W, y: (b / 9973) * H });
     }
 
-    // ถนนดิน = ริบบิ้น polygon คดเคี้ยว ขอบไม่สม่ำเสมอ (world space) — สร้างครั้งเดียว
-    // (1) เส้นกลาง = โค้ง Catmull-Rom ผ่านคริสตอลทุกลูก (ไม่หักมุมที่โหนดแบบเส้นตรง)
-    // (2) ส่ายซ้าย-ขวาเพิ่มตาม value noise — คดเคี้ยวแบบธรรมชาติ แต่หน่วงเป็น 0 ตรงคริสตอล
-    //     เพื่อให้ถนนยังผ่ากลางลูกแก้วพอดี
+    // ถนนดิน = ริบบิ้น polygon เลื้อยแบบงู ขอบไม่สม่ำเสมอ (world space) — สร้างครั้งเดียว
+    // (1) เส้นกลาง = โค้ง Catmull-Rom ผ่านคริสตอลทุกลูก (ไม่หักมุมที่โหนด)
+    // (2) ส่ายซ้าย-ขวาแรง ๆ หลายลูกคลื่นต่อช่วงคริสตอล → เลื้อยเหมือนงู
+    //     envelope sin²(πt) บีบให้ offset + ความชัน = 0 ตรงคริสตอล (ถนนผ่ากลางลูกแก้ว เรียบ ไม่หักมุม)
     {
-      const SEGS = 14;        // ช่วงย่อยต่อ 1 ช่วงคริสตอล
-      const MEANDER = 22;     // px แอมพลิจูดการส่าย
+      const SEGS = 22;       // ช่วงย่อยต่อ 1 ช่วงคริสตอล (ถี่ขึ้นเพราะคลื่นเยอะ)
+      const AMP = Math.min(78, nodeSpacing * 0.5);  // แอมพลิจูดการเลื้อย (px)
+      const WAVES = 2.4;     // จำนวนครึ่งคลื่นต่อช่วงคริสตอล (>2 = มี S หลายตัว)
       const ctrl = nodes;
       const pts = [];
+      const segT = [];      // { seg, t } ของแต่ละจุด — ใช้คำนวณคลื่นการเลื้อย
       for (let i = 0; i < ctrl.length - 1; i++) {
         const p0 = ctrl[i - 1] || ctrl[i];
         const p1 = ctrl[i];
@@ -368,23 +370,23 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
               (2 * p0.wy - 5 * p1.wy + 4 * p2.wy - p3.wy) * tt +
               (-p0.wy + 3 * p1.wy - 3 * p2.wy + p3.wy) * ttt);
           pts.push({ x: cx, y: cy });
+          segT.push({ seg: i, t });
         }
       }
       pts.push({ x: ctrl[ctrl.length - 1].wx, y: ctrl[ctrl.length - 1].wy });
+      segT.push({ seg: ctrl.length - 2, t: 1 });
 
-      // ส่ายซ้าย-ขวา: offset ตั้งฉากตาม noise เรียบ คูณ damp (0 ที่คริสตอล = j%SEGS==0)
+      // ส่ายแบบงู: offset ตั้งฉาก = sin(t·π·WAVES) · AMP · sin²(π t) · (แอมป์สุ่มต่อช่วง)
       const base = pts.map((p) => ({ x: p.x, y: p.y }));
       for (let j = 1; j < pts.length - 1; j++) {
         const a = base[j - 1], b = base[j + 1];
         const dx = b.x - a.x, dy = b.y - a.y;
         const d = Math.hypot(dx, dy) || 1;
         const nx = -dy / d, ny = dx / d;
-        const CELL = 9;
-        const g = j / CELL, i0 = Math.floor(g), f = g - i0;
-        const s = f * f * (3 - 2 * f);
-        const n0 = h01(i0 * 911 + 41), n1 = h01((i0 + 1) * 911 + 41);
-        const damp = Math.sin(Math.PI * ((j % SEGS) / SEGS));
-        const off = ((n0 * (1 - s) + n1 * s) - 0.5) * 2 * MEANDER * damp;
+        const { seg, t } = segT[j];
+        const env = Math.sin(Math.PI * t);           // 0 ที่ปลายช่วง
+        const ampSeg = AMP * (0.75 + 0.5 * h01(seg * 131 + 7)); // แต่ละช่วงเลื้อยไม่เท่ากัน
+        const off = Math.sin(t * Math.PI * WAVES) * ampSeg * env * env;
         pts[j].x = base[j].x + nx * off;
         pts[j].y = base[j].y + ny * off;
       }
