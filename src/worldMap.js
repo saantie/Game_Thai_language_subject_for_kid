@@ -102,9 +102,10 @@ const ENTER_DELAY = 140;  // หน่วงสั้น ๆ หลัง "เ�
 const NODE_FONT = "600 13px 'Sarabun', sans-serif";
 const STAR_FILL = '#ffd86b';
 const STAR_EMPTY = 'rgba(255,255,255,0.22)';
-const ROAD_DASH = [2, 12];   // cache — setLineDash รับ array; อย่าสร้างใหม่ทุกเฟรม
-const NO_DASH = [];
 const HAS_PATH2D = typeof Path2D === 'function';
+// ถนนดิน — วาดเป็นริบบิ้น (polygon) ขอบไม่สม่ำเสมอ ความกว้างสุ่มตามระยะ
+const ROAD_HW = 16;        // ครึ่งความกว้างฐาน (px)
+const ROAD_HW_VAR = 8;     // แกว่ง ± จากฐาน — บางที่กว้าง บางที่แคบ
 
 // glass ball.png = 400x218 มีขอบโปร่งเยอะ ลูกแก้วจริง ~154x180 กลางภาพ
 // วาดทั้งภาพ scale ให้ "ลูกแก้ว" สูง ≈ NODE_R*2 แล้ววางกึ่งกลางโหนด (ไม่บีบให้เพี้ยน)
@@ -272,7 +273,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   let moved = false;
 
   let decorDots = [];  // ประกายจาง ๆ พื้นหลัง — คำนวณครั้งเดียวตอน computeLayout (ไม่ alloc ใน loop)
-  let roadPath = null; // Path2D ของเส้นทาง (world space) — สร้างครั้งเดียวตอน computeLayout
+  let roadPoly = null;    // Path2D ริบบิ้นถนนดิน (world space) — สร้างครั้งเดียวตอน computeLayout
+  let roadPolyPts = [];   // จุดขอบ polygon (fallback เมื่อไม่มี Path2D)
 
   // ---- cancel-safe timers (คัดลอกจาก mahjong.js — เคยมีบั๊ก timer ค้างยิง
   //      callback หลัง teardown ทำให้เข้ามาตราผิดจังหวะ) ห้ามใช้ setTimeout ตรง ๆ ----
@@ -341,11 +343,49 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       decorDots.push({ x: (a / 10007) * W, y: (b / 9973) * H });
     }
 
-    // เส้นทาง (world space) — สร้าง Path2D ครั้งเดียว render() แค่ translate แล้ว stroke
-    if (HAS_PATH2D) {
-      roadPath = new Path2D();
-      roadPath.moveTo(nodes[0].wx, nodes[0].wy);
-      for (let i = 1; i < nodes.length; i++) roadPath.lineTo(nodes[i].wx, nodes[i].wy);
+    // ถนนดิน = ริบบิ้น polygon ขอบไม่สม่ำเสมอ (world space) — สร้างครั้งเดียว
+    // sample จุดถี่ ๆ ตามแนวเส้นทาง แล้วยื่นซ้าย/ขวาเป็นครึ่งความกว้างที่สุ่มตามระยะ
+    {
+      const pts = [];
+      for (let i = 0; i < nodes.length - 1; i++) {
+        const a = nodes[i], b = nodes[i + 1];
+        const segLen = Math.hypot(b.wx - a.wx, b.wy - a.wy);
+        const steps = Math.max(2, Math.round(segLen / 26));
+        for (let k = 0; k < steps; k++) {
+          const t = k / steps;
+          pts.push({ x: a.wx + (b.wx - a.wx) * t, y: a.wy + (b.wy - a.wy) * t });
+        }
+      }
+      pts.push({ x: nodes[nodes.length - 1].wx, y: nodes[nodes.length - 1].wy });
+
+      // value noise เรียบ ๆ ต่อ sample — lerp ค่า hash ทุก 6 จุด (ไม่ให้ขอบสั่นจั๊กจี้)
+      const roadHW = (k) => {
+        const CELL = 6;
+        const g = k / CELL, i0 = Math.floor(g), f = g - i0;
+        const s = f * f * (3 - 2 * f);
+        const a = h01(i0 * 2749 + 13), b = h01((i0 + 1) * 2749 + 13);
+        return ROAD_HW + ((a * (1 - s) + b * s) - 0.5) * 2 * ROAD_HW_VAR;
+      };
+
+      const left = [], right = [];
+      for (let j = 0; j < pts.length; j++) {
+        const p0 = pts[Math.max(0, j - 1)];
+        const p1 = pts[Math.min(pts.length - 1, j + 1)];
+        let dx = p1.x - p0.x, dy = p1.y - p0.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const nx = -dy / d, ny = dx / d;   // ตั้งฉากกับแนวเส้นทาง
+        const hw = roadHW(j);
+        left.push({ x: pts[j].x + nx * hw, y: pts[j].y + ny * hw });
+        right.push({ x: pts[j].x - nx * hw, y: pts[j].y - ny * hw });
+      }
+      right.reverse();
+      roadPolyPts = left.concat(right);
+      roadPoly = HAS_PATH2D ? new Path2D() : null;
+      if (roadPoly) {
+        roadPoly.moveTo(roadPolyPts[0].x, roadPolyPts[0].y);
+        for (let j = 1; j < roadPolyPts.length; j++) roadPoly.lineTo(roadPolyPts[j].x, roadPolyPts[j].y);
+        roadPoly.closePath();
+      }
     }
 
     // พื้นหญ้าเป็น pattern เดียวทั้งแผนที่ — ไม่มี band ต่อกลุ่มแล้ว (สร้าง pattern ใน render)
@@ -744,9 +784,12 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   }
 
   // stroke เส้นทาง — Path2D cache ถ้ารองรับ, ไม่งั้น lineTo loop (path ถูก build ใน render ก่อนเรียก)
-  function strokeRoad() {
-    if (HAS_PATH2D) fx.stroke(roadPath);
-    else fx.stroke();
+  // trace ริบบิ้นถนนลง current path (fallback เมื่อไม่มี Path2D)
+  function traceRoadPoly() {
+    fx.beginPath();
+    fx.moveTo(roadPolyPts[0].x, roadPolyPts[0].y);
+    for (let i = 1; i < roadPolyPts.length; i++) fx.lineTo(roadPolyPts[i].x, roadPolyPts[i].y);
+    fx.closePath();
   }
 
   function update() {
@@ -1253,25 +1296,22 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       drawDecor(dc);
     }
 
-    fx.lineCap = 'round';
+    // ถนนดิน: ริบบิ้น polygon ขอบไม่สม่ำเสมอ — เนื้อดิน (pattern) + ขอบเข้มบาง ๆ ตัดกับหญ้า
     fx.lineJoin = 'round';
-    if (!HAS_PATH2D) {
-      fx.beginPath();
-      fx.moveTo(nodes[0].wx, nodes[0].wy);
-      for (let i = 1; i < nodes.length; i++) fx.lineTo(nodes[i].wx, nodes[i].wy);
+    if (HAS_PATH2D) {
+      fx.fillStyle = roadPat || '#8a6a44';
+      fx.fill(roadPoly);
+      fx.strokeStyle = 'rgba(50,34,18,0.55)';
+      fx.lineWidth = 6;
+      fx.stroke(roadPoly);
+    } else {
+      traceRoadPoly();
+      fx.fillStyle = roadPat || '#8a6a44';
+      fx.fill();
+      fx.strokeStyle = 'rgba(50,34,18,0.55)';
+      fx.lineWidth = 6;
+      fx.stroke();
     }
-    // ถนนดิน: ขอบเข้มตัดกับหญ้า → เนื้อดิน (pattern) → รอยเท้ากลางถนนจาง ๆ (เส้นประ)
-    fx.strokeStyle = 'rgba(58,40,22,0.5)';
-    fx.lineWidth = 34;
-    strokeRoad();
-    fx.strokeStyle = roadPat || '#8a6a44';
-    fx.lineWidth = 26;
-    strokeRoad();
-    fx.setLineDash(ROAD_DASH);
-    fx.strokeStyle = 'rgba(225,200,150,0.35)';
-    fx.lineWidth = 3;
-    strokeRoad();
-    fx.setLineDash(NO_DASH);
 
     fx.restore();
 
