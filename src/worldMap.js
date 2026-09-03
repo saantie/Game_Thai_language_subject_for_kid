@@ -22,23 +22,61 @@ import { getSkillEffects } from './rpg.js';
 const CRYSTAL_IMG = new Image();
 CRYSTAL_IMG.src = 'public/assets/images/glass%20ball.png';
 // แม่มดน้อย (ตัวที่เด็กบังคับ) — 3 ท่า สลับตาม state ที่มีอยู่แล้วของ hero
-// GIF เคลื่อนไหวในตัว: ยืน 22 เฟรม / เดิน 4 เฟรม / ต่อสู้ 8 เฟรม
-// สัดส่วนแต่ละไฟล์ต่างกันมาก (64x103 / 95x100 / 106x97) — drawHero คิดความกว้าง
-// จาก naturalWidth/Height ของ "ไฟล์ที่กำลังใช้" ไม่ใช่ค่าตายตัว
-// ***ต้องอ้าง <img> ที่อยู่ใน DOM จริง*** (index.html .hero-sprite) — GIF เดินเฟรม
-// เฉพาะตอนที่ browser เรนเดอร์ element นั้นอยู่ ถ้าใช้ new Image() ที่ไม่ผูก DOM
-// จะวาดแค่เฟรมแรกค้าง (วัดแล้ว: drawImage 6 ครั้งห่างกัน 220ms ได้ภาพเดียวกันหมด)
-// fallback เป็น new Image() เผื่อ element หายไป — ยังเห็นท่าถูก แค่ไม่ขยับ
-function heroImg(id, src) {
-  const el = typeof document !== 'undefined' && document.getElementById(id);
-  if (el) return el;
-  const i = new Image(); i.src = src; return i;
+// GIF เคลื่อนไหวในตัว: ยืน 21 เฟรม / เดิน 4 เฟรม / ต่อสู้ 8 เฟรม (เฟรมละ 200ms)
+// สัดส่วนแต่ละไฟล์ต่างกัน (64x103 / 95x100 / 106x97) — drawHero คิดความกว้างจากเฟรมที่ใช้จริง
+//
+// ***ทำไมต้อง decode GIF เอง***: browser หยุดเดินเฟรม GIF ของ <img> ที่ไม่ได้ถูกวาดจริงบนจอ
+// — เราย่อ element เหลือ 2px + opacity 0.01 + z-index -1 ไม่ให้เกะกะ ผลคือบนมือถือจริง GIF นิ่งสนิท
+// (เครื่องทดสอบดูเหมือนได้เพราะ pane ไม่ยิง rAF เลย เทสไม่เจอ — พลาดมาแล้วใน v188)
+// ImageDecoder แตกเฟรมเองในหน่วยความจำ แล้วเล่นตามนาฬิกาเกม (now) — คุมเฟรม 100%, เทสได้จริง
+// ไม่มี ImageDecoder (Safari < 17.4) → ถอยไปใช้ <img> ใน DOM เหมือนเดิม (ท่าถูก อาจไม่ขยับ = ไม่แย่ลง)
+function makeHeroGif(src, fallbackId) {
+  const g = {
+    frames: [], durs: [], total: 0, ready: false,
+    fallback: (typeof document !== 'undefined' && document.getElementById(fallbackId)) || null,
+  };
+  if (typeof ImageDecoder === 'function') {
+    fetch(src)
+      .then((r) => r.arrayBuffer())
+      .then(async (buf) => {
+        const dec = new ImageDecoder({ data: buf, type: 'image/gif' });
+        await dec.tracks.ready;
+        const track = dec.tracks.selectedTrack;
+        const n = (track && track.frameCount) || 1;
+        for (let i = 0; i < n; i++) {
+          const { image } = await dec.decode({ frameIndex: i });
+          g.frames.push(await createImageBitmap(image)); // เฟรมประกอบเสร็จแล้ว (browser จัดการ disposal)
+          // µs → ms; GIF delay 0/สั้นมาก → กันเล่นเร็วเวอร์ด้วยขั้นต่ำ 40ms/เฟรม
+          g.durs.push(Math.max(40, (image.duration || 0) / 1000 || 100));
+          image.close();
+        }
+        g.total = g.durs.reduce((a, b) => a + b, 0) || 1;
+        g.ready = g.frames.length > 0;
+        dec.close();
+      })
+      .catch(() => { /* เงียบ — ใช้ fallback <img> */ });
+  }
+  return g;
 }
-const HERO_IMGS = {
-  stand: heroImg('heroStandImg', 'public/assets/images/wish%20standing%2030.gif'),
-  walk:  heroImg('heroWalkImg',  'public/assets/images/wish%20walk%2030.gif'),
-  atk:   heroImg('heroAtkImg',   'public/assets/images/wish%20attact%2030.gif'),
+const HERO_GIFS = {
+  stand: makeHeroGif('public/assets/images/wish%20standing%2030.gif', 'heroStandImg'),
+  walk:  makeHeroGif('public/assets/images/wish%20walk%2030.gif',     'heroWalkImg'),
+  atk:   makeHeroGif('public/assets/images/wish%20attact%2030.gif',   'heroAtkImg'),
 };
+// ภาพที่วาดได้ดีที่สุดของท่านี้ ณ เวลา t: เฟรม ImageBitmap ถ้าพร้อม, ไม่งั้น <img> fallback, ไม่งั้น null
+function heroPoseImg(g, t) {
+  if (g.ready) {
+    if (REDUCED_MOTION) return g.frames[0];
+    let r = t % g.total;
+    for (let i = 0; i < g.frames.length; i++) {
+      r -= g.durs[i];
+      if (r < 0) return g.frames[i];
+    }
+    return g.frames[g.frames.length - 1];
+  }
+  const fb = g.fallback;
+  return fb && fb.complete && fb.naturalWidth ? fb : null;
+}
 const HERO_POSE_ATK_T = 22;  // เฟรมที่ค้างท่าต่อสู้ — ยาวกว่า SWING_T (12) เพราะ 0.2 วิ
                              // สั้นเกินกว่าจะทันเห็นท่า (แยกจากเวลาวาดรอยไม้เหวี่ยง)
 // (แม่มดแก่ปลายแผนที่ = MAP_WITCH_IMG คนละตัว — คนละหน้าตา ไม่สับสน)
@@ -1437,18 +1475,27 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     // เลือกท่าตาม state ที่มีอยู่แล้ว — ต่อสู้ > เดิน > ยืน
     // (ไม่มีท่าโดนกัด/สลบ ใช้ท่ายืน + เอฟเฟกต์กระพริบ/เอียงเหมือนเดิม)
     const pose = hero.poseAtk > 0 ? 'atk' : (hero.moving && !fainting ? 'walk' : 'stand');
-    let img = HERO_IMGS[pose];
-    if (!img.complete || !img.naturalWidth) img = HERO_IMGS.stand; // ท่านั้นยังโหลดไม่เสร็จ
+    const g0 = HERO_GIFS[pose];
+    // ยืน/เดิน = ลูปตามนาฬิกาจริง. ต่อสู้ = ยัดสวิง 8 เฟรมทั้งชุดลงช่วงถือท่า (~0.37 วิ)
+    // เพราะคลิป atk ยาว 1.6 วิ แต่ hold แค่ 0.37 วิ ถ้าเล่นตามเวลาจริงจะเห็นแค่ 2 เฟรมแรก
+    let poseT = now;
+    if (pose === 'atk' && g0.total) {
+      const frac = (HERO_POSE_ATK_T - hero.poseAtk) / HERO_POSE_ATK_T; // 0 → 1
+      poseT = Math.min(frac, 0.999) * g0.total;
+    }
+    // เฟรม ImageBitmap ปัจจุบัน (หรือ <img> fallback) — ถอยไปท่ายืนถ้าท่านี้ยังไม่พร้อม
+    let img = heroPoseImg(g0, poseT) || heroPoseImg(HERO_GIFS.stand, now);
+    // ImageBitmap มี .width/.height; <img> ต้องใช้ .naturalWidth (element ถูกย่อเหลือ 2px)
+    const iw = img ? (img.naturalWidth || img.width) : 0;
+    const ih = img ? (img.naturalHeight || img.height) : 0;
 
     const hh = HERO_R * 2.4;
-    // สัดส่วนอ่านจากขนาดจริงของ "ไฟล์ที่กำลังใช้" ไม่ฮาร์ดโค้ด — 3 ท่าครอปไม่เท่ากัน
+    // สัดส่วนอ่านจากขนาดจริงของ "ท่าที่กำลังใช้" ไม่ฮาร์ดโค้ด — 3 ท่าครอปไม่เท่ากัน
     // (เคยฮาร์ดโค้ด 0.86 ของ princess_1.png ไว้ พอเปลี่ยนรูปตัวละครก็ผิดทันที)
-    const hw = img.naturalHeight
-      ? hh * (img.naturalWidth / img.naturalHeight)
-      : hh * 0.8;
+    const hw = ih ? hh * (iw / ih) : hh * 0.8;
     fx.save();
     fx.globalAlpha = blink ? 0.4 : 1;
-    if (img.complete && img.naturalWidth) {
+    if (img && iw) {
       fx.translate(sx, sy + bob);
       fx.rotate(faintRot);
       fx.scale(hero.facing, 1);

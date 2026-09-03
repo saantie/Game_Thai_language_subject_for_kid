@@ -1392,8 +1392,8 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
 .skill-dot.hidden { display: none; }
 @keyframes skillDotPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.35); } }
 
-/* แหล่งภาพแม่มดน้อย 3 ท่า — ต้องถูกเรนเดอร์จริง GIF ถึงจะเดินเฟรม
-   (display:none / visibility:hidden จะหยุดแอนิเมชัน ใช้ย่อ+โปร่งแทน) */
+/* แหล่งภาพแม่มดน้อย 3 ท่า — ตอนนี้เป็น "fallback เท่านั้น" (worldMap.js decode GIF เองด้วย
+   ImageDecoder แล้วเล่นบน canvas) ใช้เมื่อ browser ไม่มี ImageDecoder — ท่าถูก อาจไม่เดินเฟรม */
 .hero-sprite {
   position: fixed; left: 0; bottom: 0;
   width: 2px; height: 2px; opacity: 0.01;
