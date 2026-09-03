@@ -18,9 +18,9 @@ import { createParticleSystem } from './particles.js';
 import { saveTotalScore } from './storage.js';
 import { getSkillEffects } from './rpg.js';
 
-// asset ที่มีอยู่แล้วใน APP_SHELL — encode ช่องว่างเหมือนที่อื่นในโปรเจกต์
-const CRYSTAL_IMG = new Image();
-CRYSTAL_IMG.src = 'public/assets/images/glass%20ball.png';
+// จุดมาตราบนแผนที่ = บ้านแม่มด (House wish.png) แทนลูกแก้วคริสตอลเดิม
+const HOUSE_IMG = new Image();
+HOUSE_IMG.src = 'public/assets/images/House%20wish.png';
 // แม่มดน้อย (ตัวที่เด็กบังคับ) — 3 ท่า สลับตาม state ที่มีอยู่แล้วของ hero
 // GIF เคลื่อนไหวในตัว: ยืน 21 เฟรม / เดิน 4 เฟรม / ต่อสู้ 8 เฟรม (เฟรมละ 200ms)
 // สัดส่วนแต่ละไฟล์ต่างกัน (64x103 / 95x100 / 106x97) — drawHero คิดความกว้างจากเฟรมที่ใช้จริง
@@ -107,11 +107,13 @@ const HAS_PATH2D = typeof Path2D === 'function';
 const ROAD_HW = 16;        // ครึ่งความกว้างฐาน (px)
 const ROAD_HW_VAR = 8;     // แกว่ง ± จากฐาน — บางที่กว้าง บางที่แคบ
 
-// glass ball.png = 400x218 มีขอบโปร่งเยอะ ลูกแก้วจริง ~154x180 กลางภาพ
-// วาดทั้งภาพ scale ให้ "ลูกแก้ว" สูง ≈ NODE_R*2 แล้ววางกึ่งกลางโหนด (ไม่บีบให้เพี้ยน)
-const CR_SCALE = (NODE_R * 2) / 180;
-const CR_DW = 400 * CR_SCALE;
-const CR_DH = 218 * CR_SCALE;
+// House wish.png = 500x500 ตัวบ้าน ~440x390 กลางภาพ ขอบโปร่ง
+// วาดทั้งภาพ scale ให้ "ตัวบ้าน" สูง ≈ 96px, เยื้องขึ้นเล็กน้อยให้ฐานบ้านอยู่ราวจุดโหนด
+const HOUSE_DW = 128;
+const HOUSE_DH = 128;
+const HOUSE_NUDGE_Y = -12;
+// รัศมีวงประดับรอบโหนด (แสงเรือง/วงโฟกัส/โล่ผนึก) — บ้านใหญ่กว่า NODE_R ที่ใช้ทำ hit-test
+const NODE_HALO = 46;
 
 // ---- Phase 2: ลูกสมุน + บอส เฝ้าคริสตอล ----
 // ศัตรู "เข้าทีละตัว" — มีตัวเดียวที่ไล่/กัดได้ (active) ที่เหลือลาดตระเวนรอ
@@ -1333,14 +1335,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
     if (witchWY > cy - 340 && witchWY < cy + H + 60) drawWitch();
 
-    for (let i = 0; i < decor.length; i++) {
-      const dc = decor[i];
-      // margin ล่างเผื่อสูง — ต้นไม้พุ่งขึ้นจากโคน โคนอยู่ใต้จอก็ยังเห็นยอด
-      if (dc.wy < cy - 80 || dc.wy > cy + H + 280) continue;
-      drawDecor(dc);
-    }
-
     // ถนนดิน: ริบบิ้น polygon ขอบไม่สม่ำเสมอ — เนื้อดิน (pattern) + ขอบเข้มบาง ๆ ตัดกับหญ้า
+    // (พื้นดิน วาดก่อน actors ทั้งหมด → ต้นไม้/บ้าน/ตัวละครยืนอยู่ "บน" ทาง)
     fx.lineJoin = 'round';
     if (HAS_PATH2D) {
       fx.fillStyle = roadPat || '#8a6a44';
@@ -1359,18 +1355,44 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
     fx.restore();
 
-    // ---- screen layer: คริสตอล / ลูกสมุน / ฮีโร่ / particle ----
+    // ---- actors เรียงตามความลึก (y โลก): ต้นไม้ / บ้าน / ลูกสมุน / แม่มดน้อย ----
+    // ไกล (y น้อย = บนจอ) วาดก่อน, ใกล้ (y มาก = ล่างจอ) วาดทับ → เดินหลังต้นไม้ = ถูกบัง
     fx.textAlign = 'center';
     fx.textBaseline = 'alphabetic';
     fx.font = NODE_FONT;
+
+    const zlist = [];
+    for (let i = 0; i < decor.length; i++) {
+      const dc = decor[i];
+      // margin ล่างเผื่อต้นไม้สูง (โคนใต้จอ ยอดยังโผล่)
+      if (dc.wy < cy - 80 || dc.wy > cy + H + 280) continue;
+      zlist.push({ z: dc.wy, k: 0, dc });
+    }
+    const nodeScr = new Array(nodes.length).fill(null);
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
       const sy = n.wy - cy;
-      if (sy < -80 || sy > H + 80) continue;
+      if (sy < -160 || sy > H + 160) continue;
       let sx = n.wx - cx;
-      if (sx < -120 || sx > W + 120) continue;
+      if (sx < -180 || sx > W + 180) continue;
       if (n.shake > 0) sx += Math.sin(now * 0.05) * 5 * n.shake;
-      drawNode(n, sx, sy, i, now);
+      nodeScr[i] = { sx, sy };
+      zlist.push({ z: n.wy + 8, k: 1, i, sx, sy });
+    }
+    for (let i = 0; i < minions.length; i++) zlist.push({ z: minions[i].wy, k: 2, m: minions[i] });
+    zlist.push({ z: hero.wy, k: 3 });
+    zlist.sort((a, b) => a.z - b.z);
+    for (let q = 0; q < zlist.length; q++) {
+      const it = zlist[q];
+      if (it.k === 0) drawDecor(it.dc, cx, cy);
+      else if (it.k === 1) drawHouseSprite(nodes[it.i], it.sx, it.sy);
+      else if (it.k === 2) drawMinion(it.m, cx, cy, now);
+      else drawHero(cx, cy, now);
+    }
+
+    // ---- overlay (บนสุดเสมอ): ป้ายมาตรา + พลอย + particle — อ่านง่าย ไม่ถูกบัง ----
+    for (let i = 0; i < nodes.length; i++) {
+      if (nodeScr[i]) drawNodeUI(nodes[i], nodeScr[i].sx, nodeScr[i].sy, i, now);
     }
 
     for (let i = 0; i < gems.length; i++) {
@@ -1382,10 +1404,6 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       if (gsx < -40 || gsx > W + 40) continue;
       drawGem(gsx, gsy, g.bob, now);
     }
-
-    for (let i = 0; i < minions.length; i++) drawMinion(minions[i], cx, cy, now);
-
-    drawHero(cx, cy, now);
 
     particleFx.draw();
 
@@ -1428,7 +1446,48 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     }
   }
 
-  function drawNode(n, sx, sy, i, now) {
+  // ตัวบ้าน (สไปรต์) — อยู่ในลำดับ y-sort จึงถูกต้นไม้/ฮีโร่บังได้ตามระยะ
+  function drawHouseSprite(n, sx, sy) {
+    const locked = !unlocked[n.matraId];
+    const sealed = !locked && nodeSealed(n.idx);
+
+    // แสงเรือง (ใต้บ้าน)
+    fx.beginPath();
+    fx.arc(sx, sy + 6, NODE_HALO, 0, Math.PI * 2);
+    fx.fillStyle = locked ? 'rgba(58,42,94,0.40)' : 'rgba(255,225,150,0.18)';
+    fx.fill();
+
+    // ตัวบ้าน (คงสัดส่วนภาพ เยื้องขึ้นให้ฐานอยู่ราวจุดโหนด) — ล็อก = หรี่, ปิดผนึก = หรี่นิดหน่อย
+    if (HOUSE_IMG.complete && HOUSE_IMG.naturalWidth) {
+      if (locked) fx.globalAlpha = 0.42;
+      else if (sealed) fx.globalAlpha = 0.72;
+      fx.drawImage(HOUSE_IMG, sx - HOUSE_DW / 2, sy - HOUSE_DH / 2 + HOUSE_NUDGE_Y, HOUSE_DW, HOUSE_DH);
+      fx.globalAlpha = 1;
+    } else {
+      fx.beginPath();
+      fx.arc(sx, sy, NODE_R - 4, 0, Math.PI * 2);
+      fx.fillStyle = locked ? '#3a2a5e' : '#c98a5a';
+      fx.fill();
+    }
+
+    if (locked) {
+      // แม่กุญแจคาดหน้าบ้าน
+      fx.fillStyle = 'rgba(16,8,34,0.55)';
+      fx.beginPath();
+      fx.arc(sx, sy - 2, 13, 0, Math.PI * 2);
+      fx.fill();
+      fx.strokeStyle = '#d8ccf2';
+      fx.lineWidth = 2.6;
+      fx.beginPath();
+      fx.arc(sx, sy - 5, 5.5, Math.PI, 0);
+      fx.stroke();
+      fx.fillStyle = '#d8ccf2';
+      fx.fillRect(sx - 7.5, sy - 5, 15, 11);
+    }
+  }
+
+  // ป้าย/เอฟเฟกต์ของมาตรา (วงกระเพื่อม/ดาว/โล่ผนึก/ชื่อ) — วาด overlay บนสุดเสมอ อ่านง่าย
+  function drawNodeUI(n, sx, sy, i, now) {
     const locked = !unlocked[n.matraId];
     const sealed = !locked && nodeSealed(i);
 
@@ -1436,53 +1495,21 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (i === focusIdx && !locked) {
       const t = (now % 1400) / 1400;
       fx.beginPath();
-      fx.arc(sx, sy, NODE_R + 5 + t * 9, 0, Math.PI * 2);
+      fx.arc(sx, sy, NODE_HALO + 4 + t * 10, 0, Math.PI * 2);
+      // overlay layer แล้ว → หรี่ลงจากเดิมนิดหน่อย ไม่ให้เด่นเกินตัวบ้าน
       fx.strokeStyle = sealed
-        ? 'rgba(180,150,240,' + (0.5 * (1 - t)).toFixed(3) + ')'
-        : 'rgba(130,230,255,' + (0.6 * (1 - t)).toFixed(3) + ')';
+        ? 'rgba(190,165,245,' + (0.38 * (1 - t)).toFixed(3) + ')'
+        : 'rgba(140,235,255,' + (0.45 * (1 - t)).toFixed(3) + ')';
       fx.lineWidth = sealed ? 2 : 3;
       fx.stroke();
     }
 
-    // แสงเรือง
-    fx.beginPath();
-    fx.arc(sx, sy, NODE_R + 3, 0, Math.PI * 2);
-    fx.fillStyle = locked ? 'rgba(58,42,94,0.45)' : 'rgba(120,220,255,0.16)';
-    fx.fill();
-
-    // ตัวคริสตอล (คงสัดส่วนภาพ วางกึ่งกลางโหนด) — ปิดผนึก = หรี่ลง
-    if (CRYSTAL_IMG.complete && CRYSTAL_IMG.naturalWidth) {
-      if (locked) fx.globalAlpha = 0.42;
-      else if (sealed) fx.globalAlpha = 0.7;
-      fx.drawImage(CRYSTAL_IMG, sx - CR_DW / 2, sy - CR_DH / 2, CR_DW, CR_DH);
-      fx.globalAlpha = 1;
-    } else {
-      fx.beginPath();
-      fx.arc(sx, sy, NODE_R - 4, 0, Math.PI * 2);
-      fx.fillStyle = locked ? '#3a2a5e' : '#6cd6f5';
-      fx.fill();
-    }
-
-    if (locked) {
-      // แม่กุญแจ
-      fx.fillStyle = 'rgba(16,8,34,0.5)';
-      fx.beginPath();
-      fx.arc(sx, sy, NODE_R - 2, 0, Math.PI * 2);
-      fx.fill();
-      fx.strokeStyle = '#c3b4e8';
-      fx.lineWidth = 2.6;
-      fx.beginPath();
-      fx.arc(sx, sy - 3, 5.5, Math.PI, 0);
-      fx.stroke();
-      fx.fillStyle = '#c3b4e8';
-      fx.fillRect(sx - 7.5, sy - 3, 15, 11);
-    } else {
+    if (!locked) {
       // ดาว 0–3 (ระหว่าง return beat ใช้ค่าที่กำลังไหล)
       let sc = stars[n.matraId] || 0;
       if (returnAnim && returnAnim.idx === i) sc = returnAnim.shown;
-      const py = sy + NODE_R + 11;
+      const py = sy + NODE_HALO + 16;
       for (let s = 0; s < 3; s++) {
-        // เศษ (0..1) ของดาวที่กำลังเติม → ทำให้พองนิดหน่อย
         const fillAmt = Math.max(0, Math.min(1, sc - s));
         drawPip(sx - 14 + s * 14, py, fillAmt);
       }
@@ -1492,22 +1519,18 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (sealed) {
       const t = (now % 1600) / 1600;
       fx.beginPath();
-      fx.arc(sx, sy, NODE_R + 12 + Math.sin(t * Math.PI * 2) * 2, 0, Math.PI * 2);
+      fx.arc(sx, sy, NODE_HALO + 8 + Math.sin(t * Math.PI * 2) * 2, 0, Math.PI * 2);
       fx.strokeStyle = 'rgba(150,120,235,0.35)';
       fx.lineWidth = 3;
       fx.stroke();
-      fx.beginPath();
-      fx.arc(sx, sy, NODE_R + 12, 0, Math.PI * 2);
-      fx.fillStyle = 'rgba(90,70,170,0.14)';
-      fx.fill();
       const left = Math.max(0, enemyTotal(diff) - (guardKills[n.matraId] || 0));
       fx.fillStyle = '#e7ddff';
-      fx.fillText('ศัตรูเหลือ ' + left, sx, sy - NODE_R - 12);
+      fx.fillText('ศัตรูเหลือ ' + left, sx, sy - NODE_HALO - 30);
     }
 
     // ชื่อมาตรา (fx.font set แล้วใน render() ก่อนวน loop)
-    fx.fillStyle = locked ? 'rgba(203,193,232,0.62)' : '#ece3fb';
-    fx.fillText(n.name, sx, sy + NODE_R + (locked ? 17 : 27));
+    fx.fillStyle = locked ? 'rgba(203,193,232,0.72)' : '#ece3fb';
+    fx.fillText(n.name, sx, sy + NODE_HALO + (locked ? 22 : 32));
   }
 
   // amt: 0 = ว่าง, 1 = เต็ม, ระหว่างนั้น = กำลังเติม (พองนิดหน่อย)
@@ -1726,10 +1749,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.restore();
   }
 
-  function drawDecor(dc) {
+  function drawDecor(dc, cx, cy) {
     const s = dc.s;
     fx.save();
-    fx.translate(dc.wx, dc.wy);
+    fx.translate(dc.wx - cx, dc.wy - cy);
     fx.scale(dc.flip * s, s);
     // เงาที่พื้นหญ้า — ให้ decor ดู "วางอยู่บน" พื้น ไม่ลอย (ต้นไม้เงากว้างกว่า)
     fx.fillStyle = 'rgba(30,50,20,0.20)';
