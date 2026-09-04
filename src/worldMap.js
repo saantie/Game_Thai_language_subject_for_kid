@@ -407,13 +407,12 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     });
 
     // ประกายพื้นหลัง — สุ่มแบบ deterministic (ไม่ใช้ Math.random ใน loop) ใน band สูง 1 จอ
+    // ใช้ h01() (hash ผสมบิตแบบ murmur) แทนสูตร (i*const)%mod เดิม — สูตรเดิมเป็น
+    // linear congruential ธรรมดา ทำให้จุดเรียงเป็นเส้น/แถวที่มองเห็นได้ชัดตอนสแกนจริง (บั๊กที่ผู้ใช้เจอ)
     const DOT_N = 46;
     decorDots.length = 0;
     for (let i = 0; i < DOT_N; i++) {
-      // hash เลขลำดับ → กระจายทั่ว ๆ พอ ไม่ต้องสวยมาก
-      const a = (i * 92821) % 10007;
-      const b = (i * 53113) % 9973;
-      decorDots.push({ x: (a / 10007) * W, y: (b / 9973) * H });
+      decorDots.push({ x: h01(i * 2 + 1) * W, y: h01(i * 2 + 2) * H });
     }
 
     // ถนนดิน = ริบบิ้น polygon เลื้อยแบบงู ขอบไม่สม่ำเสมอ (world space) — สร้างครั้งเดียว
@@ -1819,17 +1818,21 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.translate(-cx, -cy);
 
     // พื้นหญ้าเต็มความกว้างโลก เฉพาะช่วงที่กล้องเห็น — pattern ผูกพิกัด world เลื่อนตามกล้องเอง
+    // ไล่เฉดฉากให้หม่นลงเรื่อย ๆ ตามด่าน (เขียว/สีเดิมด่านแรก → เทาด่านบอสใหญ่)
+    // คำนวณครั้งเดียวใช้ร่วมกันทั้งพื้นหญ้า+ถนน — gradient ไล่ตามช่วงจอที่เห็น (บน→ล่าง)
+    // เป็นทางลัดถูกๆ แทน per-pixel filter (แพงกว่ามาก, codebase นี้ไม่เคยใช้ ctx.filter)
+    const sceneT_top = sceneryT(cy), sceneT_bot = sceneryT(cy + H);
+    const sceneGradFor = (alphaMul) => {
+      const g = fx.createLinearGradient(0, cy, 0, cy + H);
+      g.addColorStop(0, 'rgba(110,110,112,' + (sceneT_top * alphaMul).toFixed(2) + ')');
+      g.addColorStop(1, 'rgba(110,110,112,' + (sceneT_bot * alphaMul).toFixed(2) + ')');
+      return g;
+    };
     if (groundPat) {
       fx.fillStyle = groundPat;
       fx.fillRect(-40, cy - 40, worldW + 80, H + 80);
-      // ไล่เฉดพื้นหญ้าให้หม่นลงเรื่อย ๆ ตามด่าน (เขียวด่านแรก → เทาด่านบอสใหญ่)
-      // gradient ไล่ตามช่วงจอที่เห็น (บน→ล่าง) เป็นทางลัดถูกๆ แทน per-pixel filter (แพงกว่ามาก)
-      const tTop = sceneryT(cy), tBot = sceneryT(cy + H);
-      if (tTop > 0.01 || tBot > 0.01) {
-        const grassGrad = fx.createLinearGradient(0, cy, 0, cy + H);
-        grassGrad.addColorStop(0, 'rgba(110,110,112,' + (tTop * 0.75).toFixed(2) + ')');
-        grassGrad.addColorStop(1, 'rgba(110,110,112,' + (tBot * 0.75).toFixed(2) + ')');
-        fx.fillStyle = grassGrad;
+      if (sceneT_top > 0.01 || sceneT_bot > 0.01) {
+        fx.fillStyle = sceneGradFor(0.75);
         fx.fillRect(-40, cy - 40, worldW + 80, H + 80);
       }
     }
@@ -1847,7 +1850,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       }
     }
 
-    if (witchWY > cy - 340 && witchWY < cy + H + 60) drawWitch();
+    // แม่มดปลายแผนที่ (ประดับ) — ซ่อนตอนดวลบอสใหญ่จริง กันเห็นแม่มด 2 ตัวซ้อนกัน (ตัวจริงอยู่ใน drawFinalDuel)
+    if (!isFinalDuel() && witchWY > cy - 340 && witchWY < cy + H + 60) drawWitch();
 
     // ถนนดิน: ริบบิ้น polygon ขอบไม่สม่ำเสมอ — เนื้อดิน (pattern) + ขอบเข้มบาง ๆ ตัดกับหญ้า
     // (พื้นดิน วาดก่อน actors ทั้งหมด → ต้นไม้/บ้าน/ตัวละครยืนอยู่ "บน" ทาง)
@@ -1858,6 +1862,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.strokeStyle = 'rgba(50,34,18,0.55)';
       fx.lineWidth = 6;
       fx.stroke(roadPoly);
+      // ไล่เฉดถนนหม่นลงตามด่านเหมือนพื้นหญ้า — fill(roadPoly) ซ้ำ = จำกัดอยู่แค่รูปทรงถนนเป๊ะๆ อยู่แล้ว
+      if (sceneT_top > 0.01 || sceneT_bot > 0.01) {
+        fx.fillStyle = sceneGradFor(0.7);
+        fx.fill(roadPoly);
+      }
     } else {
       traceRoadPoly();
       fx.fillStyle = roadPat || '#8a6a44';
@@ -1865,6 +1874,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.strokeStyle = 'rgba(50,34,18,0.55)';
       fx.lineWidth = 6;
       fx.stroke();
+      if (sceneT_top > 0.01 || sceneT_bot > 0.01) {
+        fx.fillStyle = sceneGradFor(0.7);
+        fx.fill();
+      }
     }
 
     fx.restore();
