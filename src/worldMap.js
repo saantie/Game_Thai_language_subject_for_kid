@@ -126,19 +126,28 @@ const BOSS_HP = 4;             // บอส (มาตรา 5+) ตี 4 คร
 // เพิ่มสายพันธุ์ใหม่ = เพิ่มแถวที่นี่พอ ไม่ต้องแตะโค้ดวาด (drawMinion อ่าน m.kind หมด)
 //   speed = ตัวคูณความเร็วไล่ ***ห้ามทำให้เร็วเกินเด็ก*** — มี clamp ตอนรันอีกชั้นกันพลาด
 //   hp    = ต้องตีกี่ครั้งถึงตาย (ไม่กระทบจำนวนตัวที่ต้องฆ่าเพื่อเปิดคริสตอล — นับเป็นตัว)
+// 12 สายพันธุ์ — ค่อย ๆ ปรากฏตามความยาก (kindsFor). speed หลังหาร 50% แล้ว (ดู difficultyFor)
 const MINION_KINDS = [
-  { id: 'green',  body: '#86c97f', light: '#a9dda2', hat: '#4a2f6b', wing: null,      hp: 2, speed: 1.00, fly: false },
-  { id: 'blue',   body: '#7fb8e8', light: '#b3d9f5', hat: '#2a3f6b', wing: null,      hp: 2, speed: 1.15, fly: false },
-  { id: 'orange', body: '#e8a05c', light: '#f5cfa3', hat: '#6b3f1f', wing: null,      hp: 3, speed: 0.85, fly: false },
-  { id: 'bat',    body: '#b98be0', light: '#dcc4f2', hat: '#3b1f5e', wing: '#6f4a9e', hp: 1, speed: 1.20, fly: true  },
+  { id: 'green',   body: '#86c97f', light: '#a9dda2', hat: '#4a2f6b', wing: null,      hp: 2, speed: 1.00, fly: false },
+  { id: 'blue',    body: '#7fb8e8', light: '#b3d9f5', hat: '#2a3f6b', wing: null,      hp: 2, speed: 1.10, fly: false },
+  { id: 'orange',  body: '#e8a05c', light: '#f5cfa3', hat: '#6b3f1f', wing: null,      hp: 3, speed: 0.85, fly: false },
+  { id: 'bat',     body: '#b98be0', light: '#dcc4f2', hat: '#3b1f5e', wing: '#6f4a9e', hp: 1, speed: 1.20, fly: true  },
+  { id: 'red',     body: '#e07b6b', light: '#f2b4a9', hat: '#5e1f1f', wing: null,      hp: 3, speed: 1.05, fly: false },
+  { id: 'teal',    body: '#5ec9b8', light: '#a7e6dd', hat: '#1f4a44', wing: null,      hp: 3, speed: 1.15, fly: false },
+  { id: 'moth',    body: '#d9c17a', light: '#f0e3b8', hat: '#5a4a1f', wing: '#b89a4a', hp: 2, speed: 1.15, fly: true  },
+  { id: 'stone',   body: '#9a9a92', light: '#c4c4bb', hat: '#3a3a34', wing: null,      hp: 4, speed: 0.75, fly: false },
+  { id: 'violet',  body: '#a77fd8', light: '#d0b8ee', hat: '#3a1f5e', wing: null,      hp: 4, speed: 1.10, fly: false },
+  { id: 'wasp',    body: '#e8c24a', light: '#f5e2a0', hat: '#5e3f0f', wing: '#c99a2a', hp: 2, speed: 1.25, fly: true  },
+  { id: 'crimson', body: '#c0506b', light: '#e6a0b0', hat: '#4a1020', wing: null,      hp: 5, speed: 1.00, fly: false },
+  { id: 'spectre', body: '#8bb0d8', light: '#c4dcee', hat: '#22344a', wing: '#5a7a9e', hp: 3, speed: 1.30, fly: true  },
 ];
 // บอสเป็น kind หนึ่งเหมือนกัน — drawMinion จะได้อ่านสีจากที่เดียว ไม่ต้อง if isBoss ทุกจุด
 const BOSS_KIND = { id: 'boss', body: '#c97fb0', light: '#e6b3de', hat: '#6a1f4a', wing: null, hp: BOSS_HP, speed: 0.90, fly: false };
 
-// สายพันธุ์ที่โผล่ได้ตาม index มาตรา — ค่อย ๆ เพิ่มความหลากหลายตามความยาก
-// มาตรา 1-4 เขียวล้วน · 5-10 +น้ำเงิน · 11-18 +ส้ม · 19+ +ตัวบิน
+// สายพันธุ์ที่โผล่ได้ตาม index มาตรา — มาตราแรกมีสายพันธุ์เดียว ค่อย ๆ เพิ่มจนครบ 12 ที่มาตราสุดท้าย
 function kindsFor(idx) {
-  const n = idx < 4 ? 1 : idx < 10 ? 2 : idx < 18 ? 3 : 4;
+  const N = MATRA.length;
+  const n = Math.max(1, Math.min(MINION_KINDS.length, 1 + Math.floor((idx / Math.max(1, N - 1)) * (MINION_KINDS.length - 1))));
   return MINION_KINDS.slice(0, n);
 }
 const FLY_HOVER = 13;          // ตัวบินลอยเหนือพื้นกี่ px (เงายังอยู่ที่พื้น)
@@ -147,7 +156,7 @@ const FLY_WANDER_MUL = 1.4;    // ตัวบินเดินเตร่เ�
 // แนวนอนกว้าง (จอมีที่เหลือถึงขอบ) แต่แนวตั้งต้องไม่ถึงคริสตอลลูกข้างเคียง (spacing/2 ≈ 177)
 const SCATTER_RX = 176;
 const SCATTER_RY = 150;
-const WANDER_SPEED = 0.5;        // px/เฟรม — เดินเตร่ช้า ๆ
+const WANDER_SPEED = 0.25;       // px/เฟรม — เดินเตร่/ไหลลง (หาร 50% จากเดิม 0.5)
 
 // ---- พลอยเติมพลัง (เดินทับ = +1 หัวใจ) ----
 const GEM_PICK_R = 26;           // รัศมีเก็บพลอย
@@ -174,11 +183,14 @@ const SWING_T = 12;            // เฟรมโชว์รอยไม้เ�
 function difficultyFor(idx, total) {
   const t = total > 1 ? idx / (total - 1) : 0;
   return {
-    minions: Math.min(2 + idx, 5),  // 2,3,4,5,5,5,...
+    minions: Math.min(2 + idx, 5),  // 2,3,4,5,5,5,... (ตัวที่ต้องฆ่าก่อนบอสมา)
     boss: idx >= 4,                 // มาตรา 5 เป็นต้นไป
-    speed: 1.15 + t * 0.95,         // 1.15 → 2.1 (ต่ำกว่าความเร็วเดินต่ำสุดของสกิล 👟 = 2.6 เสมอ)
+    // ความเร็วไล่ — หาร 50% จากเดิม (0.575 → 1.05) · ต้องต่ำกว่าความเร็วเดินต่ำสุดของสกิล 👟 (1.3) เสมอ
+    speed: 0.575 + t * 0.475,
     aggroR: 120 + t * 90,           // 120 → 210 (ลูกสมุนกระจายไกล — ต้องเห็นเด็กไกลขึ้น)
     biteCd: Math.round(112 - t * 46), // 112 → 66 เฟรม
+    // ด่านท้าย ๆ ลูกสมุนตายยากขึ้น — +HP ต่อตัว (บวกกับ kind.hp)
+    hpBonus: idx < 12 ? 0 : idx < 20 ? 1 : 2,
   };
 }
 const HERO_START_GAP = 64; // แม่มดน้อยเริ่มห่างจากขอบโซนลูกสมุนเท่านี้ (ต้องเดินเข้าไปเอง)
@@ -1202,7 +1214,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
           audio.sfx('star');
           addPoints(m.isBoss ? BOSS_PTS : MINION_PTS);
           guardKills[gid] = (guardKills[gid] || 0) + 1;
-          dropGems(m); // ลูกสมุนบินตาย → พลอยหล่น 3 เม็ด
+          dropGems(m); // บินตาย → พลอยหัวใจ 3 เม็ด
+          dropCoin(m); // เดินตาย → เหรียญทอง 1 เหรียญ
           if (m.isBoss) {
             bossDone[gid] = true;
             particleFx.spawnCelebrationBurst(sX(m.wx), sY(m.wy), { hueMin: 280, hueRange: 40 });
@@ -1291,6 +1304,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   }
 
   // ลูกสมุน "บิน" ตาย → พลอยหล่น 3 เม็ด ตรงจุดตาย (ของหล่น: เก็บแล้วหาย ไม่เกิดใหม่)
+  // ลูกสมุน "บิน" ตาย → พลอยหัวใจหล่น 3 เม็ด ตรงจุดตาย
   function dropGems(m) {
     if (!m || !m.kind || !m.kind.fly) return;
     for (let k = 0; k < 3; k++) {
@@ -1305,31 +1319,49 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     audio.sfx('gem');
   }
 
-  // เก็บพลอย = +1 หัวใจ (ตอนพลังไม่เต็มเท่านั้น) · พลอยประจำบ้านเกิดใหม่ใน GEM_RESPAWN · พลอยหล่น (drop) เก็บแล้วหาย
+  // ลูกสมุน "เดิน (ไม่บิน)" ตาย → เหรียญทองหล่น 1 เหรียญ (เก็บ = +1 คะแนนสะสม)
+  function dropCoin(m) {
+    if (!m || !m.kind || m.kind.fly) return;
+    gems.push({
+      coin: true, drop: true, life: 620, taken: false, respawn: 0, bob: Math.random() * 6,
+      nodeIdx: m.guardIdx | 0,
+      wx: m.wx + (Math.random() - 0.5) * 14,
+      wy: m.wy + (Math.random() - 0.5) * 12,
+    });
+  }
+
+  // เก็บ: พลอย = +1 หัวใจ (ตอนพลังไม่เต็ม) · เหรียญ = +1 คะแนนสะสม (เสมอ)
+  // พลอยประจำบ้านเกิดใหม่ใน GEM_RESPAWN · ของหล่น (drop) เก็บแล้วหาย · อายุ ~10 วิ
   function updateGems() {
     const canHeal = hero.hp < sk.maxHp && hero.fainting === 0;
     const pr2 = GEM_PICK_R * GEM_PICK_R;
     for (let i = 0; i < gems.length; i++) {
       const g = gems[i];
-      if (g.drop && g.life !== undefined && --g.life <= 0) { gems.splice(i, 1); i--; continue; } // หมดอายุ (~10 วิ)
+      if (g.drop && g.life !== undefined && --g.life <= 0) { gems.splice(i, 1); i--; continue; } // หมดอายุ
       if (g.taken) {
         if (g.drop) { gems.splice(i, 1); i--; continue; }
         // เกิดใหม่ = สุ่มที่ใหม่ ไม่โผล่จุดเดิม (เดิมเด็กจำตำแหน่งได้ ไม่ต้องสำรวจ)
         if (--g.respawn <= 0) { g.taken = false; placeGem(g, nodes[g.nodeIdx]); }
         continue;
       }
-      if (!canHeal) continue;
       if (Math.abs(g.wy - hero.wy) > 160) continue; // เช็คเฉพาะเม็ดใกล้ตัว
       const dx = g.wx - hero.wx;
       const dy = g.wy - hero.wy;
-      if (dx * dx + dy * dy <= pr2) {
-        hero.hp = Math.min(sk.maxHp, hero.hp + 1);
+      if (dx * dx + dy * dy > pr2) continue;
+      if (g.coin) {
+        addPoints(1);
         audio.sfx('gem');
-        particleFx.spawnCelebrationBurst(sX(g.wx), sY(g.wy), { hueMin: 315, hueRange: 30 });
-        if (g.drop) { gems.splice(i, 1); i--; }
-        else { g.taken = true; g.respawn = GEM_RESPAWN; }
-        break; // เก็บทีละเม็ดต่อเฟรม
+        particleFx.spawnCelebrationBurst(sX(g.wx), sY(g.wy), { hueMin: 44, hueRange: 16 });
+        gems.splice(i, 1); i--;
+        continue; // เหรียญเก็บได้หลายเม็ดต่อเฟรม
       }
+      if (!canHeal) continue;
+      hero.hp = Math.min(sk.maxHp, hero.hp + 1);
+      audio.sfx('gem');
+      particleFx.spawnCelebrationBurst(sX(g.wx), sY(g.wy), { hueMin: 315, hueRange: 30 });
+      if (g.drop) { gems.splice(i, 1); i--; }
+      else { g.taken = true; g.respawn = GEM_RESPAWN; }
+      break; // พลอยหัวใจเก็บทีละเม็ดต่อเฟรม
     }
   }
 
@@ -1385,7 +1417,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (gn) {
       addPoints(m.isBoss ? BOSS_PTS : MINION_PTS);
       guardKills[gn.matraId] = (guardKills[gn.matraId] || 0) + 1;
-      dropGems(m); // ลูกสมุนบินตาย (จาก AoE/beam/ผู้ช่วย) → พลอยหล่น 3 เม็ด
+      dropGems(m); // บินตาย → พลอยหัวใจ 3 เม็ด
+      dropCoin(m); // เดินตาย → เหรียญทอง 1 เหรียญ
       if (m.isBoss) { bossDone[gn.matraId] = true; mapSay('ล้มบอสแล้ว! รีบไปเก็บกุญแจ'); }
       particleFx.spawnCelebrationBurst(sX(m.wx), sY(m.wy), { hueMin: m.isBoss ? 280 : 90, hueRange: 40 });
     }
@@ -1465,7 +1498,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     m.wanderT = 30;
     m.vx = 0;
     m.vy = 0;
-    m.hp = m.kind.hp;
+    m.hp = m.kind.hp + (isBoss ? 0 : (diff.hpBonus || 0)); // ด่านท้าย ๆ ตายยากขึ้น
     m.maxHp = m.hp;
     m.stagger = 0;
     m.reengageCd = 0;
@@ -1688,7 +1721,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       if (gsy < -40 || gsy > H + 40) continue;
       const gsx = g.wx - cx;
       if (gsx < -40 || gsx > W + 40) continue;
-      drawGem(gsx, gsy, g.bob, now);
+      drawGem(gsx, gsy, g.bob, now, g.coin);
     }
 
     // กุญแจบ้านเป้าหมาย — ที่จุดเดิม (ยังไม่เก็บ) หรือลอยเหนือหัวแม่มด (ถืออยู่)
@@ -2153,9 +2186,24 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.restore();
   }
 
-  function drawGem(sx, sy0, phase, now) {
+  function drawGem(sx, sy0, phase, now, coin) {
     const sy = sy0 - 3 - Math.sin(now * 0.004 + phase) * 3;
     const pulse = 0.5 + 0.5 * Math.sin(now * 0.006 + phase);
+    if (coin) {
+      // เหรียญทอง — วงกลม + ขอบเข้ม + ประกาย
+      fx.beginPath();
+      fx.arc(sx, sy, 10 + pulse * 2, 0, Math.PI * 2);
+      fx.fillStyle = 'rgba(255,215,120,0.18)';
+      fx.fill();
+      fx.beginPath();
+      fx.arc(sx, sy, 7, 0, Math.PI * 2);
+      fx.fillStyle = '#e8b53a';
+      fx.fill();
+      fx.lineWidth = 1.6; fx.strokeStyle = '#8a5f16'; fx.stroke();
+      fx.fillStyle = '#f6dd8e';
+      fx.beginPath(); fx.arc(sx - 2, sy - 2, 2.4, 0, Math.PI * 2); fx.fill();
+      return;
+    }
     fx.beginPath();
     fx.arc(sx, sy, 10 + pulse * 2, 0, Math.PI * 2);
     fx.fillStyle = 'rgba(255,120,205,0.16)';
@@ -2256,10 +2304,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (MAP_WITCH_IMG.complete && MAP_WITCH_IMG.naturalWidth) {
       const iw = MAP_WITCH_IMG.naturalWidth;
       const ih = MAP_WITCH_IMG.naturalHeight;
-      // จัดขนาดแบบ contain — พอดีทั้งกว้างและสูง รองรับทั้งภาพแนวตั้งและแนวนอน
-      // (0-1.gif เป็น 1920x1080 แนวนอน ถ้าคิดจากความสูงอย่างเดียวแบบเดิมจะกว้างล้นจอ)
-      const boxW = W * 0.88;
-      const boxH = Math.min(260, H * 0.42);
+      // จัดขนาดแบบ contain — ย่อเล็กลง 60% จากเดิม (× 0.4) ตามที่ผู้ใช้ขอ
+      const boxW = W * 0.88 * 0.4;
+      const boxH = Math.min(260, H * 0.42) * 0.4;
       const scale = Math.min(boxW / iw, boxH / ih);
       const dw = iw * scale;
       const dh = ih * scale;
