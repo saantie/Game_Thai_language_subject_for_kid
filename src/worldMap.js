@@ -350,7 +350,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const amp = Math.max(100, W * 0.6);
     const midX = W / 2 + amp;          // กึ่งกลางโลก
     worldW = W + amp * 2;              // บ้านสุดขอบ → cam.x ∈ [0, worldW - W]
-    const pad = H * 0.55;
+    // เผื่อพื้นที่เหนือบ้านสุดท้ายเพิ่ม — กำแพงปราสาท+บอสใหญ่ (ด่านสุดท้าย) ต้องมีที่ว่างพอ
+    // ไม่ให้ชิดขอบบนสุดของโลก (camY ต่ำสุด = 0 เลื่อนขึ้นเกินนี้ไม่ได้) — ไม่กระทบระยะห่างบ้านอื่น ๆ
+    const pad = H * 0.55 + 260;
     const spacing = Math.max(190, H * 0.42);
     nodeSpacing = spacing;
     worldH = pad + spacing * (N - 1) + pad;
@@ -808,6 +810,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     pressY = y;
     const w = toWorld(x, y);
 
+    // ด่านสุดท้าย: กดโดนตัวบอสใหญ่ = ยิงแสงทองใส่ (ไม่ใช่เดินไปหา)
+    if (tryFireStaff(w.wx, w.wy)) { pressed = false; return; }
+
     // กดโดนลูกสมุน → สั่งให้แม่มดน้อยไปตีตัวนั้น (ไม่ตีอัตโนมัติ)
     const m = minionAt(w.wx, w.wy);
     if (m) {
@@ -1042,6 +1047,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (camLockIdx >= 0 && nodes[camLockIdx]) {
       camTargetX = clampCamX(nodes[camLockIdx].wx - W / 2);
       camTargetY = clampCam(nodes[camLockIdx].wy - H / 2);
+    } else if (finalDuel && finalBoss) {
+      // ดวลบอส: วางแม่มดค่อนไปทางล่างของจอ (แทน 50%) เผื่อที่ด้านบนให้กำแพง+บอสไม่ชิดขอบ
+      // (ยังตามฮีโร่ปกติ ไม่ตรึงกล้อง — แค่เปลี่ยนสัดส่วนตำแหน่งฮีโร่ในจอ)
+      camTargetX = clampCamX(hero.wx - W / 2);
+      camTargetY = clampCam(hero.wy - H * 0.66);
     } else {
       camTargetX = clampCamX(hero.wx - W / 2);
       camTargetY = clampCam(hero.wy - H / 2);
@@ -1415,7 +1425,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (aimGold) {
       if (aimGold.dodge === undefined) aimGold.dodge = Math.random() < 0.55; // หลบ ~55% ของนัด
       if (aimGold.dodge) {
-        const away = fb.bx >= aimGold.x ? 1 : -1;
+        const away = fb.bx >= aimGold.x1 ? 1 : -1;
         fb.bx = Math.max(fb.wallL + 18, Math.min(fb.wallR - 18, fb.bx + away * 2.2));
         fb.pace = away;
       }
@@ -1427,34 +1437,29 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fb.bx += fb.pace * psp;
     }
 
-    // (3) แม่มดน้อยยิงแสงทองอัตโนมัติ (ล็อคเป้าที่ตำแหน่งบอสตอนเริ่มเล็ง)
-    if (hero.fainting === 0 && heroDuelCd <= 0) {
-      duelBeams.push({ x: fb.bx, gold: true, phase: 'aim', t: 0, hit: false });
-      heroDuelCd = 96;
-      hero.poseAtk = HERO_POSE_ATK_T;
-    }
+    // (3) แม่มดน้อยยิงแสงทอง — กดที่ตัวบอสเอง (ดู onPick) ไม่ใช่ auto ยิงตรงนี้
 
-    // (4) บอสยิงแสงเขียวลงมา (เล็งตำแหน่งแม่มด → แม่มดต้องหลบ)
+    // (4) บอสยิงแสงเขียวลงมา (เล็งตำแหน่งแม่มด ณ ขณะนั้น — เฉียงตามตำแหน่งจริง) → แม่มดต้องหลบ
     if (fb.beamCd > 0) fb.beamCd--;
     if (fb.beamCd <= 0 && hero.fainting === 0) {
-      duelBeams.push({ x: hero.wx, gold: false, phase: 'aim', t: 0, hit: false });
+      duelBeams.push({ x0: fb.bx, y0: fb.wallY - 40, x1: hero.wx, y1: hero.wy, gold: false, phase: 'aim', t: 0, hit: false });
       fb.beamCd = 130 + (Math.random() * 60 | 0);
     }
 
-    // (5) ประมวลผลลำแสง — aim (คนตรงข้ามหลบได้) → fire (โดน = -1)
+    // (5) ประมวลผลลำแสง — aim (คนตรงข้ามหลบได้) → fire (โดน = -1) · เก็บปลายทั้ง 2 จุด = ยิงเฉียงได้
     for (let i = duelBeams.length - 1; i >= 0; i--) {
       const b = duelBeams[i];
       b.t++;
       if (b.phase === 'aim') {
         if (b.t >= (b.gold ? 26 : 42)) { b.phase = 'fire'; b.t = 0; }
       } else {
-        // ยิงจริง — เช็คโดนครั้งเดียว
+        // ยิงจริง — เช็คโดนครั้งเดียว (เป้าหมายอยู่ที่ x1,y1 ซึ่งล็อกไว้ตอนเริ่มเล็ง)
         if (!b.hit) {
           b.hit = true;
           if (b.gold) {
-            if (Math.abs(fb.bx - b.x) < 26) {
+            if (Math.abs(fb.bx - b.x1) < 26) {
               fb.hp--;
-              particleFx.spawnCelebrationBurst(sX(b.x), sY(fb.wallY), { hueMin: 44, hueRange: 20 });
+              particleFx.spawnCelebrationBurst(sX(b.x1), sY(fb.wallY), { hueMin: 44, hueRange: 20 });
               audio.sfx('minion_cry');
               if (fb.hp <= 0) {
                 keyDelivered[n.matraId] = true;
@@ -1466,12 +1471,13 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
               }
             }
           } else {
-            // แสงเขียว: โดนแม่มดถ้าอยู่ในแนว x และไม่อมตะ
-            if (Math.abs(hero.wx - b.x) < 24 && hero.invuln <= 0 && hero.fainting === 0) {
+            // แสงเขียว: โดนแม่มดถ้ายังอยู่ใกล้จุดที่บอสเล็งไว้ (x1,y1) และไม่อมตะ
+            const hdx = hero.wx - b.x1, hdy = hero.wy - b.y1;
+            if (hdx * hdx + hdy * hdy < 24 * 24 && hero.invuln <= 0 && hero.fainting === 0) {
               hero.hp -= 1;
               hero.invuln = sk.invuln;
               hero.hurtT = 12;
-              hero.wx += (hero.wx > b.x ? 1 : -1) * 16;
+              hero.wx += (hero.wx > b.x1 ? 1 : -1) * 16;
               audio.sfx('bite'); audio.sfx('hero_cry');
               particleFx.spawnExplosion(sX(hero.wx), sY(hero.wy));
               if (hero.hp <= 0) {
@@ -1486,6 +1492,20 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         if (b.t >= 14) { duelBeams.splice(i, 1); }
       }
     }
+  }
+
+  // กดที่ตัวบอสใหญ่ (กล่องหยาบ ๆ รอบสไปรต์ — เผื่อเด็กแตะไม่แม่น) = ยิงแสงทอง
+  // ยิงเฉียงได้: เก็บตำแหน่งแม่มด ณ ตอนยิง (x0,y0) → เป้าที่ตำแหน่งบอสตอนนั้น (x1,y1, ล็อกไว้)
+  function tryFireStaff(wx, wy) {
+    if (!isFinalDuel() || !heroStaff || !finalBoss || heroDuelCd > 0 || hero.fainting > 0) return false;
+    const fb = finalBoss;
+    if (wx < fb.bx - 90 || wx > fb.bx + 90 || wy < fb.wallY - 110 || wy > fb.wallY + 10) return false;
+    duelBeams.push({ x0: hero.wx, y0: hero.wy, x1: fb.bx, y1: fb.wallY, gold: true, phase: 'aim', t: 0, hit: false });
+    heroDuelCd = 46;
+    hero.poseAtk = HERO_POSE_ATK_T;
+    hero.facing = fb.bx < hero.wx ? -1 : 1;
+    audio.sfx('swing');
+    return true;
   }
 
   function updateKey() {
@@ -2242,21 +2262,18 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.fillStyle = 'rgba(20,10,30,0.55)'; fx.fillRect(bhpx, wy - 26, bw2, 7);
     fx.fillStyle = '#e04b6b'; fx.fillRect(bhpx, wy - 26, bw2 * Math.max(0, fb.hp / fb.maxHp), 7);
 
-    // ลำแสง
+    // ลำแสง — เก็บจุดเริ่ม/จุดหมายจริงไว้ที่ตัว beam (x0,y0)→(x1,y1) ยิงเฉียงได้ตามตำแหน่งจริง
     for (let i = 0; i < duelBeams.length; i++) {
       const b = duelBeams[i];
-      const bxs = b.x - cx;
-      const y0 = wy - 40; // จุดบนกำแพงที่บอสยืน (ปลายลำแสงทั้งสองแบบ)
-      const y1 = hero.wy - cy - HERO_R;
-      const fromY = b.gold ? y1 : y0;
-      const toY = b.gold ? y0 : y1;
+      const fromX = b.x0 - cx, fromYp = b.y0 - cy;
+      const toX = b.x1 - cx, toYp = b.y1 - cy;
       if (b.phase === 'aim') {
         const p = b.t / (b.gold ? 26 : 42);
         fx.strokeStyle = b.gold ? 'rgba(255,224,130,' + (0.15 + p * 0.35).toFixed(2) + ')'
                                 : 'rgba(120,240,120,' + (0.15 + p * 0.4).toFixed(2) + ')';
         fx.lineWidth = 2 + p * 2;
         fx.setLineDash([6, 8]);
-        fx.beginPath(); fx.moveTo(bxs, fromY); fx.lineTo(bxs, toY); fx.stroke();
+        fx.beginPath(); fx.moveTo(fromX, fromYp); fx.lineTo(toX, toYp); fx.stroke();
         fx.setLineDash([]);
       } else {
         const a = 1 - b.t / 14;
@@ -2264,7 +2281,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
                                 : 'rgba(150,255,150,' + a.toFixed(2) + ')';
         fx.lineWidth = 9 * a + 2;
         fx.lineCap = 'round';
-        fx.beginPath(); fx.moveTo(bxs, fromY); fx.lineTo(bxs, toY); fx.stroke();
+        fx.beginPath(); fx.moveTo(fromX, fromYp); fx.lineTo(toX, toYp); fx.stroke();
       }
     }
   }
