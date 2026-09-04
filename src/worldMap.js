@@ -274,6 +274,12 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   const keyDelivered = Object.create(null); // matraId -> true (พากุญแจกลับมาเปิดบ้านแล้ว)
   const bossDone = Object.create(null);     // matraId -> true (ฆ่าบอสรอบนี้แล้ว)
   let heroKey = -1;                          // idx บ้านที่แม่มดถือกุญแจอยู่ (-1 = ไม่ถือ)
+  // ---- ด่านสุดท้าย: ดวลบอสใหญ่บนกำแพงปราสาท ----
+  const FINAL_IDX = MATRA.length - 1;
+  let heroStaff = false;      // เก็บไม้เท้ากายสิทธิ์คริสตอลแล้ว
+  let finalBoss = null;       // { hp, maxHp, bx, wallY, pace, paceTgt, beamCd, aimT }
+  let duelBeams = [];         // { x, gold, phase:'aim'|'fire', t, hit }
+  let heroDuelCd = 0;         // cooldown ยิงแสงทองอัตโนมัติ
   let diff = difficultyFor(0, 30); // ความยากของคริสตอลเป้าหมายปัจจุบัน (อัปเดตใน updateMinions)
   // บ้านเป้าหมาย "ปิดผนึก" จนกว่าจะพากุญแจ (ที่อยู่เหนือบ้าน) กลับมาเปิด — เก็บ per matraId ทั้ง session
   const guardKills = Object.create(null);    // matraId -> จำนวนลูกสมุนที่ฆ่า (คุมจังหวะบอสมา)
@@ -658,6 +664,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     hero.atk = null;
     hero.jumpT = 0; hero.broomT = 0; hero.beamCd = 0; hero.beamFx = null;
     heroKey = -1; // เข้าเล่นมาตราแล้วกลับมา = ไม่ถือกุญแจ (keyDelivered ยังคงอยู่ทั้ง session)
+    heroStaff = false; finalBoss = null; duelBeams.length = 0; heroDuelCd = 0; // ดวลบอสใหญ่ (ด่านสุดท้าย)
     hitFx.length = 0;
     pendingSpin = null;
     helpers.length = 0;
@@ -1026,8 +1033,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     // ---- เก็บพลอยเติมหัวใจ ----
     updateGems();
 
-    // ---- กุญแจบ้าน: เดินทับ = ถือ · พากลับไปที่บ้าน = เปิด ----
-    updateKey();
+    // ---- ด่านสุดท้าย = ดวลบอสใหญ่ · ด่านอื่น = กลไกกุญแจบ้าน ----
+    const finalDuel = isFinalDuel();
+    if (finalDuel) updateFinalDuel();
+    else updateKey();
 
     // ---- กล้อง (แพนทั้งแนวตั้ง + แนวนอน) ----
     if (camLockIdx >= 0 && nodes[camLockIdx]) {
@@ -1057,7 +1066,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       }
     }
 
-    updateMinions();
+    if (!finalDuel) updateMinions(); // ด่านสุดท้ายไม่มีสายลูกสมุน — ดวลบอสอย่างเดียว
     updateHelpers();
     updateReturnAnim();
     particleFx.update();
@@ -1366,6 +1375,119 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   }
 
   // กุญแจบ้าน — เดินทับ (เหนือบ้าน) = ถือ · พากลับมาที่บ้าน = เปิดผนึก แล้ว nearestUnlockedUnderHero เข้าเอง
+  // ---------- ด่านสุดท้าย: ดวลบอสใหญ่ ----------
+  // active เมื่อ focus = บ้านสุดท้าย · ยังไม่ล้มบอส (keyDelivered = ล้มบอสใหญ่แล้ว → เข้าปราสาทได้)
+  function isFinalDuel() {
+    const n = nodes[FINAL_IDX];
+    return !REDUCED_MOTION && n && unlocked[n.matraId] && !keyDelivered[n.matraId] && focusIdx === FINAL_IDX;
+  }
+  function staffPos() { return keyPos(FINAL_IDX); }
+
+  function updateFinalDuel() {
+    const n = nodes[FINAL_IDX];
+    const wallY = n.wy - nodeSpacing * 1.05;
+    const wallL = spineXAt(wallY) - W * 0.42;
+    const wallR = spineXAt(wallY) + W * 0.42;
+
+    if (heroDuelCd > 0) heroDuelCd--;
+
+    // (1) ยังไม่มีไม้เท้า → เดินไปเก็บ (ลอยเหนือบ้าน) → บอสใหญ่ปรากฏ
+    if (!heroStaff) {
+      const sp = staffPos();
+      if (hero.fainting === 0) {
+        const dx = hero.wx - sp.wx, dy = hero.wy - sp.wy;
+        if (dx * dx + dy * dy <= (GEM_PICK_R + 10) * (GEM_PICK_R + 10)) {
+          heroStaff = true;
+          finalBoss = { hp: 8, maxHp: 8, bx: (wallL + wallR) / 2, wallY, wallL, wallR, pace: 1, paceTgt: wallR - 40, beamCd: 90, aimT: 0 };
+          audio.sfx('ting');
+          particleFx.spawnCelebrationBurst(sX(sp.wx), sY(sp.wy), { hueMin: 44, hueRange: 22 });
+          mapSay('ได้ไม้เท้ากายสิทธิ์คริสตอล! สู้บอสใหญ่บนกำแพง');
+        }
+      }
+      return;
+    }
+    if (!finalBoss) return;
+    const fb = finalBoss;
+
+    // (2) บอสเดินไปมาบนกำแพง · ถ้ามีแสงทองกำลังเล็ง → หลบ (บางครั้ง) แทนเดินปกติ
+    const psp = 1.1;
+    const aimGold = duelBeams.find((b) => b.gold && b.phase === 'aim');
+    if (aimGold) {
+      if (aimGold.dodge === undefined) aimGold.dodge = Math.random() < 0.55; // หลบ ~55% ของนัด
+      if (aimGold.dodge) {
+        const away = fb.bx >= aimGold.x ? 1 : -1;
+        fb.bx = Math.max(fb.wallL + 18, Math.min(fb.wallR - 18, fb.bx + away * 2.2));
+        fb.pace = away;
+      }
+    } else {
+      if (Math.abs(fb.bx - fb.paceTgt) < psp + 0.5) {
+        fb.paceTgt = fb.wallL + 20 + Math.random() * (fb.wallR - fb.wallL - 40);
+      }
+      fb.pace = fb.bx < fb.paceTgt ? 1 : -1;
+      fb.bx += fb.pace * psp;
+    }
+
+    // (3) แม่มดน้อยยิงแสงทองอัตโนมัติ (ล็อคเป้าที่ตำแหน่งบอสตอนเริ่มเล็ง)
+    if (hero.fainting === 0 && heroDuelCd <= 0) {
+      duelBeams.push({ x: fb.bx, gold: true, phase: 'aim', t: 0, hit: false });
+      heroDuelCd = 96;
+      hero.poseAtk = HERO_POSE_ATK_T;
+    }
+
+    // (4) บอสยิงแสงเขียวลงมา (เล็งตำแหน่งแม่มด → แม่มดต้องหลบ)
+    if (fb.beamCd > 0) fb.beamCd--;
+    if (fb.beamCd <= 0 && hero.fainting === 0) {
+      duelBeams.push({ x: hero.wx, gold: false, phase: 'aim', t: 0, hit: false });
+      fb.beamCd = 130 + (Math.random() * 60 | 0);
+    }
+
+    // (5) ประมวลผลลำแสง — aim (คนตรงข้ามหลบได้) → fire (โดน = -1)
+    for (let i = duelBeams.length - 1; i >= 0; i--) {
+      const b = duelBeams[i];
+      b.t++;
+      if (b.phase === 'aim') {
+        if (b.t >= (b.gold ? 26 : 42)) { b.phase = 'fire'; b.t = 0; }
+      } else {
+        // ยิงจริง — เช็คโดนครั้งเดียว
+        if (!b.hit) {
+          b.hit = true;
+          if (b.gold) {
+            if (Math.abs(fb.bx - b.x) < 26) {
+              fb.hp--;
+              particleFx.spawnCelebrationBurst(sX(b.x), sY(fb.wallY), { hueMin: 44, hueRange: 20 });
+              audio.sfx('minion_cry');
+              if (fb.hp <= 0) {
+                keyDelivered[n.matraId] = true;
+                bossDone[n.matraId] = true;
+                finalBoss = null;
+                particleFx.spawnCelebrationBurst(sX(n.wx), sY(n.wy), { hueMin: 44, hueRange: 30 });
+                audio.sfx('ting');
+                mapSay('ล้มบอสใหญ่ได้แล้ว! เข้าปราสาทเลย');
+              }
+            }
+          } else {
+            // แสงเขียว: โดนแม่มดถ้าอยู่ในแนว x และไม่อมตะ
+            if (Math.abs(hero.wx - b.x) < 24 && hero.invuln <= 0 && hero.fainting === 0) {
+              hero.hp -= 1;
+              hero.invuln = sk.invuln;
+              hero.hurtT = 12;
+              hero.wx += (hero.wx > b.x ? 1 : -1) * 16;
+              audio.sfx('bite'); audio.sfx('hero_cry');
+              particleFx.spawnExplosion(sX(hero.wx), sY(hero.wy));
+              if (hero.hp <= 0) {
+                hero.hp = 0; hero.fainting = FAINT_T; hero.hurtT = 0;
+                addPoints(-100);
+                heroStaff = false; finalBoss = null; duelBeams.length = 0;
+                mapSay('ล้มแล้ว! ต้องไปเอาไม้เท้าใหม่');
+              }
+            }
+          }
+        }
+        if (b.t >= 14) { duelBeams.splice(i, 1); }
+      }
+    }
+  }
+
   function updateKey() {
     const i = focusIdx;
     const n = nodes[i];
@@ -1724,8 +1846,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       drawGem(gsx, gsy, g.bob, now, g.coin);
     }
 
-    // กุญแจบ้านเป้าหมาย — ที่จุดเดิม (ยังไม่เก็บ) หรือลอยเหนือหัวแม่มด (ถืออยู่)
-    {
+    // ด่านสุดท้าย = กำแพงปราสาท + บอสใหญ่ · ด่านอื่น = กุญแจบ้าน
+    if (isFinalDuel()) {
+      drawFinalDuel(cx, cy, now);
+    } else {
       const fi = focusIdx;
       const fn = nodes[fi];
       if (fn && !REDUCED_MOTION && unlocked[fn.matraId] && !keyDelivered[fn.matraId]) {
@@ -1867,7 +1991,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.lineWidth = 3;
       fx.stroke();
       let msg;
-      if (heroKey === i) msg = '🔑 พากุญแจกลับบ้าน!';
+      if (i === FINAL_IDX) msg = heroStaff ? '⚔️ สู้บอสใหญ่บนกำแพง!' : '💎 เก็บไม้เท้ากายสิทธิ์คริสตอล';
+      else if (heroKey === i) msg = '🔑 พากุญแจกลับบ้าน!';
       else if (cursed) msg = '👹 ล้มบอสทำลายคำสาป!';
       else msg = '🔑 เก็บกุญแจเหนือบ้าน';
       fx.fillStyle = cursed ? '#ffc2d2' : '#ffe6a6';
@@ -1952,6 +2077,21 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     }
     fx.restore();
 
+    // ไม้เท้ากายสิทธิ์คริสตอล (ด่านสุดท้าย ถือแล้ว) — อยู่ในมือ ยอดคริสตัลเรืองแสง
+    if (heroStaff) {
+      const stx = sx + hero.facing * 9;
+      const baseY = sy + bob;           // ราวมือ
+      const topY = sy - HERO_R * 1.3 + bob;
+      fx.strokeStyle = '#6b4a2f'; fx.lineWidth = 3.5; fx.lineCap = 'round';
+      fx.beginPath(); fx.moveTo(stx, baseY); fx.lineTo(stx + hero.facing * 2, topY); fx.stroke();
+      const gx = stx + hero.facing * 2, gy = topY - 7;
+      fx.fillStyle = 'rgba(160,235,255,' + (0.28 + 0.22 * Math.sin(now * 0.008)).toFixed(2) + ')';
+      fx.beginPath(); fx.arc(gx, gy, 10, 0, Math.PI * 2); fx.fill();
+      fx.fillStyle = '#7fe6ff';
+      fx.beginPath(); fx.moveTo(gx, gy - 7); fx.lineTo(gx - 4.5, gy); fx.lineTo(gx, gy + 5.5); fx.lineTo(gx + 4.5, gy); fx.closePath(); fx.fill();
+      fx.strokeStyle = '#2a8aa8'; fx.lineWidth = 1.2; fx.stroke();
+    }
+
     // วูบแดงตอนโดนกัด
     if (hero.hurtT > 0) {
       fx.fillStyle = 'rgba(255,60,60,' + (0.32 * (hero.hurtT / 12)).toFixed(2) + ')';
@@ -2034,6 +2174,98 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.beginPath();
       fx.moveTo(x, y - 12); fx.lineTo(x - 5, y - 4); fx.lineTo(x + 5, y - 4);
       fx.closePath(); fx.fill();
+    }
+  }
+
+  // ---------- ด่านสุดท้าย: กำแพงปราสาท + บอสใหญ่ + ลำแสงทอง/เขียว ----------
+  function drawFinalDuel(cx, cy, now) {
+    const n = nodes[FINAL_IDX];
+    // ไม้เท้ากายสิทธิ์คริสตอล (ยังไม่เก็บ) — ลอยเหนือบ้าน
+    if (!heroStaff) {
+      const sp = staffPos();
+      const x = sp.wx - cx, y = sp.wy - cy - Math.sin(now * 0.004) * 4;
+      const pulse = 0.3 + 0.3 * Math.sin(now * 0.006);
+      fx.fillStyle = 'rgba(160,230,255,' + pulse.toFixed(2) + ')';
+      fx.beginPath(); fx.arc(x, y, 20, 0, Math.PI * 2); fx.fill();
+      fx.strokeStyle = '#6b4a2f'; fx.lineWidth = 4;
+      fx.beginPath(); fx.moveTo(x, y + 14); fx.lineTo(x, y - 8); fx.stroke();
+      fx.fillStyle = '#7fe6ff';
+      fx.beginPath(); fx.moveTo(x, y - 16); fx.lineTo(x - 6, y - 7); fx.lineTo(x, y - 2); fx.lineTo(x + 6, y - 7); fx.closePath(); fx.fill();
+      fx.strokeStyle = '#2a8aa8'; fx.lineWidth = 1.4; fx.stroke();
+      return;
+    }
+    if (!finalBoss) return;
+    const fb = finalBoss;
+    const wy = fb.wallY - cy;
+    const wl = fb.wallL - cx, wr = fb.wallR - cx;
+
+    // กำแพงปราสาท (หิน + ใบเสมา) — สูงพอให้บอสยืนเด่น
+    const WH = 90;
+    fx.fillStyle = '#8b8378';
+    fx.fillRect(wl, wy, wr - wl, WH);
+    fx.fillStyle = '#736b60';
+    fx.fillRect(wl, wy + WH - 14, wr - wl, 14);
+    for (let x = wl; x < wr; x += 30) {
+      fx.fillStyle = '#948b7e';
+      fx.fillRect(x, wy - 12, 18, 12);
+    }
+    // เส้นอิฐ
+    fx.strokeStyle = 'rgba(55,50,42,0.4)'; fx.lineWidth = 1.4;
+    for (let r = 0; r < 4; r++) {
+      const ly = wy + 6 + r * 22;
+      fx.beginPath(); fx.moveTo(wl, ly); fx.lineTo(wr, ly); fx.stroke();
+      for (let x = wl + (r % 2 ? 15 : 0); x < wr; x += 30) { fx.beginPath(); fx.moveTo(x, ly); fx.lineTo(x, ly + 22); fx.stroke(); }
+    }
+
+    // บอสใหญ่ยืนบนกำแพง (ใช้ภาพแม่มดใจร้าย ขยายใหญ่)
+    const bx = fb.bx - cx;
+    const bh = 92;
+    if (MAP_WITCH_IMG.complete && MAP_WITCH_IMG.naturalWidth) {
+      const bw = bh * (MAP_WITCH_IMG.naturalWidth / MAP_WITCH_IMG.naturalHeight);
+      fx.save();
+      fx.translate(bx, wy - 4);
+      fx.scale(fb.pace < 0 ? -1 : 1, 1);
+      fx.drawImage(MAP_WITCH_IMG, -bw / 2, -bh, bw, bh);
+      fx.restore();
+    } else {
+      fx.fillStyle = '#3a1f5e';
+      fx.beginPath(); fx.arc(bx, wy - 34, 22, 0, Math.PI * 2); fx.fill();
+    }
+    // ไม้เท้าบอส (ยิงแสงเขียว)
+    fx.strokeStyle = '#4a2f1f'; fx.lineWidth = 4;
+    fx.beginPath(); fx.moveTo(bx + 16, wy - 6); fx.lineTo(bx + 26, wy - 40); fx.stroke();
+    fx.fillStyle = '#66e06a';
+    fx.beginPath(); fx.arc(bx + 26, wy - 44, 5, 0, Math.PI * 2); fx.fill();
+
+    // แถบพลังบอส
+    const bw2 = 90, bhpx = wl + (wr - wl) / 2 - bw2 / 2;
+    fx.fillStyle = 'rgba(20,10,30,0.55)'; fx.fillRect(bhpx, wy - 26, bw2, 7);
+    fx.fillStyle = '#e04b6b'; fx.fillRect(bhpx, wy - 26, bw2 * Math.max(0, fb.hp / fb.maxHp), 7);
+
+    // ลำแสง
+    for (let i = 0; i < duelBeams.length; i++) {
+      const b = duelBeams[i];
+      const bxs = b.x - cx;
+      const y0 = wy - 40; // จุดบนกำแพงที่บอสยืน (ปลายลำแสงทั้งสองแบบ)
+      const y1 = hero.wy - cy - HERO_R;
+      const fromY = b.gold ? y1 : y0;
+      const toY = b.gold ? y0 : y1;
+      if (b.phase === 'aim') {
+        const p = b.t / (b.gold ? 26 : 42);
+        fx.strokeStyle = b.gold ? 'rgba(255,224,130,' + (0.15 + p * 0.35).toFixed(2) + ')'
+                                : 'rgba(120,240,120,' + (0.15 + p * 0.4).toFixed(2) + ')';
+        fx.lineWidth = 2 + p * 2;
+        fx.setLineDash([6, 8]);
+        fx.beginPath(); fx.moveTo(bxs, fromY); fx.lineTo(bxs, toY); fx.stroke();
+        fx.setLineDash([]);
+      } else {
+        const a = 1 - b.t / 14;
+        fx.strokeStyle = b.gold ? 'rgba(255,236,150,' + a.toFixed(2) + ')'
+                                : 'rgba(150,255,150,' + a.toFixed(2) + ')';
+        fx.lineWidth = 9 * a + 2;
+        fx.lineCap = 'round';
+        fx.beginPath(); fx.moveTo(bxs, fromY); fx.lineTo(bxs, toY); fx.stroke();
+      }
     }
   }
 
