@@ -1411,7 +1411,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
           finalBoss = { hp: 8, maxHp: 8, bx: (wallL + wallR) / 2, wallY, wallL, wallR, pace: 1, paceTgt: wallR - 40, beamCd: 90, aimT: 0 };
           audio.sfx('ting');
           particleFx.spawnCelebrationBurst(sX(sp.wx), sY(sp.wy), { hueMin: 44, hueRange: 22 });
-          mapSay('ได้ไม้เท้ากายสิทธิ์คริสตอล! สู้บอสใหญ่บนกำแพง');
+          mapSay('ได้ไม้เท้ากายสิทธิ์คริสตอล! สู้บอสใหญ่เลย');
         }
       }
       return;
@@ -2011,7 +2011,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.lineWidth = 3;
       fx.stroke();
       let msg;
-      if (i === FINAL_IDX) msg = heroStaff ? '⚔️ สู้บอสใหญ่บนกำแพง!' : '💎 เก็บไม้เท้ากายสิทธิ์คริสตอล';
+      if (i === FINAL_IDX) msg = heroStaff ? '⚔️ สู้บอสใหญ่!' : '💎 เก็บไม้เท้ากายสิทธิ์คริสตอล';
       else if (heroKey === i) msg = '🔑 พากุญแจกลับบ้าน!';
       else if (cursed) msg = '👹 ล้มบอสทำลายคำสาป!';
       else msg = '🔑 เก็บกุญแจเหนือบ้าน';
@@ -2219,25 +2219,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const wy = fb.wallY - cy;
     const wl = fb.wallL - cx, wr = fb.wallR - cx;
 
-    // กำแพงปราสาท (หิน + ใบเสมา) — สูงพอให้บอสยืนเด่น
-    const WH = 90;
-    fx.fillStyle = '#8b8378';
-    fx.fillRect(wl, wy, wr - wl, WH);
-    fx.fillStyle = '#736b60';
-    fx.fillRect(wl, wy + WH - 14, wr - wl, 14);
-    for (let x = wl; x < wr; x += 30) {
-      fx.fillStyle = '#948b7e';
-      fx.fillRect(x, wy - 12, 18, 12);
-    }
-    // เส้นอิฐ
-    fx.strokeStyle = 'rgba(55,50,42,0.4)'; fx.lineWidth = 1.4;
-    for (let r = 0; r < 4; r++) {
-      const ly = wy + 6 + r * 22;
-      fx.beginPath(); fx.moveTo(wl, ly); fx.lineTo(wr, ly); fx.stroke();
-      for (let x = wl + (r % 2 ? 15 : 0); x < wr; x += 30) { fx.beginPath(); fx.moveTo(x, ly); fx.lineTo(x, ly + 22); fx.stroke(); }
-    }
+    // (v206.1: เอากำแพงปราสาทออกตามคำขอผู้ใช้ — เหลือแค่บอสลอยอยู่ตำแหน่งเดิม wl/wr ยังใช้คุมระยะเดินและแถบพลังบอส)
 
-    // บอสใหญ่ยืนบนกำแพง (ใช้ภาพแม่มดใจร้าย ขยายใหญ่)
+    // บอสใหญ่ลอยอยู่กลางอากาศ (ใช้ภาพแม่มดใจร้าย ขยายใหญ่)
     const bx = fb.bx - cx;
     const bh = 92;
     if (MAP_WITCH_IMG.complete && MAP_WITCH_IMG.naturalWidth) {
