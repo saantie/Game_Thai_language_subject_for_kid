@@ -241,7 +241,14 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     hp: sk.maxHp, invuln: 0, hurtT: 0, fainting: 0,
     atk: null, // ลูกสมุนที่เด็ก "กดสั่งตี" — แม่มดน้อยไม่ตีอัตโนมัติ ตีเฉพาะตัวนี้
     poseAtk: 0, // เฟรมที่เหลือของ "ท่าต่อสู้" (ยาวกว่ารอยไม้เหวี่ยง ให้ทันเห็นท่า)
+    jumpT: 0,   // สกิล 🦘 — เฟรมพุ่งเร็วช่วงต้นของการเคลื่อน
+    broomT: 0,  // สกิล 🧹 — เฟรมลอย (ลูกสมุนพื้นกัดไม่โดน)
+    beamCd: 0,  // สกิล ✨ — cooldown ยิงแสง
+    beamFx: null, // { tx, ty, t } เส้นแสงยิง
   };
+  let helpers = [];        // สกิล 🧚 — ผู้ช่วยสู้อัตโนมัติ (เตรียมระบบ, GIF ทีหลัง)
+  let hitFx = [];          // { wx, wy, t } วงรีแสงทองขยายออก ตอนตีโดน (แทนดาวกระจาย)
+  let pendingSpin = null;  // { r, wide } — AoE เหวี่ยงหมุน ประมวลผลหลังจบ minion loop (กัน splice ซ้อน)
   let enterLatch = false; // true = ตัดสินใจเข้าโหนดแล้ว รอ stop() (กันเข้าซ้ำ tap+เดินถึง)
 
   let gems = [];          // { wx, wy, taken, respawn, bob } — เดินทับ = +1 หัวใจ
@@ -637,7 +644,12 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     hero.hurtT = 0;
     hero.fainting = 0;
     hero.atk = null;
+    hero.jumpT = 0; hero.broomT = 0; hero.beamCd = 0; hero.beamFx = null;
     heroKey = -1; // เข้าเล่นมาตราแล้วกลับมา = ไม่ถือกุญแจ (keyDelivered ยังคงอยู่ทั้ง session)
+    hitFx.length = 0;
+    pendingSpin = null;
+    helpers.length = 0;
+    syncHelpers(); // สกิล 🧚 — สร้างผู้ช่วยตามจำนวนที่อัปไว้
     for (let i = 0; i < gems.length; i++) { gems[i].taken = false; gems[i].respawn = 0; }
 
     cam.x = clampCamX(node.wx - W / 2);
@@ -780,6 +792,26 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     // กดโดนลูกสมุน → สั่งให้แม่มดน้อยไปตีตัวนั้น (ไม่ตีอัตโนมัติ)
     const m = minionAt(w.wx, w.wy);
     if (m) {
+      const dm = Math.hypot(m.wx - hero.wx, m.wy - hero.wy);
+      // สกิล ✨ — ลูกสมุนไกลเกินเอื้อม แต่ในระยะยิงแสง → ยิงใส่ทันที ไม่ต้องเดินไปหา
+      if (sk.beam > 0 && !m.isBoss && dm > ATTACK_R && dm <= sk.beam && hero.beamCd <= 0 && hero.fainting === 0) {
+        const d = dm || 1;
+        m.hp--;
+        m.stagger = MINION_STAGGER;
+        m.active = false;
+        m.vx = ((m.wx - hero.wx) / d) * KNOCK * 0.5;
+        m.vy = ((m.wy - hero.wy) / d) * KNOCK * 0.5;
+        hero.beamCd = 40;
+        hero.beamFx = { tx: m.wx, ty: m.wy, t: 0 };
+        hero.facing = m.wx < hero.wx ? -1 : 1;
+        hero.poseAtk = HERO_POSE_ATK_T;
+        audio.sfx('swing');
+        audio.sfx('minion_cry');
+        spawnHitFx(m.wx, m.wy);
+        if (m.hp <= 0) killMinionAt(m);
+        pressNodeIdx = -1;
+        return;
+      }
       hero.atk = m;
       pressNodeIdx = -1;
       clampTarget(m.wx, m.wy);
@@ -791,6 +823,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     // กดพื้น/คริสตอล → เดิน (+ เลิกสั่งตี)
     hero.atk = null;
     pressNodeIdx = nodeAt(w.wx, w.wy);
+    // สกิล 🦘 — แตะพื้นไกล ๆ = พุ่งกระโดดเร็วช่วงต้น
+    if (sk.jump > 0 && Math.hypot(w.wx - hero.wx, w.wy - hero.wy) > 130) hero.jumpT = 12;
     clampTarget(w.wx, w.wy);
     hero.moving = true;
     camLockIdx = -1; // แตะพื้นครั้งแรก → กล้องเลิกล็อกโหนด ตามฮีโร่แทน
@@ -895,6 +929,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (hero.invuln > 0) hero.invuln--;
     if (hero.hurtT > 0) hero.hurtT--;
     if (hero.poseAtk > 0) hero.poseAtk--;
+    if (hero.jumpT > 0) hero.jumpT--;
+    if (hero.broomT > 0) hero.broomT--;
+    if (hero.beamCd > 0) hero.beamCd--;
+    if (hero.beamFx && ++hero.beamFx.t > 10) hero.beamFx = null;
 
     // ---- สลบ (พลังหมด) ----
     if (hero.fainting > 0) {
@@ -932,7 +970,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         hero.wy = hero.ty;
         hero.moving = false;
       } else {
-        const step = Math.min(d, sk.heroSpeed); // สกิล 👟
+        // สกิล 👟 ความเร็วปกติ · สกิล 🦘 พุ่งเร็วช่วงต้น (jumpT)
+        const spd = hero.jumpT > 0 ? sk.heroSpeed * sk.jump : sk.heroSpeed;
+        const step = Math.min(d, spd);
         hero.wx += (dx / d) * step;
         hero.wy += (dy / d) * step;
         if (Math.abs(dx) > 0.8) hero.facing = dx < 0 ? -1 : 1;
@@ -1006,6 +1046,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     }
 
     updateMinions();
+    updateHelpers();
     updateReturnAnim();
     particleFx.update();
   }
@@ -1106,7 +1147,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         m.wx += (dhx / d) * msp;
         m.wy += (dhy / d) * msp;
         m.facing = dhx < 0 ? -1 : 1;
-        if (distHero < BITE_R && m.biteCd <= 0 && hero.invuln <= 0 && hero.fainting === 0) {
+        // สกิล 🧹 — แม่มดลอยไม้กวาดอยู่ → ลูกสมุน "พื้น" กัดไม่ถึง (ตัวบินยังกัดได้)
+        const canBite = !(hero.broomT > 0 && !m.kind.fly);
+        if (canBite && distHero < BITE_R && m.biteCd <= 0 && hero.invuln <= 0 && hero.fainting === 0) {
           biteHero(m);
         }
       } else if (m.isBoss) {
@@ -1143,7 +1186,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         hero.swingT = SWING_T;
         hero.poseAtk = HERO_POSE_ATK_T;
         hero.facing = dhx < 0 ? -1 : 1;
-        particleFx.spawnExplosion(sX(m.wx), sY(m.wy));
+        spawnHitFx(m.wx, m.wy); // เอฟเฟกต์ตี — วงรีแสงทอง
+        // สกิล 🌀/💫 — เหวี่ยงทีเดียวโดนลูกสมุนรอบตัว (ประมวลผลหลังจบ loop กัน splice ซ้อน)
+        if ((sk.spin || sk.spinWide) && !m.isBoss) {
+          pendingSpin = { r: Math.max(sk.spin, sk.spinWide), wide: sk.spinWide > 0 };
+        }
         audio.sfx('swing');
         audio.sfx('minion_cry'); // เสียงร้องลูกสมุนโดนตี
         if (m.isBoss && m.hp > 0) mapSay('ตีบอสอีก ' + m.hp + ' ครั้ง!');
@@ -1170,6 +1217,12 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         }
       }
     }
+
+    // สกิล 🌀/💫 — AoE เหวี่ยงหมุน หลัง loop จบ (backward loop ภายใน = splice ปลอดภัย)
+    if (pendingSpin) {
+      doSpinHit(pendingSpin.r, pendingSpin.wide);
+      pendingSpin = null;
+    }
   }
 
   function biteHero(m) {
@@ -1187,6 +1240,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     audio.sfx('bite');
     audio.sfx('hero_cry'); // เสียงร้องแม่มดน้อยโดนกัด
     particleFx.spawnExplosion(sX(hero.wx), sY(hero.wy));
+    // สกิล 🧹 — โดนกัดแล้วขึ้นไม้กวาดลอยหนีชั่วครู่ (ลูกสมุนพื้นกัดไม่โดน)
+    if (sk.broom > 0 && hero.hp > 0) {
+      hero.broomT = sk.broom;
+      mapSay('ขึ้นไม้กวาด! ลอยหนีลูกสมุน');
+    }
     if (hero.hp <= 0) {
       hero.hp = 0;
       hero.fainting = FAINT_T;
@@ -1290,6 +1348,91 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         audio.sfx('gem');
         particleFx.spawnCelebrationBurst(sX(kp.wx), sY(kp.wy), { hueMin: 44, hueRange: 22 });
         mapSay('ได้กุญแจแล้ว! รีบพากลับไปเปิดบ้าน');
+      }
+    }
+  }
+
+  // ---------- สกิลต่อสู้ 5–10 ----------
+  // เอฟเฟกต์ตี — วงรีแสงทองแนวนอนขยายออก+จาง (แทนดาวกระจายเดิม) เก็บพิกัด world
+  function spawnHitFx(wx, wy) {
+    hitFx.push({ wx, wy, t: 0 });
+    if (hitFx.length > 28) hitFx.shift();
+  }
+
+  // ลูกสมุน m ตายจาก AoE/beam/ผู้ช่วย (ไม่ใช่จากตีตรง) — แต้ม/นับ/เอฟเฟกต์/ถอดออกจาก array
+  function killMinionAt(m) {
+    const idx = minions.indexOf(m);
+    if (idx < 0) return;
+    const gn = nodes[m.guardIdx];
+    if (gn) {
+      addPoints(m.isBoss ? BOSS_PTS : MINION_PTS);
+      guardKills[gn.matraId] = (guardKills[gn.matraId] || 0) + 1;
+      if (m.isBoss) { bossDone[gn.matraId] = true; mapSay('ล้มบอสแล้ว! รีบไปเก็บกุญแจ'); }
+      particleFx.spawnCelebrationBurst(sX(m.wx), sY(m.wy), { hueMin: m.isBoss ? 280 : 90, hueRange: 40 });
+    }
+    if (hero.atk === m) hero.atk = null;
+    minionPool.push(m);
+    minions.splice(idx, 1);
+  }
+
+  // AoE เหวี่ยงหมุน — เรียกหลังจบ minion loop (backward, splice ปลอดภัย)
+  function doSpinHit(r, wide) {
+    const r2 = r * r;
+    let hitAny = false;
+    for (let i = minions.length - 1; i >= 0; i--) {
+      const m = minions[i];
+      if (m === hero.atk || m.isBoss || m.stagger > 0) continue; // ตัวหลักโดนแล้ว · บอสต้องตีตรง
+      const dx = m.wx - hero.wx, dy = m.wy - hero.wy;
+      if (dx * dx + dy * dy > r2) continue;
+      const d = Math.hypot(dx, dy) || 1;
+      const k = wide ? KNOCK * 1.5 : KNOCK * 0.7;
+      m.hp--;
+      m.stagger = MINION_STAGGER;
+      m.active = false;
+      m.vx = (dx / d) * k;
+      m.vy = (dy / d) * k;
+      m.spinV = 0.3;
+      spawnHitFx(m.wx, m.wy);
+      hitAny = true;
+      if (m.hp <= 0) killMinionAt(m);
+    }
+    if (hitAny) audio.sfx('minion_cry');
+  }
+
+  // ผู้ช่วย — จำนวนตาม sk.helpers, โคจรรอบแม่มด + ยิงศัตรูใกล้สุดเป็นระยะ (auto)
+  function syncHelpers() {
+    const want = sk.helpers | 0;
+    while (helpers.length < want) helpers.push({ wx: hero.wx, wy: hero.wy, a: Math.random() * 6.28, atkCd: 30, zap: null });
+    while (helpers.length > want) helpers.pop();
+  }
+  function updateHelpers() {
+    for (let h = 0; h < helpers.length; h++) {
+      const hp = helpers[h];
+      hp.a += 0.03;
+      const ox = hero.wx + Math.cos(hp.a + h * 2.1) * (46 + h * 5);
+      const oy = hero.wy - HERO_R * 0.7 + Math.sin(hp.a + h * 2.1) * (28 + h * 4);
+      hp.wx += (ox - hp.wx) * 0.14;
+      hp.wy += (oy - hp.wy) * 0.14;
+      if (hp.atkCd > 0) hp.atkCd--;
+      if (hp.zap && ++hp.zap.t > 8) hp.zap = null;
+      if (hp.atkCd <= 0 && hero.fainting === 0) {
+        let best = null, bd = 150 * 150;
+        for (let i = 0; i < minions.length; i++) {
+          const m = minions[i];
+          if (m.isBoss || m.stagger > 0) continue;
+          const dx = m.wx - hp.wx, dy = m.wy - hp.wy;
+          const dd = dx * dx + dy * dy;
+          if (dd < bd) { bd = dd; best = m; }
+        }
+        if (best) {
+          best.hp--;
+          if (best.stagger < 8) best.stagger = 8;
+          hp.atkCd = 66;
+          hp.zap = { tx: best.wx, ty: best.wy, t: 0 };
+          spawnHitFx(best.wx, best.wy);
+          audio.sfx('minion_cry');
+          if (best.hp <= 0) killMinionAt(best);
+        }
       }
     }
   }
@@ -1510,6 +1653,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       else if (it.k === 2) drawMinion(it.m, cx, cy, now);
       else drawHero(cx, cy, now);
     }
+    drawHelpers(cx, cy);  // ผู้ช่วยโคจรรอบแม่มด (วาดหลัง actors)
 
     // ---- overlay (บนสุดเสมอ): ป้ายมาตรา + พลอย + particle — อ่านง่าย ไม่ถูกบัง ----
     for (let i = 0; i < nodes.length; i++) {
@@ -1541,6 +1685,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       }
     }
 
+    drawBeam(cx, cy);
+    drawHitFx(cx, cy);
     particleFx.draw();
 
     // ---- HUD: แถบพลังแม่มดน้อย (มุมซ้ายบน ใต้ปุ่ม) ----
@@ -1700,17 +1846,20 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
   function drawHero(cx, cy, now) {
     const sx = hero.wx - cx;
-    const sy = hero.wy - cy;
+    // สกิล 🧹 — ลอยไม้กวาด: ยกตัวขึ้น + เงาย่อ (เข้า-ออกนุ่ม ๆ ตาม broomT)
+    const fly = hero.broomT > 0 ? Math.min(1, hero.broomT / 20) * Math.min(1, (sk.broom - hero.broomT) / 12 + 0.15) : 0;
+    const sy = hero.wy - cy - fly * 16;
     const fainting = hero.fainting > 0;
     const bob = hero.moving && !fainting && !REDUCED_MOTION ? Math.sin(hero.bob) * 3 : 0;
     // กระพริบตอนอมตะ (โดนกัด) / เอียงตอนสลบ
     const blink = hero.invuln > 0 && ((now / 70) | 0) % 2;
     const faintRot = fainting ? Math.min(1, (FAINT_T - hero.fainting) / 12) * 1.35 : 0;
 
-    // เงา
+    // เงา — อยู่ที่ "พื้น" เสมอ (ตอนลอยไม้กวาด เงาย่อลงไม่ลอยตาม)
+    const groundY = hero.wy - cy + HERO_R - 3;
     fx.beginPath();
-    fx.ellipse(sx, sy + HERO_R - 3, HERO_R * 0.72, HERO_R * 0.26, 0, 0, Math.PI * 2);
-    fx.fillStyle = 'rgba(0,0,0,0.28)';
+    fx.ellipse(sx, groundY, HERO_R * 0.72 * (1 - fly * 0.4), HERO_R * 0.26 * (1 - fly * 0.4), 0, 0, Math.PI * 2);
+    fx.fillStyle = 'rgba(0,0,0,' + (0.28 - fly * 0.12).toFixed(2) + ')';
     fx.fill();
 
     // เลือกท่าตาม state ที่มีอยู่แล้ว — ต่อสู้ > เดิน > ยืน
@@ -1775,6 +1924,65 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   }
 
   // ---------- Phase 2/3 draw helpers ----------
+  // เอฟเฟกต์ตี — วงรีแสงทองแนวนอนขยายออก + จาง (แทนดาวกระจาย)
+  function drawHitFx(cx, cy) {
+    for (let i = hitFx.length - 1; i >= 0; i--) {
+      const f = hitFx[i];
+      f.t++;
+      if (f.t > 15) { hitFx.splice(i, 1); continue; }
+      const p = f.t / 15;
+      const rx = 12 + p * 42;
+      const ry = rx * 0.4;
+      const x = f.wx - cx, y = f.wy - cy;
+      fx.save();
+      fx.globalAlpha = (1 - p) * 0.85;
+      fx.strokeStyle = '#ffe08a';
+      fx.lineWidth = 4 * (1 - p) + 1.2;
+      fx.beginPath(); fx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); fx.stroke();
+      fx.globalAlpha = (1 - p) * 0.5;
+      fx.fillStyle = '#fff6d0';
+      fx.beginPath(); fx.ellipse(x, y, rx * 0.5, ry * 0.5, 0, 0, Math.PI * 2); fx.fill();
+      fx.restore();
+    }
+  }
+
+  // เส้นแสงยิง (สกิล ✨) จากแม่มดไปเป้า
+  function drawBeam(cx, cy) {
+    if (!hero.beamFx) return;
+    const p = hero.beamFx.t / 10;
+    fx.save();
+    fx.globalAlpha = (1 - p) * 0.9;
+    fx.strokeStyle = '#ffe8a0';
+    fx.lineWidth = 5 * (1 - p) + 1;
+    fx.lineCap = 'round';
+    fx.beginPath();
+    fx.moveTo(hero.wx - cx, hero.wy - cy - HERO_R * 0.6);
+    fx.lineTo(hero.beamFx.tx - cx, hero.beamFx.ty - cy);
+    fx.stroke();
+    fx.restore();
+  }
+
+  // ผู้ช่วย (สกิล 🧚) — TODO: เปลี่ยนเป็น GIF ทีหลัง · ตอนนี้ orb เรืองแสง + หมวกจิ๋ว
+  function drawHelpers(cx, cy) {
+    for (let h = 0; h < helpers.length; h++) {
+      const hp = helpers[h];
+      const x = hp.wx - cx, y = hp.wy - cy;
+      if (hp.zap) {
+        fx.strokeStyle = 'rgba(255,225,140,' + (1 - hp.zap.t / 8).toFixed(2) + ')';
+        fx.lineWidth = 2.5;
+        fx.beginPath(); fx.moveTo(x, y); fx.lineTo(hp.zap.tx - cx, hp.zap.ty - cy); fx.stroke();
+      }
+      fx.fillStyle = 'rgba(180,140,255,0.32)';
+      fx.beginPath(); fx.arc(x, y, 11, 0, Math.PI * 2); fx.fill();
+      fx.fillStyle = '#c9b3f5';
+      fx.beginPath(); fx.arc(x, y, 6.5, 0, Math.PI * 2); fx.fill();
+      fx.fillStyle = '#6a4a9e';
+      fx.beginPath();
+      fx.moveTo(x, y - 12); fx.lineTo(x - 5, y - 4); fx.lineTo(x + 5, y - 4);
+      fx.closePath(); fx.fill();
+    }
+  }
+
   function drawMinion(m, cx, cy, now) {
     const sx = m.wx - cx;
     const sy = m.wy - cy;

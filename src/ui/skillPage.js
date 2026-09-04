@@ -65,10 +65,11 @@ export function setSkillPageBack(container, cb) {
 
 function cardHtml(sk, r) {
   const rank = r.skills[sk.id] || 0;
-  const maxed = rank >= MAX_RANK;
+  const maxRank = sk.maxRank || MAX_RANK;
+  const maxed = rank >= maxRank;
   const canUp = !maxed && r.pointsLeft > 0;
   let pips = '';
-  for (let i = 0; i < MAX_RANK; i++) pips += `<span class="pip ${i < rank ? 'on' : ''}"></span>`;
+  for (let i = 0; i < maxRank; i++) pips += `<span class="pip ${i < rank ? 'on' : ''}"></span>`;
   const now = sk.label(sk.levels[rank]);
   const next = maxed ? '' : `<span class="skill-next">&#8594; ${sk.label(sk.levels[rank + 1])}</span>`;
   return `
