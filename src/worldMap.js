@@ -1283,6 +1283,15 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       const dx = hero.wx - kp.wx, dy = hero.wy - kp.wy;
       const R = GEM_PICK_R + 8;
       if (dx * dx + dy * dy <= R * R) {
+        // ด่านที่มีบอส: กุญแจถูกคำสาปล็อกอยู่ ต้องล้มบอสก่อนถึงเก็บได้
+        if (difficultyFor(i, nodes.length).boss && !bossDone[n.matraId]) {
+          if (!updateKey._warn || performance.now() - updateKey._warn > 2500) {
+            updateKey._warn = performance.now();
+            audio.sfx('wrong_soft');
+            mapSay('คำสาปล็อกกุญแจอยู่! ต้องล้มบอสก่อน');
+          }
+          return;
+        }
         heroKey = i;
         audio.sfx('gem');
         particleFx.spawnCelebrationBurst(sX(kp.wx), sY(kp.wy), { hueMin: 44, hueRange: 22 });
@@ -1529,10 +1538,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       const fn = nodes[fi];
       if (fn && !REDUCED_MOTION && unlocked[fn.matraId] && !keyDelivered[fn.matraId]) {
         if (heroKey === fi) {
-          drawKey(hero.wx - cx, hero.wy - cy - HERO_R * 2.6, now, true);
+          drawKey(hero.wx - cx, hero.wy - cy - HERO_R * 2.6, now, true, false);
         } else {
           const kp = keyPos(fi);
-          drawKey(kp.wx - cx, kp.wy - cy, now, false);
+          const cursed = difficultyFor(fi, nodes.length).boss && !bossDone[fn.matraId];
+          drawKey(kp.wx - cx, kp.wy - cy, now, false, cursed);
         }
       }
     }
@@ -1647,16 +1657,21 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       }
     }
 
-    // โล่ปิดผนึก + สถานะกุญแจ
+    // โล่ปิดผนึก (คำสาป) + สถานะเป้าหมาย
     if (sealed) {
       const t = (now % 1600) / 1600;
+      const cursed = difficultyFor(i, nodes.length).boss && !bossDone[n.matraId];
       fx.beginPath();
       fx.arc(sx, sy, NODE_HALO + 8 + Math.sin(t * Math.PI * 2) * 2, 0, Math.PI * 2);
-      fx.strokeStyle = 'rgba(150,120,235,0.35)';
+      fx.strokeStyle = cursed ? 'rgba(200,70,120,0.42)' : 'rgba(150,120,235,0.35)';
       fx.lineWidth = 3;
       fx.stroke();
-      fx.fillStyle = '#ffe6a6';
-      fx.fillText(heroKey === i ? '🔑 พากุญแจกลับบ้าน!' : '🔑 หากุญแจเหนือบ้าน', sx, sy - NODE_HALO - 30);
+      let msg;
+      if (heroKey === i) msg = '🔑 พากุญแจกลับบ้าน!';
+      else if (cursed) msg = '👹 ล้มบอสทำลายคำสาป!';
+      else msg = '🔑 เก็บกุญแจเหนือบ้าน';
+      fx.fillStyle = cursed ? '#ffc2d2' : '#ffe6a6';
+      fx.fillText(msg, sx, sy - NODE_HALO - 30);
     }
 
     // ชื่อมาตรา (fx.font set แล้วใน render() ก่อนวน loop)
@@ -1864,31 +1879,48 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
   // พลอยเติมพลัง — เพชรชมพูลอยเด้ง (สีต่างจากคริสตอลฟ้า / ดาวเหลือง / ลูกสมุนเขียว)
   // กุญแจทอง — หูจับ (วงแหวน) + ก้าน + เดือย 2 อัน · carried = เล็กลง ไม่ลอย
-  function drawKey(sx, sy, now, carried) {
+  function drawKey(sx, sy, now, carried, cursed) {
     const sc = carried ? 0.72 : 1;
     const bob = carried ? 0 : Math.sin(now * 0.004) * 4;
+    // cursed = ยังไม่ล้มบอส → กุญแจสีคล้ำ + ออร่าม่วงคำสาป + โซ่ ยังเก็บไม่ได้
+    const ringOut = cursed ? '#3a2350' : '#8a5f16';
+    const ringIn = cursed ? '#7a5aa8' : '#e8b53a';
+    const body = cursed ? '#8f78b3' : '#e8b53a';
     fx.save();
     fx.translate(sx, sy + bob);
     fx.scale(sc, sc);
     if (!carried) {
       const pulse = 0.3 + 0.28 * Math.sin(now * 0.006);
-      fx.fillStyle = 'rgba(255,224,130,' + pulse.toFixed(2) + ')';
+      fx.fillStyle = cursed
+        ? 'rgba(150,90,220,' + pulse.toFixed(2) + ')'
+        : 'rgba(255,224,130,' + pulse.toFixed(2) + ')';
       fx.beginPath(); fx.arc(0, 0, 19, 0, Math.PI * 2); fx.fill();
     }
     // หูจับ (วงแหวนกลวง วาดด้วยเส้น ไม่เจาะรูทะลุ overlay)
-    fx.strokeStyle = '#8a5f16'; fx.lineWidth = 5.5;
+    fx.strokeStyle = ringOut; fx.lineWidth = 5.5;
     fx.beginPath(); fx.arc(0, -7, 6.6, 0, Math.PI * 2); fx.stroke();
-    fx.strokeStyle = '#e8b53a'; fx.lineWidth = 3.4;
+    fx.strokeStyle = ringIn; fx.lineWidth = 3.4;
     fx.beginPath(); fx.arc(0, -7, 6.6, 0, Math.PI * 2); fx.stroke();
     // ก้าน + เดือย
-    fx.fillStyle = '#e8b53a';
-    fx.strokeStyle = '#8a5f16'; fx.lineWidth = 1.4;
+    fx.fillStyle = body;
+    fx.strokeStyle = ringOut; fx.lineWidth = 1.4;
     fx.fillRect(-2, -1, 4, 16); fx.strokeRect(-2, -1, 4, 16);
     fx.fillRect(2, 8, 6, 3); fx.strokeRect(2, 8, 6, 3);
     fx.fillRect(2, 12, 4, 3); fx.strokeRect(2, 12, 4, 3);
-    // ประกาย
-    fx.fillStyle = 'rgba(255,255,235,0.9)';
-    fx.beginPath(); fx.arc(-2.5, -9, 1.6, 0, Math.PI * 2); fx.fill();
+    if (cursed) {
+      // โซ่คำสาปพันกุญแจ
+      fx.strokeStyle = 'rgba(40,20,60,0.8)'; fx.lineWidth = 2.4;
+      fx.beginPath();
+      fx.moveTo(-9, -12 + Math.sin(now * 0.003) * 1.5);
+      fx.lineTo(9, 10 - Math.sin(now * 0.003) * 1.5);
+      fx.moveTo(9, -12 - Math.sin(now * 0.003) * 1.5);
+      fx.lineTo(-9, 10 + Math.sin(now * 0.003) * 1.5);
+      fx.stroke();
+    } else {
+      // ประกาย
+      fx.fillStyle = 'rgba(255,255,235,0.9)';
+      fx.beginPath(); fx.arc(-2.5, -9, 1.6, 0, Math.PI * 2); fx.fill();
+    }
     fx.restore();
   }
 
