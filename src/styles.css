@@ -1535,7 +1535,7 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
   position: fixed;
   left: 50%; top: 50%;
   transform: translate(-50%, -50%) scale(0.4);
-  padding: 0.3em 0.4em;
+  padding: 0.55em 0.45em 0.35em;
   border-radius: 28px;
   background: rgba(20, 8, 40, 0.78);
   box-shadow: 0 0 0 3px rgba(255, 216, 77, 0.35) inset;
@@ -1550,7 +1550,10 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
   /* ขนาดมาจาก CSS var ที่ mahjong.js sizeBigWord() คำนวณจากจำนวนตัวอักษร
      (CSS วัดความยาวข้อความเองไม่ได้) — ค่า fallback = ค่าเดิมสำหรับคำไทยสั้น */
   font: 800 clamp(38px, var(--mj-bw-vw, 20vw), var(--mj-bw-max, 136px)) 'Sarabun', 'Segoe UI', sans-serif;
-  line-height: 1.6;
+  /* line-height สูง + padding-top ที่กล่องนอก — กัน background-clip:text ตัดวรรณยุกต์ซ้อนสูง
+     (เช่น "ยิ้ม" = ย + สระอิ + ไม้โท ซ้อน 2 ชั้น) ที่พุ่งเหนือ ascender ปกติ */
+  line-height: 2.15;
+  padding-top: 0.12em;
   background: linear-gradient(135deg, #fff2b0, var(--accent) 45%, #c9860c 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 16px rgba(255, 216, 77, 0.7));

@@ -1110,26 +1110,20 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
           biteHero(m);
         }
       } else if (m.isBoss) {
-        // บอสไม่เดินตาม เฝ้ากุญแจอยู่กับที่ + ส่ายเล็กน้อย
+        // บอสเฝ้าตรงบริเวณกุญแจ — ค่อย ๆ กลับไปที่กุญแจถ้าถูกตีกระเด็นออก
         m.spin = 0;
-        m.wx += Math.sin(m.bob * 0.5) * 0.4;
+        const kp = keyPos(focusIdx);
+        const dx = kp.wx - m.wx, dy = kp.wy - m.wy;
+        const dd = Math.hypot(dx, dy);
+        if (dd > 8) { m.wx += (dx / dd) * 0.9; m.wy += (dy / dd) * 0.9; }
+        else m.wx += Math.sin(m.bob * 0.5) * 0.4;
       } else {
-        // สายศัตรูไหลลงมาจากข้างบน มุ่งหน้ามาที่บ้าน (ทางที่แม่มดต้องออกไปหากุญแจ)
-        // ถึงบ้านแล้วเดินลงต่อจนหลุดจอ → despawn (flowedPast) → สายไหลไม่มีหมด
+        // ศัตรูกระจายทั่วแนวจอแล้วเดินลงตรง ๆ (ไม่รวมเป็นสาย/ไม่บีบเข้าบ้าน)
+        // เดินพ้นบ้านลงไป → despawn (flowedPast) → สายไหลไม่มีหมด
         m.spin = 0;
-        const step = WANDER_SPEED * 2.4 * (m.kind.fly ? FLY_WANDER_MUL : 1);
-        const belowHouse = gnode && m.wy > gnode.wy - 10;
-        if (belowHouse) {
-          m.wy += step;                                   // ผ่านบ้านแล้ว เดินลงตรงๆ
-        } else if (gnode) {
-          const dx = gnode.wx - m.wx, dy = (gnode.wy + 4) - m.wy;
-          const dd = Math.hypot(dx, dy) || 1;
-          m.wx += (dx / dd) * step;
-          m.wy += (dy / dd) * step;
-        } else {
-          m.wy += step;
-        }
-        m.wx += Math.sin(m.bob * 0.6 + (m.homeA || 0)) * 0.5; // ส่ายซ้ายขวา
+        const step = WANDER_SPEED * 2.2 * (m.kind.fly ? FLY_WANDER_MUL : 1);
+        m.wy += step;
+        m.wx += Math.sin(m.bob * 0.6 + (m.homeA || 0)) * 0.55; // ส่ายซ้ายขวาเล็กน้อย
         m.facing = 1;
       }
       m.bob += 0.12;
@@ -1332,10 +1326,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const kp = keyPos(focusIdx);
     const spawnY = Math.min(cam.y - 50, kp.wy - 40);
     m.wy = spawnY;
-    m.wx = spineXAt(spawnY) + (Math.random() - 0.5) * W * 0.7;
-    m.wx = Math.max(24, Math.min(worldW - 24, m.wx));
+    // กระจายทั่วแนวกว้างของจอ (ไม่เกิดเป็นสายเดียว) — เดินลงตรง ๆ ไม่บีบเข้าหาบ้าน
+    m.wx = Math.max(20, Math.min(worldW - 20, cam.x + 12 + Math.random() * (W - 24)));
     m.homeA = Math.random() * Math.PI * 2;              // เฟสส่ายซ้ายขวา
-    m.streamTargetY = gnode.wy + 60;                    // ผ่านบ้านลงไปเกินนี้ = despawn
+    m.streamTargetY = gnode.wy + 90;                    // ผ่านบ้านลงไปเกินนี้ = despawn
     initMinion(m, false);
   }
 
@@ -1345,7 +1339,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     m.kind = BOSS_KIND;
     const kp = keyPos(focusIdx);
     m.wx = kp.wx;
-    m.wy = kp.wy - 26;
+    m.wy = kp.wy;                                       // โผล่ตรงบริเวณกุญแจ
     m.homeA = Math.PI / 2;
     m.streamTargetY = m.wy;                             // บอสไม่ไหลลง
     initMinion(m, true);
@@ -1611,6 +1605,12 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.fillStyle = locked ? '#3a2a5e' : '#c98a5a';
       fx.fill();
     }
+
+    // กอหญ้าตามขอบล่างบ้าน — บังรอยต่อกับพื้น (โคนบ้านในภาพ ~y sy+34)
+    fx.save();
+    fx.globalAlpha = locked ? 0.5 : 1;
+    for (let g = -2; g <= 2; g++) grassTuft(sx + g * 22 + (g % 2 ? 6 : 0), sy + 34, 18, 5);
+    fx.restore();
 
     if (locked) {
       // แม่กุญแจคาดหน้าบ้าน
@@ -1941,6 +1941,23 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.restore();
   }
 
+  // กอหญ้าเล็ก ๆ ที่โคน (บังรอยต่อกับพื้น ไม่ให้ดูลอย) — n ใบ ชี้ขึ้น เอียงสลับ
+  function grassTuft(x, y, spanW, n) {
+    for (let k = 0; k < n; k++) {
+      const f = n > 1 ? k / (n - 1) - 0.5 : 0;
+      const bx = x + f * spanW;
+      const lean = f * 7 + (k % 2 ? 1.5 : -1.5);
+      const h = 6 + (k % 3) * 3;
+      fx.fillStyle = k % 2 ? '#4f8a39' : '#356b2b';
+      fx.beginPath();
+      fx.moveTo(bx - 1.6, y);
+      fx.quadraticCurveTo(bx + lean * 0.4, y - h * 0.6, bx + lean, y - h);
+      fx.quadraticCurveTo(bx + lean * 0.4, y - h * 0.5, bx + 1.6, y);
+      fx.closePath();
+      fx.fill();
+    }
+  }
+
   function drawDecor(dc, cx, cy) {
     const s = dc.s;
     fx.save();
@@ -1968,6 +1985,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
           fx.fill();
         }
       }
+      grassTuft(0, 2, 26, 6); // กอหญ้าบังโคน
       fx.restore();
       return;
     }
