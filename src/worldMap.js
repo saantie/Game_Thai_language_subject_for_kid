@@ -211,6 +211,23 @@ const GRASS_BASE = '#5c8c3a'; // เติมช่องว่างก่อ�
 const TREE_IMG = new Image();
 TREE_IMG.src = 'public/assets/images/tree.png';
 
+// เวอร์ชันต้นไม้สีเทาเต็ม — แคช offscreen canvas ครั้งเดียวตอนภาพโหลดเสร็จ (ใช้ไล่เฉดสีต้นไม้ตามด่าน)
+// วาดแบบ globalAlpha ทับต้นไม้ปกติ (ไม่ใช้ source-atop ตรงบน fxCanvas เพราะพื้นหญ้าทึบเต็มจออยู่แล้ว
+// จะได้กล่องเหลี่ยมเทาแทนที่จะเป็นเงาต้นไม้ — ต้องผสมสีบน canvas แยกที่ยังโปร่งใสอยู่ก่อน)
+let treeTintImg = null;
+function ensureTreeTint() {
+  if (treeTintImg || !TREE_IMG.complete || !TREE_IMG.naturalWidth) return;
+  const c = document.createElement('canvas');
+  c.width = TREE_IMG.naturalWidth;
+  c.height = TREE_IMG.naturalHeight;
+  const cctx = c.getContext('2d');
+  cctx.drawImage(TREE_IMG, 0, 0);
+  cctx.globalCompositeOperation = 'source-atop';
+  cctx.fillStyle = '#6e6e70';
+  cctx.fillRect(0, 0, c.width, c.height);
+  treeTintImg = c;
+}
+
 // พิกัดวงกลมของ decor/minion — hoist ออกนอก loop (อย่า alloc array ทุกเฟรม)
 const BUSH_BLOBS = [[-8, 2], [8, 2], [0, -4], [-3, 4], [4, 5]];
 const TREE_BLOBS = [[0, -22, 15], [-9, -12, 11], [9, -12, 11], [0, -34, 10]];
@@ -237,6 +254,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   let worldH = 0;
   let worldW = 0;      // โลกกว้างกว่าจอ → กล้องแพนแนวนอนตามคริสตอล/ฮีโร่
   let nodeSpacing = 190; // ระยะห่างแนวตั้งระหว่างคริสตอล (คำนวณใน computeLayout)
+  let worldPad = 0;    // ที่ว่างเหนือบ้านแรกสุด/ใต้บ้านสุดท้าย (คำนวณใน computeLayout) — ใช้คำนวณเฉดสีฉากด้วย
 
   // ค่าจากสกิล (rpg.js) — อ่านใหม่ทุกครั้งที่ enter() เพราะเด็กอัปสกิลแล้วกลับมาแผนที่ได้
   // ห้ามอ่านครั้งเดียวตอนสร้างโมดูล ไม่งั้นสกิลที่เพิ่งอัปจะไม่มีผลจนกว่าจะรีโหลดแอป
@@ -353,6 +371,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     // เผื่อพื้นที่เหนือบ้านสุดท้ายเพิ่ม — กำแพงปราสาท+บอสใหญ่ (ด่านสุดท้าย) ต้องมีที่ว่างพอ
     // ไม่ให้ชิดขอบบนสุดของโลก (camY ต่ำสุด = 0 เลื่อนขึ้นเกินนี้ไม่ได้) — ไม่กระทบระยะห่างบ้านอื่น ๆ
     const pad = H * 0.55 + 260;
+    worldPad = pad;
     const spacing = Math.max(190, H * 0.42);
     nodeSpacing = spacing;
     worldH = pad + spacing * (N - 1) + pad;
@@ -610,6 +629,13 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     return spine[0].x;
   }
 
+  // ความคืบหน้าฉาก 0..1 ตามตำแหน่ง y โลก — 0 = ด่านแรกสุด (ล่างสุด, เขียวเต็ม)
+  // 1 = ด่านบอสใหญ่ (บนสุด, เทาเต็ม) ใช้ไล่เฉดสีพื้นหญ้า/ต้นไม้ให้หม่นลงเรื่อย ๆ ตามด่าน
+  function sceneryT(wy) {
+    const span = Math.max(1, (MATRA.length - 1) * nodeSpacing);
+    return Math.max(0, Math.min(1, 1 - (wy - worldPad) / span));
+  }
+
   function heroRestY(node) {
     // ยืนใต้คริสตอลนิดหน่อย — ไกลพอที่ arrival check จะไม่ยิงทันทีตอน enter()
     return node.wy + NODE_R + HERO_R + 10;
@@ -813,12 +839,34 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     // ด่านสุดท้าย: กดโดนตัวบอสใหญ่ = ยิงแสงทองใส่ (ไม่ใช่เดินไปหา)
     if (tryFireStaff(w.wx, w.wy)) { pressed = false; return; }
 
-    // กดโดนลูกสมุน → สั่งให้แม่มดน้อยไปตีตัวนั้น (ไม่ตีอัตโนมัติ)
     const m = minionAt(w.wx, w.wy);
     if (m) {
+      pressNodeIdx = -1;
+      // บอส (แม่มดใจร้ายตัวใหญ่) → ยิงแสงใส่ทันที ไม่ต้องเดินเข้าไปประชิด (v208 — ใช้การยิง ไม่ใช่การตี)
+      if (m.isBoss) {
+        if (hero.fainting === 0 && hero.attackCd <= 0 && m.stagger <= 0) {
+          const dm = Math.hypot(m.wx - hero.wx, m.wy - hero.wy) || 1;
+          m.hp--;
+          m.stagger = MINION_STAGGER;
+          m.active = false;
+          m.vx = ((m.wx - hero.wx) / dm) * KNOCK * 0.5; // บอสหนัก ถีบไม่ค่อยไป
+          m.vy = ((m.wy - hero.wy) / dm) * KNOCK * 0.5;
+          hero.attackCd = sk.attackCd; // สกิล ⚔️ ยังคุมความถี่ยิงเหมือนตีประชิด
+          hero.facing = m.wx < hero.wx ? -1 : 1;
+          hero.poseAtk = HERO_POSE_ATK_T;
+          hero.beamFx = { tx: m.wx, ty: m.wy, t: 0 };
+          audio.sfx('swing');
+          audio.sfx('minion_cry');
+          spawnHitFx(m.wx, m.wy);
+          if (m.hp > 0) mapSay('ตีบอสอีก ' + m.hp + ' ครั้ง!');
+          if (m.hp <= 0) killMinionAt(m);
+        }
+        return;
+      }
+      // ลูกสมุนทั่วไป → สั่งให้แม่มดน้อยเดินเข้าไปตีตัวนั้น (พฤติกรรมเดิม ไม่เปลี่ยน — เด็กต้องเดินเข้าไปสู้เอง)
       const dm = Math.hypot(m.wx - hero.wx, m.wy - hero.wy);
       // สกิล ✨ — ลูกสมุนไกลเกินเอื้อม แต่ในระยะยิงแสง → ยิงใส่ทันที ไม่ต้องเดินไปหา
-      if (sk.beam > 0 && !m.isBoss && dm > ATTACK_R && dm <= sk.beam && hero.beamCd <= 0 && hero.fainting === 0) {
+      if (sk.beam > 0 && dm > ATTACK_R && dm <= sk.beam && hero.beamCd <= 0 && hero.fainting === 0) {
         const d = dm || 1;
         m.hp--;
         m.stagger = MINION_STAGGER;
@@ -833,11 +881,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         audio.sfx('minion_cry');
         spawnHitFx(m.wx, m.wy);
         if (m.hp <= 0) killMinionAt(m);
-        pressNodeIdx = -1;
         return;
       }
       hero.atk = m;
-      pressNodeIdx = -1;
       clampTarget(m.wx, m.wy);
       hero.moving = true;
       camLockIdx = -1;
@@ -1776,6 +1822,16 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (groundPat) {
       fx.fillStyle = groundPat;
       fx.fillRect(-40, cy - 40, worldW + 80, H + 80);
+      // ไล่เฉดพื้นหญ้าให้หม่นลงเรื่อย ๆ ตามด่าน (เขียวด่านแรก → เทาด่านบอสใหญ่)
+      // gradient ไล่ตามช่วงจอที่เห็น (บน→ล่าง) เป็นทางลัดถูกๆ แทน per-pixel filter (แพงกว่ามาก)
+      const tTop = sceneryT(cy), tBot = sceneryT(cy + H);
+      if (tTop > 0.01 || tBot > 0.01) {
+        const grassGrad = fx.createLinearGradient(0, cy, 0, cy + H);
+        grassGrad.addColorStop(0, 'rgba(110,110,112,' + (tTop * 0.75).toFixed(2) + ')');
+        grassGrad.addColorStop(1, 'rgba(110,110,112,' + (tBot * 0.75).toFixed(2) + ')');
+        fx.fillStyle = grassGrad;
+        fx.fillRect(-40, cy - 40, worldW + 80, H + 80);
+      }
     }
 
     if (!REDUCED_MOTION) {
@@ -2484,6 +2540,19 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         const h = 120;
         const w = h * (TREE_IMG.naturalWidth / TREE_IMG.naturalHeight);
         fx.drawImage(TREE_IMG, -w / 2, -h * 0.84, w, h);
+        // ไล่เฉดต้นไม้ให้หม่นลงเรื่อย ๆ ตามด่าน (เขียว → เทา ใกล้บอสใหญ่)
+        // วาดเวอร์ชันเทาเต็ม (แคชไว้แล้ว) ทับด้วย globalAlpha — เคารพรูปทรงต้นไม้จริง
+        // (ห้ามใช้ source-atop ตรงนี้ตรงๆ เพราะพื้นหญ้าทึบเต็มจอวาดไปก่อนแล้ว จะได้กล่องเหลี่ยมเทาแทน)
+        const treeT = sceneryT(dc.wy);
+        if (treeT > 0.01) {
+          ensureTreeTint();
+          if (treeTintImg) {
+            fx.save();
+            fx.globalAlpha = Math.min(1, treeT * 0.9);
+            fx.drawImage(treeTintImg, -w / 2, -h * 0.84, w, h);
+            fx.restore();
+          }
+        }
       } else {
         // fallback วาดเอง (ภาพยังโหลดไม่เสร็จ)
         fx.fillStyle = '#6b4a2f';
