@@ -17,6 +17,7 @@ import { isUnlocked, getStars } from './ui/levelSelect.js';
 import { createParticleSystem } from './particles.js';
 import { saveTotalScore } from './storage.js';
 import { getSkillEffects } from './rpg.js';
+import { ITEM_TYPES, addItem, useItem as useItemFromInv, randomItemId, itemDef } from './items.js';
 
 // จุดมาตราบนแผนที่ = บ้านแม่มด (House wish.png) แทนลูกแก้วคริสตอลเดิม
 const HOUSE_IMG = new Image();
@@ -239,7 +240,13 @@ function h01(n) {
   return (x >>> 0) / 4294967296;
 }
 
-export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
+// '#rrggbb' → 'rgba(r,g,b,a)' — ใช้แต่งสีเรืองแสงไอเทมบน canvas (ต้นทาง ITEM_TYPES.color ใน items.js)
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+}
+
+export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventoryChange }) {
   const fx = scene.fx;
   const particleFx = createParticleSystem(fx); // pool แยกของตัวเอง (แบบ mahjong.js)
 
@@ -275,6 +282,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     broomT: 0,  // สกิล 🧹 — เฟรมลอย (ลูกสมุนพื้นกัดไม่โดน)
     beamCd: 0,  // สกิล ✨ — cooldown ยิงแสง
     beamFx: null, // { tx, ty, t } เส้นแสงยิง
+    invisT: 0,   // ไอเทม 👻 — เฟรมที่เหลือของการหายตัว (ลูกสมุนกัดไม่โดนเลย ทั้งบิน/พื้น)
+    giantT: 0,   // ไอเทม ⚡ — เฟรมที่เหลือพลังยักษ์ (เดินชนลูกสมุนทั่วไปก็ล้มเลย)
+    shieldUp: false, // ไอเทม 🛡️ — กันโดนกัดครั้งถัดไป 1 ครั้ง (ใช้แล้วเป็น false)
+    ringFx: null, // { t } วงแหวนระเบิดขยายออกตอนใช้ไอเทม 💥
   };
   let helpers = [];        // สกิล 🧚 — ผู้ช่วยสู้อัตโนมัติ (เตรียมระบบ, GIF ทีหลัง)
   let hitFx = [];          // { wx, wy, t } วงรีแสงทองขยายออก ตอนตีโดน (แทนดาวกระจาย)
@@ -690,6 +701,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     hero.fainting = 0;
     hero.atk = null;
     hero.jumpT = 0; hero.broomT = 0; hero.beamCd = 0; hero.beamFx = null;
+    hero.invisT = 0; hero.giantT = 0; hero.ringFx = null; // ไอเทม (เอฟเฟกต์จับเวลา) เคลียร์ตอนเข้ามาตราใหม่
+    // shieldUp *ไม่* เคลียร์ — เป็นการ์ดที่รอใช้ ไม่ใช่ตัวจับเวลา เก็บข้ามมาตราได้ ไม่ให้เสียของฟรี
     heroKey = -1; // เข้าเล่นมาตราแล้วกลับมา = ไม่ถือกุญแจ (keyDelivered ยังคงอยู่ทั้ง session)
     heroStaff = false; finalBoss = null; duelBeams.length = 0; heroDuelCd = 0; // ดวลบอสใหญ่ (ด่านสุดท้าย)
     hitFx.length = 0;
@@ -1002,6 +1015,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (hero.broomT > 0) hero.broomT--;
     if (hero.beamCd > 0) hero.beamCd--;
     if (hero.beamFx && ++hero.beamFx.t > 10) hero.beamFx = null;
+    // ไอเทม 👻/⚡/💥 — ตัวจับเวลา (ดู items.js สำหรับ data, applyItemEffect() สำหรับตอนใช้)
+    if (hero.invisT > 0) hero.invisT--;
+    if (hero.giantT > 0) { hero.giantT--; updateGiantContact(); }
+    if (hero.ringFx && ++hero.ringFx.t > 22) hero.ringFx = null;
 
     // ---- สลบ (พลังหมด) ----
     if (hero.fainting > 0) {
@@ -1224,7 +1241,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         m.wy += (dhy / d) * msp;
         m.facing = dhx < 0 ? -1 : 1;
         // สกิล 🧹 — แม่มดลอยไม้กวาดอยู่ → ลูกสมุน "พื้น" กัดไม่ถึง (ตัวบินยังกัดได้)
-        const canBite = !(hero.broomT > 0 && !m.kind.fly);
+        // ไอเทม 👻 หายตัว — กัดไม่โดนเลยทุกชนิด (แรงกว่าไม้กวาด)
+        const canBite = hero.invisT <= 0 && !(hero.broomT > 0 && !m.kind.fly);
         if (canBite && distHero < BITE_R && m.biteCd <= 0 && hero.invuln <= 0 && hero.fainting === 0) {
           biteHero(m);
         }
@@ -1280,6 +1298,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
           guardKills[gid] = (guardKills[gid] || 0) + 1;
           dropGems(m); // บินตาย → พลอยหัวใจ 3 เม็ด
           dropCoin(m); // เดินตาย → เหรียญทอง 1 เหรียญ
+          maybeDropItem(m); // โอกาสน้อยหล่นไอเทมพลังวิเศษ
           if (m.isBoss) {
             bossDone[gid] = true;
             particleFx.spawnCelebrationBurst(sX(m.wx), sY(m.wy), { hueMin: 280, hueRange: 40 });
@@ -1304,10 +1323,20 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   }
 
   function biteHero(m) {
+    m.biteCd = diff.biteCd; // ตัวกัดเข้าคูลดาวน์เสมอ ไม่ว่าจะบล็อกได้ไหม
+    // ไอเทม 🛡️ โล่วิเศษ — กันโดนกัดครั้งถัดไป 1 ครั้ง ไม่เสียหัวใจ ใช้แล้วหมดไป
+    if (hero.shieldUp) {
+      hero.shieldUp = false;
+      hero.invuln = sk.invuln; // กันโดนซ้ำทันทีเหมือนโดนกัดจริง
+      hero.hurtT = 6;
+      audio.sfx('ting');
+      particleFx.spawnCelebrationBurst(sX(hero.wx), sY(hero.wy), { hueMin: 140, hueRange: 30 });
+      mapSay('โล่กันไว้ทัน!');
+      return;
+    }
     hero.hp -= BITE_DMG;
     hero.invuln = sk.invuln; // สกิล 🛡️
     hero.hurtT = 12;
-    m.biteCd = diff.biteCd;
     // ผลักแม่มดน้อยถอย + ยกเลิกเป้าหมายเดิน
     const d = Math.hypot(hero.wx - m.wx, hero.wy - m.wy) || 1;
     hero.wx += ((hero.wx - m.wx) / d) * 11;
@@ -1394,6 +1423,21 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     });
   }
 
+  // ลูกสมุนตาย → โอกาสน้อยหล่นไอเทมพลังวิเศษ 1 ชิ้น (สุ่มชนิดจาก 5 อย่าง — ดู items.js)
+  // บอสโอกาสสูงกว่าลูกสมุนทั่วไปพอสมควร (รางวัลคุ้มกับความยาก) แต่ไม่การันตี — ยังต้องเก็บสะสม
+  const ITEM_DROP_CHANCE = 0.035;
+  const ITEM_DROP_CHANCE_BOSS = 0.15;
+  function maybeDropItem(m) {
+    if (!m) return;
+    if (Math.random() > (m.isBoss ? ITEM_DROP_CHANCE_BOSS : ITEM_DROP_CHANCE)) return;
+    gems.push({
+      item: randomItemId(), drop: true, life: 900, taken: false, respawn: 0, bob: Math.random() * 6,
+      nodeIdx: m.guardIdx | 0,
+      wx: m.wx + (Math.random() - 0.5) * 16,
+      wy: m.wy + (Math.random() - 0.5) * 14,
+    });
+  }
+
   // เก็บ: พลอย = +1 หัวใจ (ตอนพลังไม่เต็ม) · เหรียญ = +1 คะแนนสะสม (เสมอ)
   // พลอยประจำบ้านเกิดใหม่ใน GEM_RESPAWN · ของหล่น (drop) เก็บแล้วหาย · อายุ ~10 วิ
   function updateGems() {
@@ -1412,6 +1456,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       const dx = g.wx - hero.wx;
       const dy = g.wy - hero.wy;
       if (dx * dx + dy * dy > pr2) continue;
+      if (g.item) {
+        pickupItemGem(g);
+        gems.splice(i, 1); i--;
+        continue; // ไอเทมเก็บได้หลายชิ้นต่อเฟรมเหมือนเหรียญ
+      }
       if (g.coin) {
         addPoints(1);
         audio.sfx('gem');
@@ -1427,6 +1476,17 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       else { g.taken = true; g.respawn = GEM_RESPAWN; }
       break; // พลอยหัวใจเก็บทีละเม็ดต่อเฟรม
     }
+  }
+
+  // เก็บไอเทมพลังวิเศษ 1 ชิ้น (g.item = id ตาม items.js) — เรียกจากเดินทับเองใน updateGems
+  // และจากไอเทม 🧲 แม่เหล็ก (applyItemEffect) — ตัวเรียกเป็นคนลบออกจาก gems[] เอง
+  function pickupItemGem(g) {
+    addItem(g.item);
+    if (onInventoryChange) onInventoryChange();
+    const def = itemDef(g.item);
+    audio.sfx('ting');
+    particleFx.spawnCelebrationBurst(sX(g.wx), sY(g.wy), { hueMin: 200, hueRange: 70 });
+    mapSay(def ? def.icon + ' ได้' + def.name + '!' : 'ได้ไอเทมพลังวิเศษ!');
   }
 
   // กุญแจบ้าน — เดินทับ (เหนือบ้าน) = ถือ · พากลับมาที่บ้าน = เปิดผนึก แล้ว nearestUnlockedUnderHero เข้าเอง
@@ -1606,12 +1666,95 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       guardKills[gn.matraId] = (guardKills[gn.matraId] || 0) + 1;
       dropGems(m); // บินตาย → พลอยหัวใจ 3 เม็ด
       dropCoin(m); // เดินตาย → เหรียญทอง 1 เหรียญ
+      maybeDropItem(m); // โอกาสน้อยหล่นไอเทมพลังวิเศษ
       if (m.isBoss) { bossDone[gn.matraId] = true; mapSay('ล้มบอสแล้ว! รีบไปเก็บกุญแจ'); }
       particleFx.spawnCelebrationBurst(sX(m.wx), sY(m.wy), { hueMin: m.isBoss ? 280 : 90, hueRange: 40 });
     }
     if (hero.atk === m) hero.atk = null;
     minionPool.push(m);
     minions.splice(idx, 1);
+  }
+
+  // ---------- ไอเทมพลังวิเศษ (แถบล่างจอเรียกจากนี่ — data/inventory อยู่ใน items.js) ----------
+  // คืน true ถ้าใช้สำเร็จ (มีของ + กำลังเล่นอยู่) — false ถ้าของหมด/ไม่ได้อยู่ในเกม
+  function applyItemEffect(id) {
+    if (!running || hero.fainting > 0) return false;
+    if (!useItemFromInv(id)) return false;
+    if (onInventoryChange) onInventoryChange();
+    if (id === 'ring') {
+      // 💥 ระเบิดวงแหวน — โดนทุกตัวที่อยู่ในจอ แรงเท่าโดนตี 2 ครั้ง
+      const top = cam.y - 40, bot = cam.y + H + 40;
+      const left = cam.x - 40, right = cam.x + W + 40;
+      for (let i = minions.length - 1; i >= 0; i--) {
+        const m = minions[i];
+        if (m.wy < top || m.wy > bot || m.wx < left || m.wx > right) continue;
+        if (m.stagger > 0) continue;
+        m.hp -= 2;
+        m.stagger = MINION_STAGGER;
+        m.active = false;
+        const d = Math.hypot(m.wx - hero.wx, m.wy - hero.wy) || 1;
+        const k = m.isBoss ? KNOCK * 0.5 : KNOCK * 1.3;
+        m.vx = ((m.wx - hero.wx) / d) * k;
+        m.vy = ((m.wy - hero.wy) / d) * k;
+        spawnHitFx(m.wx, m.wy);
+        if (m.hp <= 0) killMinionAt(m);
+      }
+      hero.ringFx = { t: 0 };
+      audio.sfx('boom');
+      mapSay('💥 ระเบิดวงแหวน!');
+    } else if (id === 'invis') {
+      // 👻 หายตัว 10 วินาที — ดู canBite ใน updateMinions (hero.invisT)
+      hero.invisT = 600;
+      audio.sfx('chime');
+      mapSay('👻 หายตัว 10 วินาที!');
+    } else if (id === 'shield') {
+      // 🛡️ โล่วิเศษ — กันกัดครั้งถัดไป ดู biteHero()
+      hero.shieldUp = true;
+      audio.sfx('ting');
+      mapSay('🛡️ มีโล่กันกัดแล้ว!');
+    } else if (id === 'magnet') {
+      // 🧲 แม่เหล็กเวทมนตร์ — ดูดพลอย/เหรียญ/ไอเทมทุกอย่างที่เห็นในจอมาเก็บทันที
+      for (let i = gems.length - 1; i >= 0; i--) {
+        const g = gems[i];
+        if (g.taken) continue;
+        const gsx = g.wx - cam.x, gsy = g.wy - cam.y;
+        if (gsx < -40 || gsx > W + 40 || gsy < -40 || gsy > H + 40) continue;
+        if (g.item) { pickupItemGem(g); gems.splice(i, 1); continue; }
+        if (g.coin) {
+          addPoints(1);
+          particleFx.spawnCelebrationBurst(sX(g.wx), sY(g.wy), { hueMin: 44, hueRange: 16 });
+          gems.splice(i, 1);
+          continue;
+        }
+        if (hero.hp < sk.maxHp) { // พลอยหัวใจ — ดูดเฉพาะตอนพลังไม่เต็ม (เหมือนเดินทับเอง)
+          hero.hp = Math.min(sk.maxHp, hero.hp + 1);
+          particleFx.spawnCelebrationBurst(sX(g.wx), sY(g.wy), { hueMin: 315, hueRange: 30 });
+          if (g.drop) gems.splice(i, 1);
+          else { g.taken = true; g.respawn = GEM_RESPAWN; }
+        }
+      }
+      audio.sfx('gem');
+      mapSay('🧲 ดูดของทั้งหมดมาแล้ว!');
+    } else if (id === 'giant') {
+      // ⚡ พลังยักษ์ทลาย 8 วินาที — ดู updateGiantContact()
+      hero.giantT = 480;
+      audio.sfx('boom');
+      mapSay('⚡ พลังยักษ์ทลาย 8 วินาที!');
+    }
+    return true;
+  }
+
+  // ไอเทม ⚡ พลังยักษ์ — เดินชนลูกสมุนทั่วไป (ไม่รวมบอส กันสู้บอสฟรีเกินไป) ก็ล้มเลย ไม่ต้องตี
+  function updateGiantContact() {
+    const r2 = (HERO_R + 26) * (HERO_R + 26);
+    for (let i = minions.length - 1; i >= 0; i--) {
+      const m = minions[i];
+      if (m.isBoss || m.stagger > 0) continue;
+      const dx = m.wx - hero.wx, dy = m.wy - hero.wy;
+      if (dx * dx + dy * dy > r2) continue;
+      spawnHitFx(m.wx, m.wy);
+      killMinionAt(m);
+    }
   }
 
   // AoE เหวี่ยงหมุน — เรียกหลังจบ minion loop (backward, splice ปลอดภัย)
@@ -1932,7 +2075,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       if (gsy < -40 || gsy > H + 40) continue;
       const gsx = g.wx - cx;
       if (gsx < -40 || gsx > W + 40) continue;
-      drawGem(gsx, gsy, g.bob, now, g.coin);
+      drawGem(gsx, gsy, g.bob, now, g.coin, g.item);
     }
 
     // ด่านสุดท้าย = กำแพงปราสาท + บอสใหญ่ · ด่านอื่น = กุญแจบ้าน
@@ -2123,10 +2266,13 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const blink = hero.invuln > 0 && ((now / 70) | 0) % 2;
     const faintRot = fainting ? Math.min(1, (FAINT_T - hero.fainting) / 12) * 1.35 : 0;
 
+    // ไอเทม ⚡ พลังยักษ์ — ตัวใหญ่ขึ้นชั่วคราว (giantT>0)
+    const giantScale = hero.giantT > 0 ? 1.6 : 1;
+
     // เงา — อยู่ที่ "พื้น" เสมอ (ตอนลอยไม้กวาด เงาย่อลงไม่ลอยตาม)
     const groundY = hero.wy - cy + HERO_R - 3;
     fx.beginPath();
-    fx.ellipse(sx, groundY, HERO_R * 0.72 * (1 - fly * 0.4), HERO_R * 0.26 * (1 - fly * 0.4), 0, 0, Math.PI * 2);
+    fx.ellipse(sx, groundY, HERO_R * 0.72 * (1 - fly * 0.4) * giantScale, HERO_R * 0.26 * (1 - fly * 0.4) * giantScale, 0, 0, Math.PI * 2);
     fx.fillStyle = 'rgba(0,0,0,' + (0.28 - fly * 0.12).toFixed(2) + ')';
     fx.fill();
 
@@ -2147,12 +2293,13 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     const iw = img ? (img.naturalWidth || img.width) : 0;
     const ih = img ? (img.naturalHeight || img.height) : 0;
 
-    const hh = HERO_R * 2.4;
+    const hh = HERO_R * 2.4 * giantScale;
     // สัดส่วนอ่านจากขนาดจริงของ "ท่าที่กำลังใช้" ไม่ฮาร์ดโค้ด — 3 ท่าครอปไม่เท่ากัน
     // (เคยฮาร์ดโค้ด 0.86 ของ princess_1.png ไว้ พอเปลี่ยนรูปตัวละครก็ผิดทันที)
     const hw = ih ? hh * (iw / ih) : hh * 0.8;
     fx.save();
-    fx.globalAlpha = blink ? 0.4 : 1;
+    // ไอเทม 👻 หายตัว — จางลงชัดเจนให้เห็นว่าล่องหนอยู่ (blink โดนกัด สำคัญกว่า ทับกันได้)
+    fx.globalAlpha = blink ? 0.4 : (hero.invisT > 0 ? 0.42 : 1);
     if (img && iw) {
       fx.translate(sx, sy + bob);
       fx.rotate(faintRot);
@@ -2187,6 +2334,26 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.beginPath();
       fx.arc(sx, sy - HERO_R * 0.4, HERO_R * 1.1, 0, Math.PI * 2);
       fx.fill();
+    }
+
+    // ไอเทม 🛡️ โล่วิเศษ — วงแหวนเขียวเรืองแสงรอบตัว รอใช้งาน (ใช้แล้วหาย)
+    if (hero.shieldUp) {
+      const sp = 0.6 + 0.4 * Math.sin(now * 0.008);
+      fx.strokeStyle = 'rgba(120,240,150,' + sp.toFixed(2) + ')';
+      fx.lineWidth = 2.4;
+      fx.beginPath();
+      fx.arc(sx, sy - HERO_R * 0.4, HERO_R * 1.15, 0, Math.PI * 2);
+      fx.stroke();
+    }
+
+    // ไอเทม 💥 ระเบิดวงแหวน — วงแหวนสีส้มขยายออกจากตัวตอนใช้ (22 เฟรม ~0.37 วิ)
+    if (hero.ringFx) {
+      const p = hero.ringFx.t / 22;
+      fx.strokeStyle = 'rgba(255,150,60,' + (1 - p).toFixed(2) + ')';
+      fx.lineWidth = 5 * (1 - p) + 1;
+      fx.beginPath();
+      fx.arc(sx, sy - HERO_R * 0.4, HERO_R * 0.6 + p * 220, 0, Math.PI * 2);
+      fx.stroke();
     }
 
     // รอยไม้กายสิทธิ์เหวี่ยง (ตอนตีลูกสมุน)
@@ -2488,9 +2655,25 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.restore();
   }
 
-  function drawGem(sx, sy0, phase, now, coin) {
+  function drawGem(sx, sy0, phase, now, coin, itemId) {
     const sy = sy0 - 3 - Math.sin(now * 0.004 + phase) * 3;
     const pulse = 0.5 + 0.5 * Math.sin(now * 0.006 + phase);
+    if (itemId) {
+      // ไอเทมพลังวิเศษ — วงเรืองแสงสีเฉพาะชนิด (ITEM_TYPES.color) + ไอคอน emoji ตรงกลาง
+      const def = itemDef(itemId);
+      const col = (def && def.color) || '#ffffff';
+      fx.beginPath();
+      fx.arc(sx, sy, 15 + pulse * 3, 0, Math.PI * 2);
+      fx.fillStyle = hexA(col, 0.22 + pulse * 0.1);
+      fx.fill();
+      fx.save();
+      fx.font = '20px sans-serif';
+      fx.textAlign = 'center';
+      fx.textBaseline = 'middle';
+      fx.fillText((def && def.icon) || '❓', sx, sy);
+      fx.restore(); // กัน textBaseline/font รั่วไปกระทบของที่วาดต่อจากนี้ในเฟรมเดียวกัน (hitFx/beam ฯลฯ)
+      return;
+    }
     if (coin) {
       // เหรียญทอง — วงกลม + ขอบเข้ม + ประกาย
       fx.beginPath();
@@ -2677,5 +2860,5 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     fx.fill();
   }
 
-  return { enter, onPick, onMove, onRelease, relayout, refresh, stop };
+  return { enter, onPick, onMove, onRelease, relayout, refresh, stop, useItem: applyItemEffect };
 }

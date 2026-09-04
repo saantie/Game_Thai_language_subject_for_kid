@@ -1,6 +1,6 @@
 // sw.js — Service Worker: cache-first + stale-while-revalidate + auto-reload on update
 // bump CACHE string ทุกครั้งที่ deploy ใหม่ → browser detect diff → install → reload client
-const CACHE = 'witch-cauldron-v209';
+const CACHE = 'witch-cauldron-v210';
 
 const APP_SHELL = [
   './',
@@ -10,6 +10,7 @@ const APP_SHELL = [
   './icons/icon-512.png',
   './src/main.js',
   './src/storage.js',
+  './src/items.js',
   './src/game.js',
   './src/mahjong.js',
   './src/worldMap.js',

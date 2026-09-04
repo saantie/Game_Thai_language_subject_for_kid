@@ -1376,6 +1376,42 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
   margin-top: 0;
 }
 
+/* ไอเทมพลังวิเศษ 5 ช่อง — แถบล่างจอ กดใช้ได้เลยสะดวก (ตัวที่ยังไม่เก็บ = เทา กดไม่ได้)
+   เติมปุ่มจริงด้วย main.js จาก items.ITEM_TYPES — ที่นี่มีแค่ layout ของ #itemBar เอง */
+.item-bar {
+  position: absolute;
+  left: 50%; transform: translateX(-50%);
+  bottom: max(14px, env(safe-area-inset-bottom, 14px));
+  display: flex; gap: 8px;
+}
+.item-slot {
+  position: relative;
+  width: 50px; height: 50px; border-radius: 14px;
+  background: linear-gradient(135deg, var(--purple), var(--purple-deep));
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 4px 14px rgba(40, 16, 90, 0.5), inset 0 1px 0 rgba(255,255,255,0.25);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; line-height: 1;
+  transition: transform 0.12s;
+}
+.item-slot:active { transform: scale(0.9); }
+/* ยังไม่เคยเก็บชนิดนี้เลย — เทา จาง กดไม่ได้ (โชว์ไว้ให้รู้ว่ามี 5 อย่างให้สะสม) */
+.item-slot.empty {
+  filter: grayscale(1); opacity: 0.4;
+  pointer-events: none;
+  background: linear-gradient(135deg, #6a6a72, #45454c);
+}
+.item-count {
+  position: absolute; bottom: -4px; right: -4px;
+  min-width: 18px; height: 18px; padding: 0 4px;
+  border-radius: 999px; background: #ff4d6d; border: 2px solid #2a1350;
+  font-size: 11px; font-weight: 800; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+@media (max-width: 420px) {
+  .item-slot { width: 42px; height: 42px; border-radius: 12px; font-size: 20px; }
+}
+
 /* ปุ่มสกิล ⚔️ — แถวเดียวกับ ☰ ถัดไปทางขวา (68 + 44 + 8 ช่องไฟ) */
 .map-skill-btn {
   position: absolute;

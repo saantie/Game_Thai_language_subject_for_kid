@@ -13,6 +13,7 @@ import { buildLevelSelect } from './ui/levelSelect.js';
 import { openAdultGate } from './ui/adultPage.js';
 import { watchAuthState, isAdminEmail } from './firebaseAuth.js';
 import { MATRA } from './data/matra.js';
+import { ITEM_TYPES, getInventory } from './items.js';
 import {
   loadProgress, saveProgress, clearProgress,
   loadArEnabled, saveArEnabled,
@@ -148,6 +149,37 @@ const mahjongWarmup = createMahjongWarmup({
   },
 });
 
+// ไอเทมพลังวิเศษ 5 ช่อง — แถบล่างจอหน้าแผนที่ (#itemBar อยู่ใน #mapScreen ในตัวเอง จึง
+// โชว์/ซ่อนตาม showScreen('map') ให้แล้ว) สร้างปุ่มครั้งเดียวจาก ITEM_TYPES (items.js
+// เป็นแหล่งความจริงเดียว — ห้ามฮาร์ดโค้ดไอคอน/ชื่อซ้ำที่นี่) แล้ว refresh แค่ count/เทาๆ
+const itemBarEl = $('#itemBar');
+const itemSlotEls = {};
+ITEM_TYPES.forEach((it) => {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'item-slot empty';
+  btn.title = it.name + ' — ' + it.desc;
+  btn.textContent = it.icon;
+  const badge = document.createElement('span');
+  badge.className = 'item-count';
+  badge.hidden = true;
+  btn.appendChild(badge);
+  btn.addEventListener('click', () => worldMap.useItem(it.id)); // false เงียบๆ ถ้าของหมด (ปุ่มเทา กดไม่ได้อยู่แล้ว)
+  itemBarEl.appendChild(btn);
+  itemSlotEls[it.id] = { btn, badge };
+});
+function renderItemBar() {
+  const inv = getInventory();
+  ITEM_TYPES.forEach((it) => {
+    const n = inv[it.id] || 0;
+    const { btn, badge } = itemSlotEls[it.id];
+    btn.classList.toggle('empty', n <= 0);
+    badge.hidden = n <= 0;
+    badge.textContent = n;
+  });
+}
+renderItemBar();
+
 // แผนที่มนตรา — แทนหน้าเลือกมาตรา (วาดบน #fxCanvas เหมือน game.js)
 // onPickMatra = เดินไป/แตะคริสตอลที่ปลดล็อก → เข้าเล่นมาตรานั้นด้วย flow เดิม
 const worldMap = createWorldMap({
@@ -156,6 +188,7 @@ const worldMap = createWorldMap({
   app,
   dom,
   onPickMatra: (id) => startMatraById(id),
+  onInventoryChange: renderItemBar,
 });
 
 // input layer: hybrid — pointer (touch/เมาส์) ทำงานเสมอ, AR (handpinch) ซ้อนทับ

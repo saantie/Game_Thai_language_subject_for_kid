@@ -130,3 +130,20 @@ export function clearRpg() {
     localStorage.removeItem(RPG_KEY);
   } catch (e) {}
 }
+
+// ---- ไอเทมพลังวิเศษ (เก็บสะสมจากลูกสมุนหล่น ใช้แล้วหมดไป — ดู src/items.js) ----
+const ITEMS_KEY = 'witch_items';
+
+export function loadItems() {
+  try {
+    return JSON.parse(localStorage.getItem(ITEMS_KEY) || 'null');
+  } catch (e) {
+    return null;
+  }
+}
+
+export function saveItems(state) {
+  try {
+    localStorage.setItem(ITEMS_KEY, JSON.stringify(state));
+  } catch (e) {}
+}
