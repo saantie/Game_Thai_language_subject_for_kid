@@ -1202,6 +1202,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
           audio.sfx('star');
           addPoints(m.isBoss ? BOSS_PTS : MINION_PTS);
           guardKills[gid] = (guardKills[gid] || 0) + 1;
+          dropGems(m); // ลูกสมุนบินตาย → พลอยหล่น 3 เม็ด
           if (m.isBoss) {
             bossDone[gid] = true;
             particleFx.spawnCelebrationBurst(sX(m.wx), sY(m.wy), { hueMin: 280, hueRange: 40 });
@@ -1289,13 +1290,30 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (dom.totalBadgeValue) dom.totalBadgeValue.textContent = app.totalScore;
   }
 
-  // เก็บพลอย = +1 หัวใจ (ตอนพลังไม่เต็มเท่านั้น) · เก็บแล้วเกิดใหม่ใน GEM_RESPAWN เฟรม
+  // ลูกสมุน "บิน" ตาย → พลอยหล่น 3 เม็ด ตรงจุดตาย (ของหล่น: เก็บแล้วหาย ไม่เกิดใหม่)
+  function dropGems(m) {
+    if (!m || !m.kind || !m.kind.fly) return;
+    for (let k = 0; k < 3; k++) {
+      const a = (k / 3) * Math.PI * 2 + Math.random() * 0.8;
+      gems.push({
+        drop: true, life: 620, taken: false, respawn: 0, bob: Math.random() * 6,
+        nodeIdx: m.guardIdx | 0,
+        wx: m.wx + Math.cos(a) * (12 + Math.random() * 16),
+        wy: m.wy + Math.sin(a) * (10 + Math.random() * 12),
+      });
+    }
+    audio.sfx('gem');
+  }
+
+  // เก็บพลอย = +1 หัวใจ (ตอนพลังไม่เต็มเท่านั้น) · พลอยประจำบ้านเกิดใหม่ใน GEM_RESPAWN · พลอยหล่น (drop) เก็บแล้วหาย
   function updateGems() {
     const canHeal = hero.hp < sk.maxHp && hero.fainting === 0;
     const pr2 = GEM_PICK_R * GEM_PICK_R;
     for (let i = 0; i < gems.length; i++) {
       const g = gems[i];
+      if (g.drop && g.life !== undefined && --g.life <= 0) { gems.splice(i, 1); i--; continue; } // หมดอายุ (~10 วิ)
       if (g.taken) {
+        if (g.drop) { gems.splice(i, 1); i--; continue; }
         // เกิดใหม่ = สุ่มที่ใหม่ ไม่โผล่จุดเดิม (เดิมเด็กจำตำแหน่งได้ ไม่ต้องสำรวจ)
         if (--g.respawn <= 0) { g.taken = false; placeGem(g, nodes[g.nodeIdx]); }
         continue;
@@ -1305,11 +1323,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       const dx = g.wx - hero.wx;
       const dy = g.wy - hero.wy;
       if (dx * dx + dy * dy <= pr2) {
-        g.taken = true;
-        g.respawn = GEM_RESPAWN;
         hero.hp = Math.min(sk.maxHp, hero.hp + 1);
         audio.sfx('gem');
         particleFx.spawnCelebrationBurst(sX(g.wx), sY(g.wy), { hueMin: 315, hueRange: 30 });
+        if (g.drop) { gems.splice(i, 1); i--; }
+        else { g.taken = true; g.respawn = GEM_RESPAWN; }
         break; // เก็บทีละเม็ดต่อเฟรม
       }
     }
@@ -1367,6 +1385,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (gn) {
       addPoints(m.isBoss ? BOSS_PTS : MINION_PTS);
       guardKills[gn.matraId] = (guardKills[gn.matraId] || 0) + 1;
+      dropGems(m); // ลูกสมุนบินตาย (จาก AoE/beam/ผู้ช่วย) → พลอยหล่น 3 เม็ด
       if (m.isBoss) { bossDone[gn.matraId] = true; mapSay('ล้มบอสแล้ว! รีบไปเก็บกุญแจ'); }
       particleFx.spawnCelebrationBurst(sX(m.wx), sY(m.wy), { hueMin: m.isBoss ? 280 : 90, hueRange: 40 });
     }
@@ -1663,6 +1682,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     for (let i = 0; i < gems.length; i++) {
       const g = gems[i];
       if (g.taken) continue;
+      // พลอยหล่นใกล้หมดอายุ → กะพริบเตือน
+      if (g.drop && g.life < 96 && ((now / 90) | 0) % 2) continue;
       const gsy = g.wy - cy;
       if (gsy < -40 || gsy > H + 40) continue;
       const gsx = g.wx - cx;
