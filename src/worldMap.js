@@ -116,9 +116,9 @@ const HOUSE_NUDGE_Y = -12;
 const NODE_HALO = 46;
 
 // ---- Phase 2: ลูกสมุน + บอส เฝ้าคริสตอล ----
-// ศัตรู "เข้าทีละตัว" — มีตัวเดียวที่ไล่/กัดได้ (active) ที่เหลือลาดตระเวนรอ
+// ศัตรู "เข้าทีละตัว" — มีตัวเดียวที่ไล่/กัดได้ (active) ที่เหลือไหลลง/รอ
 // ถูกตี → กระเด็นออก + สะดุด + reengageCd (เดินกลับเข้ามาใหม่ / เปิดทางให้ตัวอื่น)
-// ศัตรูของแต่ละมาตรา "หมดได้" — ฆ่าแล้วไม่เกิดใหม่ (clearedGuards/guardKills per matraId)
+// ศัตรูไหลลงมาจากข้างบนไม่มีหมด · guardKills คุมจังหวะบอสมาเฝ้ากุญแจ
 const MAX_MINIONS = 6;
 const BOSS_HP = 4;             // บอส (มาตรา 5+) ตี 4 ครั้งตาย
 
@@ -181,7 +181,6 @@ function difficultyFor(idx, total) {
     biteCd: Math.round(112 - t * 46), // 112 → 66 เฟรม
   };
 }
-function enemyTotal(d) { return d.minions + (d.boss ? 1 : 0); }
 const HERO_START_GAP = 64; // แม่มดน้อยเริ่มห่างจากขอบโซนลูกสมุนเท่านี้ (ต้องเดินเข้าไปเอง)
 
 // ---- แถบพลังแม่มดน้อย ----
@@ -253,10 +252,12 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   let minions = [];
   const minionPool = [];
   let spawnCd = 80;
+  const keyDelivered = Object.create(null); // matraId -> true (พากุญแจกลับมาเปิดบ้านแล้ว)
+  const bossDone = Object.create(null);     // matraId -> true (ฆ่าบอสรอบนี้แล้ว)
+  let heroKey = -1;                          // idx บ้านที่แม่มดถือกุญแจอยู่ (-1 = ไม่ถือ)
   let diff = difficultyFor(0, 30); // ความยากของคริสตอลเป้าหมายปัจจุบัน (อัปเดตใน updateMinions)
-  // คริสตอลเป้าหมาย "ปิดผนึก" จนกว่าจะกำจัดลูกสมุนที่เฝ้าครบ (keyed by matraId, per session)
-  const clearedGuards = Object.create(null); // matraId -> true = เคลียร์แล้ว เปิดเก็บได้
-  const guardKills = Object.create(null);    // matraId -> จำนวนลูกสมุนที่ฆ่าในความพยายามนี้
+  // บ้านเป้าหมาย "ปิดผนึก" จนกว่าจะพากุญแจ (ที่อยู่เหนือบ้าน) กลับมาเปิด — เก็บ per matraId ทั้ง session
+  const guardKills = Object.create(null);    // matraId -> จำนวนลูกสมุนที่ฆ่า (คุมจังหวะบอสมา)
   const guardSpawns = Object.create(null);   // matraId -> จำนวนลูกสมุนที่ปล่อยออกมาแล้ว
 
   // Phase 3
@@ -306,7 +307,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
   // สุ่มตำแหน่งพลอยรอบคริสตอล — แต่ละเม็ดสุ่มใน "ช่อง" ของตัวเอง (แบ่งวงตาม GEM_PER_NODE)
   // สุ่มจริงแต่ไม่ทับกันเอง · ใช้ Math.random ไม่ใช่ h01 เพราะพลอยเป็นของ gameplay ที่
-  // เปลี่ยนตำแหน่งได้ (แนวเดียวกับ pickWanderTarget) ต่างจากของประดับที่ต้องอยู่นิ่ง
+  // เปลี่ยนตำแหน่งได้ทุกครั้งที่เกิดใหม่ ต่างจากของประดับที่ต้องอยู่นิ่ง
   function placeGem(g, node) {
     const ang = ((g.slot + Math.random()) / GEM_PER_NODE) * Math.PI * 2;
     const f = GEM_MIN_F + Math.random() * (1 - GEM_MIN_F);
@@ -497,11 +498,15 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       stars[id] = getStars(app, id);
       if (unlocked[id]) lastUnlockedIdx = i;
     }
-    // เดินขึ้นได้เกินคริสตอลที่ปลดล็อกไปอีกแค่ 2 ลูก (ลูกที่ล็อก)
+    // เดินขึ้นได้เกินบ้านที่ปลดล็อกไปอีกแค่ 2 หลัง (หลังที่ล็อก)
     const ceilIdx = Math.min(nodes.length - 1, lastUnlockedIdx + 2);
     walkCeilY = nodes[ceilIdx].wy - NODE_R - 20;
     const prevFocus = focusIdx;
     focusIdx = computeFocusIdx();
+    // บ้านเป้าหมายยังผนึก → ต้องเดินขึ้นไปถึงกุญแจได้ (สำคัญตอน focus = บ้านหลังสุด)
+    if (nodeSealed(focusIdx)) {
+      walkCeilY = Math.min(walkCeilY, keyPos(focusIdx).wy - 60);
+    }
     if (focusIdx !== prevFocus) {
       // เป้าหมายเปลี่ยน (เช่น admin ล็อกอิน) — ลูกสมุนเฝ้าลูกเก่าไม่ต้องแล้ว
       minions.forEach((m) => minionPool.push(m));
@@ -535,11 +540,21 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     spawnCd = 60;
   }
 
-  // คริสตอลปิดผนึกอยู่ไหม (ต้องกำจัดลูกสมุนก่อนถึงเก็บได้)
+  // บ้านปิดผนึกอยู่ไหม (ต้องพากุญแจกลับมาเปิด)
   function nodeSealed(i) {
-    if (REDUCED_MOTION) return false;      // โหมดสงบ — ไม่มีลูกสมุน เปิดตลอด
-    if (i !== focusIdx) return false;      // มีลูกสมุนเฝ้าเฉพาะคริสตอลเป้าหมาย
-    return !clearedGuards[nodes[i].matraId];
+    if (REDUCED_MOTION) return false;      // โหมดสงบ — ไม่มีศัตรู/กุญแจ เปิดตลอด
+    if (i !== focusIdx) return false;      // มีศัตรู/กุญแจเฉพาะบ้านเป้าหมาย
+    return !keyDelivered[nodes[i].matraId];
+  }
+
+  // ตำแหน่งกุญแจของบ้าน i — เหนือบ้านขึ้นไป (ไม่ใช่เดินเก็บง่าย) สุ่มแนวนอนรอบถนน
+  // deterministic (hash) → ตายแล้วกุญแจกลับจุดเดิมเป๊ะ ไม่ต้องเก็บ state
+  function keyPos(i) {
+    const n = nodes[i];
+    const upFrac = 0.62 + h01(i * 41 + 7) * 0.33;         // 0.62–0.95 ของ nodeSpacing เหนือบ้าน
+    const ky = n.wy - nodeSpacing * upFrac;
+    const kx = spineXAt(ky) + (h01(i * 53 + 11) - 0.5) * (W * 0.56);
+    return { wx: Math.max(30, Math.min(worldW - 30, kx)), wy: ky };
   }
 
   function clampCam(y) {
@@ -604,7 +619,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       if (k >= 0) fi = k;
     }
     focusIdx = fi;
-    resetGuardWave(); // ศัตรูที่เหลือ = enemyTotal - ที่ฆ่าไปแล้ว (ไม่เกิดใหม่)
+    resetGuardWave(); // init ตัวนับ guardKills/guardSpawns + หน่วงก่อนศัตรูตัวแรกไหลมา
     const node = nodes[fi];
 
     hero.wx = node.wx;
@@ -622,6 +637,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     hero.hurtT = 0;
     hero.fainting = 0;
     hero.atk = null;
+    heroKey = -1; // เข้าเล่นมาตราแล้วกลับมา = ไม่ถือกุญแจ (keyDelivered ยังคงอยู่ทั้ง session)
     for (let i = 0; i < gems.length; i++) { gems[i].taken = false; gems[i].respawn = 0; }
 
     cam.x = clampCamX(node.wx - W / 2);
@@ -813,9 +829,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     if (nodeSealed(i)) {
       if (viaTap) {
         audio.sfx('tile_blocked');
-        const tot = enemyTotal(difficultyFor(i, nodes.length));
-        const left = Math.max(0, tot - (guardKills[n.matraId] || 0));
-        mapSay('กำจัดศัตรูให้หมดก่อนนะ! เหลืออีก ' + left + ' ตัว');
+        mapSay(heroKey === i ? 'พากุญแจมาที่บ้านสิ!' : 'ไปเก็บกุญแจเหนือบ้านก่อนนะ!');
         n.shake = 1;
       }
       return;
@@ -960,6 +974,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     // ---- เก็บพลอยเติมหัวใจ ----
     updateGems();
 
+    // ---- กุญแจบ้าน: เดินทับ = ถือ · พากลับไปที่บ้าน = เปิด ----
+    updateKey();
+
     // ---- กล้อง (แพนทั้งแนวตั้ง + แนวนอน) ----
     if (camLockIdx >= 0 && nodes[camLockIdx]) {
       camTargetX = clampCamX(nodes[camLockIdx].wx - W / 2);
@@ -1001,13 +1018,12 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
 
     const fnode = nodes[focusIdx];
     const fid = fnode && fnode.matraId;
-    const needGuards = fnode && unlocked[fid] && (stars[fid] || 0) < 3 && !clearedGuards[fid];
+    // ยังไม่ส่งกุญแจ = บ้านยังผนึก = ศัตรูยังไหลมาไม่หยุด
+    const needGuards = fnode && unlocked[fid] && !keyDelivered[fid];
 
-    // ปล่อยศัตรูทีละตัว — ลูกสมุนปกติก่อนจนหมด แล้วบอส 1 ตัว (idx>=4)
-    //   ศัตรูมีจำนวนจำกัด: จำนวนที่ยังต้องเจอ = diff.minions - ที่ฆ่าไปแล้ว (+ บอสถ้ามี)
+    // ลูกสมุนไหลลงมาจากข้างบนเรื่อยๆ ไม่มีหมด · ฆ่าครบจำนวนความยาก → บอสมาเฝ้ากุญแจ 1 ตัว
     if (!REDUCED_MOTION && !returnAnim && hero.fainting === 0 && needGuards) {
       const killed = guardKills[fid] || 0;
-      const normalsKilled = Math.min(killed, diff.minions);
       let normalsAlive = 0;
       let bossAlive = false;
       for (let k = 0; k < minions.length; k++) {
@@ -1015,15 +1031,14 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         else normalsAlive++;
       }
       if (spawnCd > 0) spawnCd--;
-      if (spawnCd <= 0 && minions.length < MAX_MINIONS) {
-        if (normalsKilled + normalsAlive < diff.minions) {
-          spawnGuard(fnode, guardSpawns[fid] || 0, false);
-          guardSpawns[fid] = (guardSpawns[fid] || 0) + 1;
-          spawnCd = 34;
-        } else if (diff.boss && normalsKilled >= diff.minions && !bossAlive && killed < diff.minions + 1) {
-          spawnGuard(fnode, guardSpawns[fid] || 0, true);
-          guardSpawns[fid] = (guardSpawns[fid] || 0) + 1;
-          spawnCd = 44;
+      if (spawnCd <= 0) {
+        if (diff.boss && killed >= diff.minions && !bossAlive && !bossDone[fid]) {
+          spawnBoss(fnode);
+          spawnCd = 90;
+        } else if (normalsAlive < MAX_MINIONS) {
+          spawnStreamMinion(fnode);
+          // ยิ่งด่านยาก ยิ่งไหลถี่ (~52 → 40 เฟรม)
+          spawnCd = Math.max(40, Math.round(60 - diff.minions * 4));
         }
       }
     }
@@ -1058,7 +1073,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       if (m.biteCd > 0) m.biteCd--;
 
       const gnode = nodes[m.guardIdx];
-      if (!gnode || (stars[gnode.matraId] || 0) >= 3 || m.wy < cullLo || m.wy > cullHi) {
+      // ปล่อยคืน pool: บ้านเปิดแล้ว / หลุดจอ / เดินลงเลยบ้านไปแล้ว (สายไหลผ่านไป ไม่ปะทะ)
+      const flowedPast = !m.isBoss && !m.active && m.reengageCd <= 0 &&
+        m.wy > (m.streamTargetY != null ? m.streamTargetY + 24 : gnode ? gnode.wy + 90 : 1e9);
+      if (!gnode || keyDelivered[gnode.matraId] || m.wy < cullLo || m.wy > cullHi || flowedPast) {
         if (hero.atk === m) hero.atk = null;
         minionPool.push(m);
         minions.splice(i, 1);
@@ -1091,21 +1109,28 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
         if (distHero < BITE_R && m.biteCd <= 0 && hero.invuln <= 0 && hero.fainting === 0) {
           biteHero(m);
         }
-      } else {
-        // เดินเตร่ช้า ๆ กระจายอยู่ใกล้ ๆ คริสตอล (ไม่วนเป็นวง) — สุ่มจุดใหม่เป็นระยะ
+      } else if (m.isBoss) {
+        // บอสไม่เดินตาม เฝ้ากุญแจอยู่กับที่ + ส่ายเล็กน้อย
         m.spin = 0;
-        m.wanderT--;
-        if (m.wanderT <= 0) pickWanderTarget(m, gnode);
-        const wdx = m.wanderX - m.wx;
-        const wdy = m.wanderY - m.wy;
-        const wd = Math.hypot(wdx, wdy);
-        if (wd > 3) {
-          const step = Math.min(wd, WANDER_SPEED * (m.kind.fly ? FLY_WANDER_MUL : 1));
-          m.wx += (wdx / wd) * step;
-          m.wy += (wdy / wd) * step;
-          if (Math.abs(wdx) > 0.3) m.facing = wdx < 0 ? -1 : 1;
+        m.wx += Math.sin(m.bob * 0.5) * 0.4;
+      } else {
+        // สายศัตรูไหลลงมาจากข้างบน มุ่งหน้ามาที่บ้าน (ทางที่แม่มดต้องออกไปหากุญแจ)
+        // ถึงบ้านแล้วเดินลงต่อจนหลุดจอ → despawn (flowedPast) → สายไหลไม่มีหมด
+        m.spin = 0;
+        const step = WANDER_SPEED * 2.4 * (m.kind.fly ? FLY_WANDER_MUL : 1);
+        const belowHouse = gnode && m.wy > gnode.wy - 10;
+        if (belowHouse) {
+          m.wy += step;                                   // ผ่านบ้านแล้ว เดินลงตรงๆ
+        } else if (gnode) {
+          const dx = gnode.wx - m.wx, dy = (gnode.wy + 4) - m.wy;
+          const dd = Math.hypot(dx, dy) || 1;
+          m.wx += (dx / dd) * step;
+          m.wy += (dy / dd) * step;
+        } else {
+          m.wy += step;
         }
-        // ถ้าถึงจุดก่อนหมดเวลา = ยืนแช่ (idle bob) จนกว่า wanderT จะหมดแล้วสุ่มใหม่
+        m.wx += Math.sin(m.bob * 0.6 + (m.homeA || 0)) * 0.5; // ส่ายซ้ายขวา
+        m.facing = 1;
       }
       m.bob += 0.12;
 
@@ -1136,14 +1161,13 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
           audio.sfx('star');
           addPoints(m.isBoss ? BOSS_PTS : MINION_PTS);
           guardKills[gid] = (guardKills[gid] || 0) + 1;
-          if (guardKills[gid] >= enemyTotal(diff) && !clearedGuards[gid]) {
-            // เคลียร์ศัตรูครบ (ลูกสมุน + บอส) → คริสตอลเปิด!
-            clearedGuards[gid] = true;
-            particleFx.spawnCelebrationBurst(sX(gnode.wx), sY(gnode.wy), { hueMin: 186, hueRange: 40 });
+          if (m.isBoss) {
+            bossDone[gid] = true;
+            particleFx.spawnCelebrationBurst(sX(m.wx), sY(m.wy), { hueMin: 280, hueRange: 40 });
             audio.sfx('ting');
-            mapSay('เปิดแล้ว! เดินไปเก็บคริสตอลได้เลย');
-          } else if (diff.boss && guardKills[gid] === diff.minions) {
-            mapSay('บอสมาแล้ว! ระวังตัวนะ');
+            mapSay('ล้มบอสแล้ว! รีบไปเก็บกุญแจ');
+          } else if (diff.boss && !bossDone[gid] && guardKills[gid] === diff.minions) {
+            mapSay('บอสกำลังมาเฝ้ากุญแจ!');
           }
           if (hero.atk === m) hero.atk = null; // ตัวที่สั่งตีตายแล้ว
           minionPool.push(m);
@@ -1175,14 +1199,19 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       hero.hurtT = 0;
       hero.atk = null;
       addPoints(-100); // ตาย = เหรียญสะสมลด 100 (clamp ≥ 0 ใน addPoints)
-      mapSay('ล้มแล้ว! เสียเหรียญ 100');
+      if (heroKey !== -1) {
+        heroKey = -1; // ตายพร้อมถือกุญแจ → กุญแจหล่นกลับไปจุดเดิม (keyPos คงที่)
+        mapSay('ทำกุญแจหล่น! ต้องไปเอาใหม่ที่เดิม');
+      } else {
+        mapSay('ล้มแล้ว! เสียเหรียญ 100');
+      }
       particleFx.spawnExplosion(sX(hero.wx), sY(hero.wy));
     }
   }
 
   function heroRespawn() {
     const node = nodes[focusIdx] || nodes[0];
-    // ฟื้นห่างจากโซนลูกสมุนลงมา (ไม่ตกกลางวง → กันสลบวนไม่จบ)
+    // ฟื้นใต้บ้าน (ไม่ตกกลางวง → กันสลบวนไม่จบ)
     hero.wx = node.wx;
     hero.wy = heroSealedStartY(node);
     hero.tx = hero.wx;
@@ -1191,22 +1220,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     hero.hp = sk.maxHp;
     hero.invuln = 150; // ~2.5s อมตะให้ตั้งหลัก
     hero.hurtT = 0;
-    // ดึงลูกสมุนกลับเข้าโซนบ้านของตัวเอง เอนขึ้นบน (พ้นจากฮีโร่ที่ฟื้นด้านล่าง) + หน่วงนาน
-    for (let i = 0; i < minions.length; i++) {
-      const m = minions[i];
-      const f = 0.6 + Math.random() * 0.4;
-      m.wx = node.wx + Math.cos(m.homeA) * SCATTER_RX * f;
-      m.wy = node.wy + Math.sin(m.homeA) * SCATTER_RY * f - 30; // เอนขึ้นบน หนีฮีโร่
-      m.wanderX = m.wx;
-      m.wanderY = m.wy;
-      m.wanderT = 60;
-      m.stagger = 0;
-      m.active = false;
-      m.reengageCd = 90;
-      m.biteCd = diff.biteCd;
-      m.vx = 0;
-      m.vy = 0;
-    }
+    // ล้างศัตรูที่ค้าง — สายไหลจะสร้างใหม่เอง (guardKills/bossDone คงไว้ = ความคืบหน้าไม่หาย)
+    minions.forEach((m) => minionPool.push(m));
+    minions.length = 0;
+    spawnCd = 90;
     camTargetX = clampCamX(node.wx - W / 2);
     camTargetY = clampCam(node.wy - H / 2);
     mapSay('ตั้งหลักใหม่ ระวังมากขึ้นนะ');
@@ -1246,37 +1263,41 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     }
   }
 
-  // เลือกจุดเดินเตร่ใหม่ — แต่ละตัวมี "โซนบ้าน" (m.homeA) ของตัวเอง กระจายห่างกันรอบคริสตอล
-  // เตร่อยู่ในโซนตัวเอง + ระยะไม่น้อยกว่า ~ครึ่งวง (ไม่มุดกลับมากอดลูกแก้ว)
-  function pickWanderTarget(m, gnode) {
-    const ang = m.homeA + (Math.random() - 0.5) * 0.8;    // เตร่ในโซนตัวเอง ~±23° (ไม่ล้ำช่องล่าง)
-    const f = 0.55 + Math.random() * 0.45;                 // 0.55–1.0 ของรัศมีวงรี
-    m.wanderX = gnode.wx + Math.cos(ang) * SCATTER_RX * f;
-    m.wanderY = gnode.wy + Math.sin(ang) * SCATTER_RY * f;
-    m.wanderT = 90 + (Math.random() * 130 | 0);            // เดิน/ยืนแช่ ~2–3.7 วิ
+  // กุญแจบ้าน — เดินทับ (เหนือบ้าน) = ถือ · พากลับมาที่บ้าน = เปิดผนึก แล้ว nearestUnlockedUnderHero เข้าเอง
+  function updateKey() {
+    const i = focusIdx;
+    const n = nodes[i];
+    if (REDUCED_MOTION || !n || !unlocked[n.matraId] || keyDelivered[n.matraId] || hero.fainting > 0) return;
+    if (heroKey === i) {
+      const dx = hero.wx - n.wx, dy = hero.wy - n.wy;
+      const R = NODE_R + HERO_R + 8;
+      if (dx * dx + dy * dy <= R * R) {
+        keyDelivered[n.matraId] = true;
+        heroKey = -1;
+        audio.sfx('ting');
+        particleFx.spawnCelebrationBurst(sX(n.wx), sY(n.wy), { hueMin: 44, hueRange: 26 });
+        mapSay('เปิดบ้านได้แล้ว! เดินเข้าไปเลย');
+      }
+    } else if (heroKey === -1) {
+      const kp = keyPos(i);
+      const dx = hero.wx - kp.wx, dy = hero.wy - kp.wy;
+      const R = GEM_PICK_R + 8;
+      if (dx * dx + dy * dy <= R * R) {
+        heroKey = i;
+        audio.sfx('gem');
+        particleFx.spawnCelebrationBurst(sX(kp.wx), sY(kp.wy), { hueMin: 44, hueRange: 22 });
+        mapSay('ได้กุญแจแล้ว! รีบพากลับไปเปิดบ้าน');
+      }
+    }
   }
 
-  // ศัตรูเฝ้าคริสตอล gnode — แต่ละตัวได้ "โซนบ้าน" กระจายเท่า ๆ กันรอบคริสตอล
-  //   เว้นช่องล่างตรง ๆ (ทางที่เด็กเดินขึ้นมา) ไว้ — ลูกสมุนเฝ้าด้านข้าง+ด้านบน+เฉียงล่าง
-  //   เด็กเดินขึ้นทางกลางได้โดยไม่โดนรุมทันที แต่ต้องกวาดให้ครบทุกตัวคริสตอลถึงเปิด
-  function spawnGuard(gnode, idx, isBoss) {
-    const m = minionPool.pop() || {};
-    const total = Math.max(1, enemyTotal(diff));
-    const GAP = 1.15;                       // ครึ่งความกว้างช่องล่างที่เว้นไว้ (rad ~66°)
-    const arc = Math.PI * 2 - GAP * 2;      // ส่วนโค้งที่กระจายลูกสมุน (~228°)
-    const slot = idx % total;
-    m.homeA = Math.PI / 2 + GAP + ((slot + 0.5) / total) * arc; // π/2 = ทิศลง (หา่งเด็ก)
-    const f = 0.6 + h01(idx * 7 + 3) * 0.4;
+  // ตั้งค่าฟิลด์ร่วมของลูกสมุน/บอส (ดึงจาก pool ใช้ซ้ำ ไม่ alloc)
+  function initMinion(m, isBoss) {
     m.guardIdx = focusIdx;
     m.isBoss = !!isBoss;
-    // สายพันธุ์: วนตามช่องที่เกิด → คลื่นเดียวมีหลายแบบปนกัน ไม่ใช่สุ่มจนซ้ำทั้งคลื่น
-    const kinds = kindsFor(focusIdx);
-    m.kind = isBoss ? BOSS_KIND : kinds[idx % kinds.length];
-    m.wx = gnode.wx + Math.cos(m.homeA) * SCATTER_RX * f;
-    m.wy = gnode.wy + Math.sin(m.homeA) * SCATTER_RY * f;
     m.wanderX = m.wx;
     m.wanderY = m.wy;
-    m.wanderT = 20 + idx * 8; // เหลื่อมกันเล็กน้อยตอนเพิ่งเกิด
+    m.wanderT = 30;
     m.vx = 0;
     m.vy = 0;
     m.hp = m.kind.hp;
@@ -1287,9 +1308,39 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
     m.biteCd = isBoss ? 30 : 45;
     m.spin = 0;
     m.spinV = 0;
-    m.bob = h01((performance.now() | 0) * 7 + idx) * 6;
+    m.bob = Math.random() * 6;
     m.facing = 1;
     minions.push(m);
+  }
+
+  // ลูกสมุน 1 ตัว — เกิดเหนือจอ/เหนือกุญแจ แล้วเดินลงมาผ่านบ้าน (สายไหลไม่มีหมด)
+  function spawnStreamMinion(gnode) {
+    const m = minionPool.pop() || {};
+    const seq = guardSpawns[gnode.matraId] || 0;
+    guardSpawns[gnode.matraId] = seq + 1;
+    const kinds = kindsFor(focusIdx);
+    m.kind = kinds[seq % kinds.length];
+    const kp = keyPos(focusIdx);
+    const spawnY = Math.min(cam.y - 50, kp.wy - 40);
+    m.wy = spawnY;
+    m.wx = spineXAt(spawnY) + (Math.random() - 0.5) * W * 0.7;
+    m.wx = Math.max(24, Math.min(worldW - 24, m.wx));
+    m.homeA = Math.random() * Math.PI * 2;              // เฟสส่ายซ้ายขวา
+    m.streamTargetY = gnode.wy + 60;                    // ผ่านบ้านลงไปเกินนี้ = despawn
+    initMinion(m, false);
+  }
+
+  // บอส 1 ตัว — โผล่เฝ้ากุญแจ (เหนือบ้าน) เมื่อฆ่าลูกสมุนครบจำนวนความยาก
+  function spawnBoss(gnode) {
+    const m = minionPool.pop() || {};
+    m.kind = BOSS_KIND;
+    const kp = keyPos(focusIdx);
+    m.wx = kp.wx;
+    m.wy = kp.wy - 26;
+    m.homeA = Math.PI / 2;
+    m.streamTargetY = m.wy;                             // บอสไม่ไหลลง
+    initMinion(m, true);
+    mapSay('บอสมาเฝ้ากุญแจ! ตีให้ล้ม');
   }
 
   // ---------- Phase 3: return beat ----------
@@ -1472,6 +1523,20 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       drawGem(gsx, gsy, g.bob, now);
     }
 
+    // กุญแจบ้านเป้าหมาย — ที่จุดเดิม (ยังไม่เก็บ) หรือลอยเหนือหัวแม่มด (ถืออยู่)
+    {
+      const fi = focusIdx;
+      const fn = nodes[fi];
+      if (fn && !REDUCED_MOTION && unlocked[fn.matraId] && !keyDelivered[fn.matraId]) {
+        if (heroKey === fi) {
+          drawKey(hero.wx - cx, hero.wy - cy - HERO_R * 2.6, now, true);
+        } else {
+          const kp = keyPos(fi);
+          drawKey(kp.wx - cx, kp.wy - cy, now, false);
+        }
+      }
+    }
+
     particleFx.draw();
 
     // ---- HUD: แถบพลังแม่มดน้อย (มุมซ้ายบน ใต้ปุ่ม) ----
@@ -1582,7 +1647,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       }
     }
 
-    // โล่ปิดผนึก + จำนวนลูกสมุนที่เหลือ
+    // โล่ปิดผนึก + สถานะกุญแจ
     if (sealed) {
       const t = (now % 1600) / 1600;
       fx.beginPath();
@@ -1590,9 +1655,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
       fx.strokeStyle = 'rgba(150,120,235,0.35)';
       fx.lineWidth = 3;
       fx.stroke();
-      const left = Math.max(0, enemyTotal(diff) - (guardKills[n.matraId] || 0));
-      fx.fillStyle = '#e7ddff';
-      fx.fillText('ศัตรูเหลือ ' + left, sx, sy - NODE_HALO - 30);
+      fx.fillStyle = '#ffe6a6';
+      fx.fillText(heroKey === i ? '🔑 พากุญแจกลับบ้าน!' : '🔑 หากุญแจเหนือบ้าน', sx, sy - NODE_HALO - 30);
     }
 
     // ชื่อมาตรา (fx.font set แล้วใน render() ก่อนวน loop)
@@ -1799,6 +1863,35 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra }) {
   }
 
   // พลอยเติมพลัง — เพชรชมพูลอยเด้ง (สีต่างจากคริสตอลฟ้า / ดาวเหลือง / ลูกสมุนเขียว)
+  // กุญแจทอง — หูจับ (วงแหวน) + ก้าน + เดือย 2 อัน · carried = เล็กลง ไม่ลอย
+  function drawKey(sx, sy, now, carried) {
+    const sc = carried ? 0.72 : 1;
+    const bob = carried ? 0 : Math.sin(now * 0.004) * 4;
+    fx.save();
+    fx.translate(sx, sy + bob);
+    fx.scale(sc, sc);
+    if (!carried) {
+      const pulse = 0.3 + 0.28 * Math.sin(now * 0.006);
+      fx.fillStyle = 'rgba(255,224,130,' + pulse.toFixed(2) + ')';
+      fx.beginPath(); fx.arc(0, 0, 19, 0, Math.PI * 2); fx.fill();
+    }
+    // หูจับ (วงแหวนกลวง วาดด้วยเส้น ไม่เจาะรูทะลุ overlay)
+    fx.strokeStyle = '#8a5f16'; fx.lineWidth = 5.5;
+    fx.beginPath(); fx.arc(0, -7, 6.6, 0, Math.PI * 2); fx.stroke();
+    fx.strokeStyle = '#e8b53a'; fx.lineWidth = 3.4;
+    fx.beginPath(); fx.arc(0, -7, 6.6, 0, Math.PI * 2); fx.stroke();
+    // ก้าน + เดือย
+    fx.fillStyle = '#e8b53a';
+    fx.strokeStyle = '#8a5f16'; fx.lineWidth = 1.4;
+    fx.fillRect(-2, -1, 4, 16); fx.strokeRect(-2, -1, 4, 16);
+    fx.fillRect(2, 8, 6, 3); fx.strokeRect(2, 8, 6, 3);
+    fx.fillRect(2, 12, 4, 3); fx.strokeRect(2, 12, 4, 3);
+    // ประกาย
+    fx.fillStyle = 'rgba(255,255,235,0.9)';
+    fx.beginPath(); fx.arc(-2.5, -9, 1.6, 0, Math.PI * 2); fx.fill();
+    fx.restore();
+  }
+
   function drawGem(sx, sy0, phase, now) {
     const sy = sy0 - 3 - Math.sin(now * 0.004 + phase) * 3;
     const pulse = 0.5 + 0.5 * Math.sin(now * 0.006 + phase);
