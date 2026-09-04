@@ -462,7 +462,7 @@ function playIntroVideo(src, onDone) {
 
   introVideo.src = src;
   introVideo.muted = false;
-  introVideo.volume = 0.42; // ลดเสียงวิดีโอนำเรื่อง — 0.6 เดิม ลดลงอีก 30% (0.6 x 0.7)
+  introVideo.volume = 0.6; // เสียงวิดีโอนำเรื่อง (Movie 1) — 60%
   introVideo.onerror = finish;   // format/network error → ข้าม
   introVideo.onended = finish;
   skipVideoBtn.onclick = finish;
