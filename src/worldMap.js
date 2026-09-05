@@ -1784,21 +1784,25 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
   // ผู้ช่วย — จำนวนตาม sk.helpers, โคจรรอบแม่มด + ยิงศัตรูใกล้สุดเป็นระยะ (auto)
   function syncHelpers() {
     const want = sk.helpers | 0;
-    while (helpers.length < want) helpers.push({ wx: hero.wx, wy: hero.wy, a: Math.random() * 6.28, atkCd: 30, zap: null });
+    while (helpers.length < want) helpers.push({ wx: hero.wx, wy: hero.wy, a: Math.random() * 6.28, atkCd: 30, target: null });
     while (helpers.length > want) helpers.pop();
   }
+  // ผู้ช่วย — บินเข้าไปตีประชิดเอง ***ไม่ยิงจากระยะไกล*** (ผู้ใช้ยืนยัน: ให้บินไปช่วยตีเท่านั้น)
+  // ไม่มีเป้าหมาย → โคจรรอบตัวฮีโร่เหมือนเดิม · มีเป้าหมาย → บินตรงเข้าหาจนถึงระยะประชิดค่อยตี
+  const HELPER_SPD = 3.6;
+  const HELPER_MELEE_R = 22;
+  const HELPER_SEEK_R = 220; // ระยะที่มองเห็นเป้าหมาย (จากตัวผู้ช่วยเอง ไม่ใช่จากฮีโร่)
   function updateHelpers() {
     for (let h = 0; h < helpers.length; h++) {
       const hp = helpers[h];
       hp.a += 0.03;
-      const ox = hero.wx + Math.cos(hp.a + h * 2.1) * (46 + h * 5);
-      const oy = hero.wy - HERO_R * 0.7 + Math.sin(hp.a + h * 2.1) * (28 + h * 4);
-      hp.wx += (ox - hp.wx) * 0.14;
-      hp.wy += (oy - hp.wy) * 0.14;
       if (hp.atkCd > 0) hp.atkCd--;
-      if (hp.zap && ++hp.zap.t > 8) hp.zap = null;
-      if (hp.atkCd <= 0 && hero.fainting === 0) {
-        let best = null, bd = 150 * 150;
+
+      // เป้าหมายเดิมตายไปแล้ว/หายไปจากจอ → เลิกตาม
+      if (hp.target && (minions.indexOf(hp.target) < 0 || hp.target.hp <= 0)) hp.target = null;
+      // ยังไม่มีเป้าหมาย + หมดคูลดาวน์ → หาตัวใกล้สุดที่บินไปถึงได้
+      if (!hp.target && hp.atkCd <= 0 && hero.fainting === 0) {
+        let best = null, bd = HELPER_SEEK_R * HELPER_SEEK_R;
         for (let i = 0; i < minions.length; i++) {
           const m = minions[i];
           if (m.isBoss || m.stagger > 0) continue;
@@ -1806,15 +1810,31 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
           const dd = dx * dx + dy * dy;
           if (dd < bd) { bd = dd; best = m; }
         }
-        if (best) {
-          best.hp--;
-          if (best.stagger < 8) best.stagger = 8;
-          hp.atkCd = 66;
-          hp.zap = { tx: best.wx, ty: best.wy, t: 0 };
-          spawnHitFx(best.wx, best.wy);
+        hp.target = best;
+      }
+
+      if (hp.target) {
+        // บินตรงเข้าหาตัวจริง — ตีได้ก็ต่อเมื่อถึงระยะประชิดแล้วเท่านั้น
+        const dx = hp.target.wx - hp.wx, dy = hp.target.wy - hp.wy;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d > HELPER_MELEE_R) {
+          hp.wx += (dx / d) * HELPER_SPD;
+          hp.wy += (dy / d) * HELPER_SPD;
+        } else if (hp.atkCd <= 0) {
+          const m = hp.target;
+          m.hp--;
+          if (m.stagger < 8) m.stagger = 8;
+          hp.atkCd = 50;
+          spawnHitFx(m.wx, m.wy);
           audio.sfx('minion_cry');
-          if (best.hp <= 0) killMinionAt(best);
+          if (m.hp <= 0) { killMinionAt(m); hp.target = null; }
         }
+      } else {
+        // ไม่มีเป้าหมาย — โคจรรอบตัวฮีโร่เหมือนเดิม
+        const ox = hero.wx + Math.cos(hp.a + h * 2.1) * (46 + h * 5);
+        const oy = hero.wy - HERO_R * 0.7 + Math.sin(hp.a + h * 2.1) * (28 + h * 4);
+        hp.wx += (ox - hp.wx) * 0.14;
+        hp.wy += (oy - hp.wy) * 0.14;
       }
     }
   }
@@ -2412,16 +2432,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     fx.restore();
   }
 
-  // ผู้ช่วย (สกิล 🧚) — TODO: เปลี่ยนเป็น GIF ทีหลัง · ตอนนี้ orb เรืองแสง + หมวกจิ๋ว
+  // ผู้ช่วย (สกิล 🧚) — บินเข้าไปตีประชิดเท่านั้น ไม่ยิง — TODO: เปลี่ยนเป็น GIF ทีหลัง · ตอนนี้ orb เรืองแสง + หมวกจิ๋ว
   function drawHelpers(cx, cy) {
     for (let h = 0; h < helpers.length; h++) {
       const hp = helpers[h];
       const x = hp.wx - cx, y = hp.wy - cy;
-      if (hp.zap) {
-        fx.strokeStyle = 'rgba(255,225,140,' + (1 - hp.zap.t / 8).toFixed(2) + ')';
-        fx.lineWidth = 2.5;
-        fx.beginPath(); fx.moveTo(x, y); fx.lineTo(hp.zap.tx - cx, hp.zap.ty - cy); fx.stroke();
-      }
       fx.fillStyle = 'rgba(180,140,255,0.32)';
       fx.beginPath(); fx.arc(x, y, 11, 0, Math.PI * 2); fx.fill();
       fx.fillStyle = '#c9b3f5';
