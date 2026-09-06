@@ -15,16 +15,16 @@ export function createParticleSystem(fx) {
     particles.push(p);
   }
 
-  // decay/spd/count เป็น option — ค่า default = ค่าเดิมเป๊ะ (game.js ไม่กระทบ)
-  // decay สูง = อยู่สั้นลง (life -= decay ต่อเฟรม) · spd = ช่วงความเร็วสุ่ม (2 + rnd*spd) · count = จำนวนอนุภาค
-  function spawnExplosion(cx, cy, { decay = 0.018, spd = 6, count = 26 } = {}) {
+  // decay/spd/count/sizeMul เป็น option — ค่า default = ค่าเดิมเป๊ะ (game.js ไม่กระทบ)
+  // decay สูง = อยู่สั้นลง · spd = ช่วงความเร็วสุ่ม · count = จำนวนอนุภาค · sizeMul = ตัวคูณขนาด (รัศมี)
+  function spawnExplosion(cx, cy, { decay = 0.018, spd = 6, count = 26, sizeMul = 1 } = {}) {
     for (let i = 0; i < count; i++) {
       const p = acquire();
       const a = Math.random() * Math.PI * 2;
       const sp = 2 + Math.random() * spd;
       p.x = cx; p.y = cy;
       p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp - 2;
-      p.life = 1; p.decay = decay; p.r = 3 + Math.random() * 5;
+      p.life = 1; p.decay = decay; p.r = (3 + Math.random() * 5) * sizeMul;
       p.hue = 120 + Math.random() * 80; p.star = false; p.shard = false;
       p.fillStyle = `hsl(${p.hue},90%,60%)`; // cache สีไว้ตอน spawn — ไม่คำนวณ string ซ้ำทุกเฟรมใน drawParticle
       add(p);
@@ -35,9 +35,9 @@ export function createParticleSystem(fx) {
   // ต่ออนุภาคบน canvas (บังคับ browser ทำ blur pass) ชดเชยด้วยขนาดใหญ่ขึ้น +
   // กระจายมุมสม่ำเสมอ (แทนสุ่มล้วน) ให้ยังดูเป็น "ดาวกระจาย" ชัดแม้ประหยัดกว่าเดิมมาก
   // hueMin/hueRange เลือกธีมสีได้ (ค่า default = ทองเดิม ไม่กระทบ call site เดิม)
-  // decay/spd/count เป็น option — ค่า default = ค่าเดิม (game.js เรียกแบบไม่ส่ง = เหมือนเดิมเป๊ะ)
-  // worldMap ส่ง decay สูง + spd แรง + count ครึ่งเดียว ให้ดาวกระจาย "ปุ๊บแล้วหาย" ไม่ค้าง ไม่รก
-  function spawnCelebrationBurst(cx, cy, { hueMin = 42, hueRange = 18, decay = 0.018, spd = 6, count = 16 } = {}) {
+  // decay/spd/count/sizeMul เป็น option — ค่า default = ค่าเดิม (game.js เรียกแบบไม่ส่ง = เหมือนเดิมเป๊ะ)
+  // worldMap ส่ง decay สูง + spd แรง + count ครึ่ง + sizeMul 0.5 ให้ดาวกระจาย "ปุ๊บแล้วหาย" ไม่รก
+  function spawnCelebrationBurst(cx, cy, { hueMin = 42, hueRange = 18, decay = 0.018, spd = 6, count = 16, sizeMul = 1 } = {}) {
     const COUNT = count;
     for (let i = 0; i < COUNT; i++) {
       const p = acquire();
@@ -46,7 +46,7 @@ export function createParticleSystem(fx) {
       p.x = cx; p.y = cy;
       p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp - 3;
       p.life = 1; p.decay = decay;
-      p.r = 12 + Math.random() * 12; // ใหญ่ขึ้นชดเชยที่ตัด glow ออก
+      p.r = (12 + Math.random() * 12) * sizeMul; // ใหญ่ขึ้นชดเชยที่ตัด glow ออก · sizeMul ย่อลงได้
       p.hue = hueMin + Math.random() * hueRange;
       p.star = true; p.shard = false;
       p.noGlow = true; // ★ ข้าม shadowBlur ใน drawParticle — ประหยัดสุด

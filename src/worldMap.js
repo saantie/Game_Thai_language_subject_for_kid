@@ -235,8 +235,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
 
   // ดาวกระจายบนแผนที่ — จบไว (decay สูง + พุ่งแรงกว่า default) + จำนวนดาวครึ่งเดียว (ผู้ใช้ขอ: ไม่รก/ไม่อืด)
   // ทุกจุด: ตี/ตาย/กัด/เก็บของ/เข้าด่าน/ล้มบอส · game.js เรียกแบบไม่ส่ง opts = ค่าเดิมเป๊ะ
-  const MAP_BURST_FX = { decay: 0.045, spd: 10, count: 8 };  // spawnCelebrationBurst เดิม 16 → 8
-  const MAP_BOOM_FX = { decay: 0.045, spd: 10, count: 13 };  // spawnExplosion เดิม 26 → 13
+  const MAP_BURST_FX = { decay: 0.045, spd: 10, count: 8, sizeMul: 0.5 };  // เดิม 16 ดวง → 8 · ขนาดครึ่ง
+  const MAP_BOOM_FX = { decay: 0.045, spd: 10, count: 13, sizeMul: 0.5 };  // เดิม 26 ดวง → 13 · ขนาดครึ่ง
   // alias ไว้เรียกใน wrapper — ฟังก์ชันใน particleFx ไม่ผูก this (closure ตรง) เรียกแบบ unbound ได้
   const _burstRaw = particleFx.spawnCelebrationBurst;
   const _boomRaw = particleFx.spawnExplosion;
@@ -303,6 +303,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
   let currentTomeWord = '';                  // คำที่กำลังอ่านในคัมภีร์ (ใช้วาดคำสีทองตอน tomeBlast)
   let tomeBlast = null;                       // { word, targets[], i, wx, wy } — คำสีทองลอยไปชนสมุนทีละตัว (freeze combat ต่อ)
   let heroKey = -1;                          // idx บ้านที่แม่มดถือกุญแจอยู่ (-1 = ไม่ถือ)
+  let keyGrabTs = 0;                          // performance.now() ตอนเก็บกุญแจ — ถือเกิน 30 วิ ไม่เข้าบ้าน → หยุดเติมลูกสมุน
   // ---- ด่านสุดท้าย: ดวลบอสใหญ่บนกำแพงปราสาท ----
   const FINAL_IDX = MATRA.length - 1;
   let heroStaff = false;      // เก็บไม้เท้ากายสิทธิ์คริสตอลแล้ว
@@ -695,7 +696,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     hero.jumpT = 0; hero.broomT = 0; hero.beamCd = 0; hero.beamFx = null;
     hero.invisT = 0; hero.giantT = 0; hero.ringFx = null; // ไอเทม (เอฟเฟกต์จับเวลา) เคลียร์ตอนเข้ามาตราใหม่
     // shieldUp *ไม่* เคลียร์ — เป็นการ์ดที่รอใช้ ไม่ใช่ตัวจับเวลา เก็บข้ามมาตราได้ ไม่ให้เสียของฟรี
-    heroKey = -1; // เข้าเล่นมาตราแล้วกลับมา = ไม่ถือกุญแจ (keyDelivered ยังคงอยู่ทั้ง session)
+    heroKey = -1; keyGrabTs = 0; // เข้าเล่นมาตราแล้วกลับมา = ไม่ถือกุญแจ (keyDelivered ยังคงอยู่ทั้ง session)
     heroStaff = false; finalBoss = null; duelBeams.length = 0; heroDuelCd = 0; // ดวลบอสใหญ่ (ด่านสุดท้าย)
     hitFx.length = 0;
     pendingSpin = null;
@@ -1179,7 +1180,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     const fnode = nodes[focusIdx];
     const fid = fnode && fnode.matraId;
     // ยังไม่ส่งกุญแจ = บ้านยังผนึก = ศัตรูยังไหลมาไม่หยุด
-    const needGuards = fnode && unlocked[fid] && !keyDelivered[fid];
+    // ยกเว้น: ถือกุญแจแล้วเกิน 30 วิยังไม่เข้าบ้าน → หยุดเติมลูกสมุน (กันติดอยู่ในสมรภูมิ)
+    const keyStalled = heroKey >= 0 && keyGrabTs > 0 && performance.now() - keyGrabTs > 30000;
+    const needGuards = fnode && unlocked[fid] && !keyDelivered[fid] && !keyStalled;
 
     // ลูกสมุนไหลลงมาจากข้างบนเรื่อยๆ ไม่มีหมด · ฆ่าครบจำนวนความยาก → บอสมาเฝ้ากุญแจ 1 ตัว
     if (!REDUCED_MOTION && !returnAnim && hero.fainting === 0 && needGuards) {
@@ -1281,13 +1284,21 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
         if (dd > 8) { m.wx += (dx / dd) * 0.9; m.wy += (dy / dd) * 0.9; }
         else m.wx += Math.sin(m.bob * 0.5) * 0.4;
       } else {
-        // ศัตรูกระจายทั่วแนวจอแล้วเดินลงตรง ๆ (ไม่รวมเป็นสาย/ไม่บีบเข้าบ้าน)
-        // เดินพ้นบ้านลงไป → despawn (flowedPast) → สายไหลไม่มีหมด
         m.spin = 0;
-        const step = WANDER_SPEED * 2.2 * (m.kind.fly ? FLY_WANDER_MUL : 1);
-        m.wy += step;
-        m.wx += Math.sin(m.bob * 0.6 + (m.homeA || 0)) * 0.55; // ส่ายซ้ายขวาเล็กน้อย
-        m.facing = 1;
+        // อยู่ในรัศมีใกล้แม่มดน้อย → เดินเข้าหา (ช้ากว่าตัว active, ไม่กัด — แค่มารุมล้อม)
+        // นอกรัศมี → เดินลงตรง ๆ กระจายทั่วแนวจอ เดินพ้นบ้าน → despawn (flowedPast)
+        if (distHero < diff.aggroR * 1.25) {
+          const d = distHero || 1;
+          const hs = Math.min(diff.speed * (m.kind.speed || 1) * 0.78, sk.heroSpeed - 0.4);
+          m.wx += (dhx / d) * hs;
+          m.wy += (dhy / d) * hs;
+          m.facing = dhx < 0 ? -1 : 1;
+        } else {
+          const step = WANDER_SPEED * 2.2 * (m.kind.fly ? FLY_WANDER_MUL : 1);
+          m.wy += step;
+          m.wx += Math.sin(m.bob * 0.6 + (m.homeA || 0)) * 0.55; // ส่ายซ้ายขวาเล็กน้อย
+          m.facing = 1;
+        }
       }
       m.bob += 0.12;
 
@@ -1385,7 +1396,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       hero.atk = null;
       addPoints(-100); // ตาย = เหรียญสะสมลด 100 (clamp ≥ 0 ใน addPoints)
       if (heroKey !== -1) {
-        heroKey = -1; // ตายพร้อมถือกุญแจ → กุญแจหล่นกลับไปจุดเดิม (keyPos คงที่)
+        heroKey = -1; keyGrabTs = 0; // ตายพร้อมถือกุญแจ → กุญแจหล่นกลับไปจุดเดิม (keyPos คงที่)
         mapSay('ทำกุญแจหล่น! ต้องไปเอาใหม่ที่เดิม');
       } else {
         mapSay('ล้มแล้ว! เสียเหรียญ 100');
@@ -1554,7 +1565,6 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     const n = nodes[FINAL_IDX];
     return !REDUCED_MOTION && n && unlocked[n.matraId] && !keyDelivered[n.matraId] && focusIdx === FINAL_IDX;
   }
-  function staffPos() { return keyPos(FINAL_IDX); }
 
   function updateFinalDuel() {
     const n = nodes[FINAL_IDX];
@@ -1564,22 +1574,15 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
 
     if (heroDuelCd > 0) heroDuelCd--;
 
-    // (1) ยังไม่มีไม้เท้า → เดินไปเก็บ (ลอยเหนือบ้าน) → บอสใหญ่ปรากฏ
-    if (!heroStaff) {
-      const sp = staffPos();
-      if (hero.fainting === 0) {
-        const dx = hero.wx - sp.wx, dy = hero.wy - sp.wy;
-        if (dx * dx + dy * dy <= (GEM_PICK_R + 10) * (GEM_PICK_R + 10)) {
-          heroStaff = true;
-          finalBoss = { hp: 8, maxHp: 8, bx: (wallL + wallR) / 2, wallY, wallL, wallR, pace: 1, paceTgt: wallR - 40, beamCd: 90, aimT: 0 };
-          audio.sfx('ting');
-          mapBurst(sX(sp.wx), sY(sp.wy), { hueMin: 44, hueRange: 22 });
-          mapSay('ได้ไม้เท้ากายสิทธิ์คริสตอล! สู้บอสใหญ่เลย');
-        }
-      }
+    // (1) เข้าด่านสุดท้าย = ดวลเลย (ไม่ต้องเก็บไม้เท้าคริสตอลแล้ว — heroStaff = true อัตโนมัติ ไว้โชว์ไม้เท้าในมือ)
+    if (!heroStaff) heroStaff = true;
+    if (!finalBoss) {
+      if (hero.fainting > 0) return;
+      finalBoss = { hp: 8, maxHp: 8, bx: (wallL + wallR) / 2, wallY, wallL, wallR, pace: 1, paceTgt: wallR - 40, beamCd: 90, aimT: 0 };
+      audio.sfx('ting');
+      mapSay('บอสใหญ่มาแล้ว! ยิงแสงใส่ให้ล้ม');
       return;
     }
-    if (!finalBoss) return;
     const fb = finalBoss;
 
     // (2) บอสเดินไปมาบนกำแพง · ถ้ามีแสงทองกำลังเล็ง → หลบ (บางครั้ง) แทนเดินปกติ
@@ -1646,8 +1649,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
               if (hero.hp <= 0) {
                 hero.hp = 0; hero.fainting = FAINT_T; hero.hurtT = 0;
                 addPoints(-100);
-                heroStaff = false; finalBoss = null; duelBeams.length = 0;
-                mapSay('ล้มแล้ว! ต้องไปเอาไม้เท้าใหม่');
+                finalBoss = null; duelBeams.length = 0; // heroStaff คงไว้ — updateFinalDuel จะ spawn บอสใหม่เอง
+                mapSay('ล้มแล้ว! ตั้งหลักสู้บอสใหญ่ใหม่');
               }
             }
           }
@@ -1660,7 +1663,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
   // กดที่ตัวบอสใหญ่ (กล่องหยาบ ๆ รอบสไปรต์ — เผื่อเด็กแตะไม่แม่น) = ยิงแสงทอง
   // ยิงเฉียงได้: เก็บตำแหน่งแม่มด ณ ตอนยิง (x0,y0) → เป้าที่ตำแหน่งบอสตอนนั้น (x1,y1, ล็อกไว้)
   function tryFireStaff(wx, wy) {
-    if (!isFinalDuel() || !heroStaff || !finalBoss || heroDuelCd > 0 || hero.fainting > 0) return false;
+    if (!isFinalDuel() || !finalBoss || heroDuelCd > 0 || hero.fainting > 0) return false;
     const fb = finalBoss;
     if (wx < fb.bx - 90 || wx > fb.bx + 90 || wy < fb.wallY - 110 || wy > fb.wallY + 10) return false;
     duelBeams.push({ x0: hero.wx, y0: hero.wy, x1: fb.bx, y1: fb.wallY, gold: true, phase: 'aim', t: 0, hit: false });
@@ -1700,6 +1703,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
           return;
         }
         heroKey = i;
+        keyGrabTs = performance.now(); // เริ่มจับเวลา 30 วิ (เกินแล้วหยุดเติมลูกสมุน)
         audio.sfx('gem');
         mapBurst(sX(kp.wx), sY(kp.wy), { hueMin: 44, hueRange: 22 });
         mapSay('ได้กุญแจแล้ว! รีบพากลับไปเปิดบ้าน');
@@ -1944,13 +1948,13 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     fx.save();
     fx.textAlign = 'center';
     fx.textBaseline = 'middle';
-    fx.font = '900 60px "Sarabun", sans-serif'; // ~เท่าบอส
-    fx.shadowColor = 'rgba(255,216,107,0.95)';
-    fx.shadowBlur = 22 * pulse;
-    fx.fillStyle = '#ffd84d';
+    fx.font = '800 34px "Sarabun", sans-serif'; // เล็กลง + โปร่งใส (ผู้ใช้ขอ)
+    fx.shadowColor = 'rgba(255,216,107,0.7)';
+    fx.shadowBlur = 12 * pulse;
+    fx.fillStyle = 'rgba(255,216,77,0.55)';
     fx.fillText(tomeBlast.word, x, y);
-    fx.fillStyle = 'rgba(255,245,200,0.9)';
-    fx.shadowBlur = 8;
+    fx.fillStyle = 'rgba(255,245,200,0.5)';
+    fx.shadowBlur = 5;
     fx.fillText(tomeBlast.word, x, y);
     fx.restore();
   }
@@ -2428,7 +2432,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       fx.lineWidth = 3;
       fx.stroke();
       let msg;
-      if (i === FINAL_IDX) msg = heroStaff ? '⚔️ สู้บอสใหญ่!' : '💎 เก็บไม้เท้ากายสิทธิ์คริสตอล';
+      if (i === FINAL_IDX) msg = '⚔️ สู้บอสใหญ่! ยิงแสงใส่ให้ล้ม';
       else if (heroKey === i) msg = '🔑 พากุญแจกลับบ้าน!';
       else if (cursed) msg = '👹 ล้มบอสทำลายคำสาป!';
       else msg = '🔑 เก็บกุญแจเหนือบ้าน';
@@ -2633,23 +2637,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     }
   }
 
-  // ---------- ด่านสุดท้าย: กำแพงปราสาท + บอสใหญ่ + ลำแสงทอง/เขียว ----------
+  // ---------- ด่านสุดท้าย: บอสใหญ่ + ลำแสงทอง/เขียว (ไม่มีขั้นเก็บไม้เท้าคริสตอลแล้ว) ----------
   function drawFinalDuel(cx, cy, now) {
-    const n = nodes[FINAL_IDX];
-    // ไม้เท้ากายสิทธิ์คริสตอล (ยังไม่เก็บ) — ลอยเหนือบ้าน
-    if (!heroStaff) {
-      const sp = staffPos();
-      const x = sp.wx - cx, y = sp.wy - cy - Math.sin(now * 0.004) * 4;
-      const pulse = 0.3 + 0.3 * Math.sin(now * 0.006);
-      fx.fillStyle = 'rgba(160,230,255,' + pulse.toFixed(2) + ')';
-      fx.beginPath(); fx.arc(x, y, 20, 0, Math.PI * 2); fx.fill();
-      fx.strokeStyle = '#6b4a2f'; fx.lineWidth = 4;
-      fx.beginPath(); fx.moveTo(x, y + 14); fx.lineTo(x, y - 8); fx.stroke();
-      fx.fillStyle = '#7fe6ff';
-      fx.beginPath(); fx.moveTo(x, y - 16); fx.lineTo(x - 6, y - 7); fx.lineTo(x, y - 2); fx.lineTo(x + 6, y - 7); fx.closePath(); fx.fill();
-      fx.strokeStyle = '#2a8aa8'; fx.lineWidth = 1.4; fx.stroke();
-      return;
-    }
     if (!finalBoss) return;
     const fb = finalBoss;
     const wy = fb.wallY - cy;
