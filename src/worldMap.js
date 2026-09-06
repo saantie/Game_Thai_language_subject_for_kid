@@ -2115,23 +2115,19 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     fx.save();
     fx.translate(-cx, -cy);
 
-    // พื้นหญ้าเต็มความกว้างโลก เฉพาะช่วงที่กล้องเห็น — pattern ผูกพิกัด world เลื่อนตามกล้องเอง
-    // ไล่เฉดฉากให้หม่นลงเรื่อย ๆ ตามด่าน (เขียว/สีเดิมด่านแรก → เทาด่านบอสใหญ่)
-    // คำนวณครั้งเดียวใช้ร่วมกันทั้งพื้นหญ้า+ถนน — gradient ไล่ตามช่วงจอที่เห็น (บน→ล่าง)
-    // เป็นทางลัดถูกๆ แทน per-pixel filter (แพงกว่ามาก, codebase นี้ไม่เคยใช้ ctx.filter)
-    const sceneT_top = sceneryT(cy), sceneT_bot = sceneryT(cy + H);
-    const sceneGradFor = (alphaMul) => {
-      const g = fx.createLinearGradient(0, cy, 0, cy + H);
-      g.addColorStop(0, 'rgba(110,110,112,' + (sceneT_top * alphaMul).toFixed(2) + ')');
-      g.addColorStop(1, 'rgba(110,110,112,' + (sceneT_bot * alphaMul).toFixed(2) + ')');
-      return g;
-    };
+    // พื้นหญ้า — pattern ผูกพิกัด world เลื่อนตามกล้องเอง · วาดเฉพาะช่วงจอที่เห็น (cx..cx+W)
+    // ไล่เฉดฉากให้หม่นลงตามด่าน (เขียวด่านแรก → เทาด่านบอสใหญ่): ทับด้วยสีเทาโปร่งแบบ "แบนเดียว"
+    // ค่า alpha คิดจาก sceneryT ที่กลางจอ — เดิมทำเป็น linear gradient (alloc object + 4 string
+    // ทุกเฟรม + fill เต็มความกว้างโลก ~2.2 เท่าจอ) เปลี่ยนเป็น flat fill: ต่างจากเดิมแค่ ~8%
+    // alpha บน→ล่าง (แทบไม่เห็น) แต่ประหยัด GC + เวลา render ต่อเฟรมมาก
+    const gx0 = cx - 40, gy0 = cy - 40, gw = W + 80, gh = H + 80;
+    const sceneTintA = sceneryT(cy + H / 2);
     if (groundPat) {
       fx.fillStyle = groundPat;
-      fx.fillRect(-40, cy - 40, worldW + 80, H + 80);
-      if (sceneT_top > 0.01 || sceneT_bot > 0.01) {
-        fx.fillStyle = sceneGradFor(0.75);
-        fx.fillRect(-40, cy - 40, worldW + 80, H + 80);
+      fx.fillRect(gx0, gy0, gw, gh);
+      if (sceneTintA > 0.01) {
+        fx.fillStyle = 'rgba(110,110,112,' + (sceneTintA * 0.75).toFixed(2) + ')';
+        fx.fillRect(gx0, gy0, gw, gh);
       }
     }
 
@@ -2160,9 +2156,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       fx.strokeStyle = 'rgba(50,34,18,0.55)';
       fx.lineWidth = 6;
       fx.stroke(roadPoly);
-      // ไล่เฉดถนนหม่นลงตามด่านเหมือนพื้นหญ้า — fill(roadPoly) ซ้ำ = จำกัดอยู่แค่รูปทรงถนนเป๊ะๆ อยู่แล้ว
-      if (sceneT_top > 0.01 || sceneT_bot > 0.01) {
-        fx.fillStyle = sceneGradFor(0.7);
+      // ไล่เฉดถนนหม่นลงตามด่านเหมือนพื้นหญ้า — flat fill ทับ (fill(roadPoly) ซ้ำ = จำกัดรูปทรงถนนอยู่แล้ว)
+      if (sceneTintA > 0.01) {
+        fx.fillStyle = 'rgba(110,110,112,' + (sceneTintA * 0.7).toFixed(2) + ')';
         fx.fill(roadPoly);
       }
     } else {
@@ -2172,8 +2168,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       fx.strokeStyle = 'rgba(50,34,18,0.55)';
       fx.lineWidth = 6;
       fx.stroke();
-      if (sceneT_top > 0.01 || sceneT_bot > 0.01) {
-        fx.fillStyle = sceneGradFor(0.7);
+      if (sceneTintA > 0.01) {
+        fx.fillStyle = 'rgba(110,110,112,' + (sceneTintA * 0.7).toFixed(2) + ')';
         fx.fill();
       }
     }
