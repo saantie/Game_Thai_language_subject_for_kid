@@ -31,23 +31,6 @@ export function createParticleSystem(fx) {
     }
   }
 
-  function spawnStars(cx, cy) {
-    for (let i = 0; i < 32; i++) {
-      const p = acquire();
-      const a = Math.random() * Math.PI * 2;
-      const sp = 1.5 + Math.random() * 7;
-      p.x = cx; p.y = cy;
-      p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp - 4;
-      p.life = 1; p.decay = 0.018; // ตั้งชัด — กัน decay ค้างจาก particle ที่ถูก recycle มา (เช่น glass shard 0.011)
-      p.r = 10 + Math.random() * 14; // ⭐ ใหญ่ขึ้นเห็นชัด
-      p.hue = 42 + Math.random() * 18;
-      p.star = true; p.shard = false;
-      p.fillStyle = `hsl(${p.hue},90%,60%)`;   // cache สีไว้ตอน spawn (ดู spawnExplosion)
-      p.shadowStyle = `hsl(${p.hue},100%,70%)`;
-      add(p);
-    }
-  }
-
   // ดาวระเบิดแบบประหยัดทรัพยากร — ตัด shadowBlur (glow) ออก เพราะเป็นต้นทุนแพงสุด
   // ต่ออนุภาคบน canvas (บังคับ browser ทำ blur pass) ชดเชยด้วยขนาดใหญ่ขึ้น +
   // กระจายมุมสม่ำเสมอ (แทนสุ่มล้วน) ให้ยังดูเป็น "ดาวกระจาย" ชัดแม้ประหยัดกว่าเดิมมาก
@@ -150,7 +133,6 @@ export function createParticleSystem(fx) {
     acquire,
     add,
     spawnExplosion,
-    spawnStars,
     spawnCelebrationBurst,
     spawnGlassShards,
     update,

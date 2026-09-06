@@ -212,23 +212,6 @@ const GRASS_BASE = '#5c8c3a'; // เติมช่องว่างก่อ�
 const TREE_IMG = new Image();
 TREE_IMG.src = 'public/assets/images/tree.png';
 
-// เวอร์ชันต้นไม้สีเทาเต็ม — แคช offscreen canvas ครั้งเดียวตอนภาพโหลดเสร็จ (ใช้ไล่เฉดสีต้นไม้ตามด่าน)
-// วาดแบบ globalAlpha ทับต้นไม้ปกติ (ไม่ใช้ source-atop ตรงบน fxCanvas เพราะพื้นหญ้าทึบเต็มจออยู่แล้ว
-// จะได้กล่องเหลี่ยมเทาแทนที่จะเป็นเงาต้นไม้ — ต้องผสมสีบน canvas แยกที่ยังโปร่งใสอยู่ก่อน)
-let treeTintImg = null;
-function ensureTreeTint() {
-  if (treeTintImg || !TREE_IMG.complete || !TREE_IMG.naturalWidth) return;
-  const c = document.createElement('canvas');
-  c.width = TREE_IMG.naturalWidth;
-  c.height = TREE_IMG.naturalHeight;
-  const cctx = c.getContext('2d');
-  cctx.drawImage(TREE_IMG, 0, 0);
-  cctx.globalCompositeOperation = 'source-atop';
-  cctx.fillStyle = '#6e6e70';
-  cctx.fillRect(0, 0, c.width, c.height);
-  treeTintImg = c;
-}
-
 // พิกัดวงกลมของ decor/minion — hoist ออกนอก loop (อย่า alloc array ทุกเฟรม)
 const BUSH_BLOBS = [[-8, 2], [8, 2], [0, -4], [-3, 4], [4, 5]];
 const TREE_BLOBS = [[0, -22, 15], [-9, -12, 11], [9, -12, 11], [0, -34, 10]];
@@ -268,12 +251,12 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
   let running = false;
   let rafId = 0;
   let lastTs = 0;
+  let fpsFrames = 0, fpsT0 = 0, fpsShown = 0, fpsLogT0 = 0; // ตรวจสอบหน่วง — นับเฟรมที่วาดจริง
 
   let nodes = [];      // [{ matraId, name, idx, wx, wy, shake }]  พิกัด world
   let worldH = 0;
   let worldW = 0;      // โลกกว้างกว่าจอ → กล้องแพนแนวนอนตามคริสตอล/ฮีโร่
   let nodeSpacing = 190; // ระยะห่างแนวตั้งระหว่างคริสตอล (คำนวณใน computeLayout)
-  let worldPad = 0;    // ที่ว่างเหนือบ้านแรกสุด/ใต้บ้านสุดท้าย (คำนวณใน computeLayout) — ใช้คำนวณเฉดสีฉากด้วย
 
   // ค่าจากสกิล (rpg.js) — อ่านใหม่ทุกครั้งที่ enter() เพราะเด็กอัปสกิลแล้วกลับมาแผนที่ได้
   // ห้ามอ่านครั้งเดียวตอนสร้างโมดูล ไม่งั้นสกิลที่เพิ่งอัปจะไม่มีผลจนกว่าจะรีโหลดแอป
@@ -398,7 +381,6 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     // เผื่อพื้นที่เหนือบ้านสุดท้ายเพิ่ม — กำแพงปราสาท+บอสใหญ่ (ด่านสุดท้าย) ต้องมีที่ว่างพอ
     // ไม่ให้ชิดขอบบนสุดของโลก (camY ต่ำสุด = 0 เลื่อนขึ้นเกินนี้ไม่ได้) — ไม่กระทบระยะห่างบ้านอื่น ๆ
     const pad = H * 0.55 + 260;
-    worldPad = pad;
     const spacing = Math.max(190, H * 0.42);
     nodeSpacing = spacing;
     worldH = pad + spacing * (N - 1) + pad;
@@ -653,13 +635,6 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       }
     }
     return spine[0].x;
-  }
-
-  // ความคืบหน้าฉาก 0..1 ตามตำแหน่ง y โลก — 0 = ด่านแรกสุด (ล่างสุด, เขียวเต็ม)
-  // 1 = ด่านบอสใหญ่ (บนสุด, เทาเต็ม) ใช้ไล่เฉดสีพื้นหญ้า/ต้นไม้ให้หม่นลงเรื่อย ๆ ตามด่าน
-  function sceneryT(wy) {
-    const span = Math.max(1, (MATRA.length - 1) * nodeSpacing);
-    return Math.max(0, Math.min(1, 1 - (wy - worldPad) / span));
   }
 
   function heroRestY(node) {
@@ -1000,6 +975,14 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     lastTs = now;
     update();
     render(now);
+    // ---- fps log (ตรวจสอบหน่วง) — นับเฉพาะเฟรมที่วาดจริง, สรุปทุก 1 วิ ----
+    fpsFrames++;
+    if (now - fpsT0 >= 1000) {
+      fpsShown = Math.round((fpsFrames * 1000) / (now - fpsT0));
+      fpsFrames = 0;
+      fpsT0 = now;
+      if (now - fpsLogT0 >= 3000) { console.log('[worldMap] fps=' + fpsShown + (quiet ? ' (idle throttle 30)' : '')); fpsLogT0 = now; }
+    }
   }
 
   function anyShake() {
@@ -2116,19 +2099,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     fx.translate(-cx, -cy);
 
     // พื้นหญ้า — pattern ผูกพิกัด world เลื่อนตามกล้องเอง · วาดเฉพาะช่วงจอที่เห็น (cx..cx+W)
-    // ไล่เฉดฉากให้หม่นลงตามด่าน (เขียวด่านแรก → เทาด่านบอสใหญ่): ทับด้วยสีเทาโปร่งแบบ "แบนเดียว"
-    // ค่า alpha คิดจาก sceneryT ที่กลางจอ — เดิมทำเป็น linear gradient (alloc object + 4 string
-    // ทุกเฟรม + fill เต็มความกว้างโลก ~2.2 เท่าจอ) เปลี่ยนเป็น flat fill: ต่างจากเดิมแค่ ~8%
-    // alpha บน→ล่าง (แทบไม่เห็น) แต่ประหยัด GC + เวลา render ต่อเฟรมมาก
-    const gx0 = cx - 40, gy0 = cy - 40, gw = W + 80, gh = H + 80;
-    const sceneTintA = sceneryT(cy + H / 2);
     if (groundPat) {
       fx.fillStyle = groundPat;
-      fx.fillRect(gx0, gy0, gw, gh);
-      if (sceneTintA > 0.01) {
-        fx.fillStyle = 'rgba(110,110,112,' + (sceneTintA * 0.75).toFixed(2) + ')';
-        fx.fillRect(gx0, gy0, gw, gh);
-      }
+      fx.fillRect(cx - 40, cy - 40, W + 80, H + 80);
     }
 
     if (!REDUCED_MOTION) {
@@ -2156,11 +2129,6 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       fx.strokeStyle = 'rgba(50,34,18,0.55)';
       fx.lineWidth = 6;
       fx.stroke(roadPoly);
-      // ไล่เฉดถนนหม่นลงตามด่านเหมือนพื้นหญ้า — flat fill ทับ (fill(roadPoly) ซ้ำ = จำกัดรูปทรงถนนอยู่แล้ว)
-      if (sceneTintA > 0.01) {
-        fx.fillStyle = 'rgba(110,110,112,' + (sceneTintA * 0.7).toFixed(2) + ')';
-        fx.fill(roadPoly);
-      }
     } else {
       traceRoadPoly();
       fx.fillStyle = roadPat || '#8a6a44';
@@ -2168,10 +2136,6 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       fx.strokeStyle = 'rgba(50,34,18,0.55)';
       fx.lineWidth = 6;
       fx.stroke();
-      if (sceneTintA > 0.01) {
-        fx.fillStyle = 'rgba(110,110,112,' + (sceneTintA * 0.7).toFixed(2) + ')';
-        fx.fill();
-      }
     }
 
     fx.restore();
@@ -2253,6 +2217,15 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
 
     // ---- HUD: แถบพลังแม่มดน้อย (มุมซ้ายบน ใต้ปุ่ม) ----
     if (!REDUCED_MOTION) drawHpBar();
+
+    // fps ตัวเล็ก ๆ มุมขวาบน (ตรวจสอบหน่วง — ลบออกได้ทีหลัง)
+    fx.save();
+    fx.font = '600 12px system-ui, sans-serif';
+    fx.textAlign = 'right';
+    fx.textBaseline = 'top';
+    fx.fillStyle = fpsShown >= 50 ? 'rgba(180,255,180,0.75)' : fpsShown >= 35 ? 'rgba(255,230,140,0.8)' : 'rgba(255,150,150,0.85)';
+    fx.fillText(fpsShown + ' fps', W - 8, 78);
+    fx.restore();
   }
 
   function drawHpBar() {
@@ -2897,19 +2870,6 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
         const h = 120;
         const w = h * (TREE_IMG.naturalWidth / TREE_IMG.naturalHeight);
         fx.drawImage(TREE_IMG, -w / 2, -h * 0.84, w, h);
-        // ไล่เฉดต้นไม้ให้หม่นลงเรื่อย ๆ ตามด่าน (เขียว → เทา ใกล้บอสใหญ่)
-        // วาดเวอร์ชันเทาเต็ม (แคชไว้แล้ว) ทับด้วย globalAlpha — เคารพรูปทรงต้นไม้จริง
-        // (ห้ามใช้ source-atop ตรงนี้ตรงๆ เพราะพื้นหญ้าทึบเต็มจอวาดไปก่อนแล้ว จะได้กล่องเหลี่ยมเทาแทน)
-        const treeT = sceneryT(dc.wy);
-        if (treeT > 0.01) {
-          ensureTreeTint();
-          if (treeTintImg) {
-            fx.save();
-            fx.globalAlpha = Math.min(1, treeT * 0.9);
-            fx.drawImage(treeTintImg, -w / 2, -h * 0.84, w, h);
-            fx.restore();
-          }
-        }
       } else {
         // fallback วาดเอง (ภาพยังโหลดไม่เสร็จ)
         fx.fillStyle = '#6b4a2f';
