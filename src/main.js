@@ -7,6 +7,7 @@ import { createHandPinchInput } from './input/handpinch.js';
 import { createGame } from './game.js';
 import { createMahjongWarmup } from './mahjong.js';
 import { createWorldMap } from './worldMap.js';
+import { createTomeRead } from './ui/tomeRead.js';
 import { buildSkillPage, setSkillPageBack } from './ui/skillPage.js';
 import { getRpg, resetRpg } from './rpg.js';
 import { buildLevelSelect } from './ui/levelSelect.js';
@@ -180,6 +181,10 @@ function renderItemBar() {
 }
 renderItemBar();
 
+// คัมภีร์มนตราพิเศษ — เก็บบนแผนที่ → อ่านสะกดคำ → ระเบิดสมุนทุกตัวในจอ
+// overlay อ่านคำจบทางเดียว (สำเร็จ/เฉลย) → เรียก worldMap.tomeExplode()
+const tomeRead = createTomeRead({ container: $('#tomeOverlay'), audio });
+
 // แผนที่มนตรา — แทนหน้าเลือกมาตรา (วาดบน #fxCanvas เหมือน game.js)
 // onPickMatra = เดินไป/แตะคริสตอลที่ปลดล็อก → เข้าเล่นมาตรานั้นด้วย flow เดิม
 const worldMap = createWorldMap({
@@ -189,6 +194,7 @@ const worldMap = createWorldMap({
   dom,
   onPickMatra: (id) => startMatraById(id),
   onInventoryChange: renderItemBar,
+  onTomeCollected: (word) => tomeRead.open(word, () => worldMap.tomeExplode()),
 });
 
 // input layer: hybrid — pointer (touch/เมาส์) ทำงานเสมอ, AR (handpinch) ซ้อนทับ

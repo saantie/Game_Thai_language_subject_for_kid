@@ -1263,6 +1263,49 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
   filter: drop-shadow(0 8px 32px rgba(109,40,217,0.7));
 }
 
+/* คัมภีร์มนตราพิเศษ — overlay อ่านคำ (บนแผนที่ RPG) */
+.tome-overlay {
+  position: fixed; inset: 0; z-index: 195;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 40%, rgba(90,40,150,0.82), rgba(20,8,40,0.94));
+  backdrop-filter: blur(3px);
+}
+.tome-overlay.hidden { display: none; }
+.tome-card {
+  width: min(92vw, 420px);
+  background: linear-gradient(160deg, #3a1f6e, #241046);
+  border: 2px solid rgba(255, 216, 107, 0.55);
+  border-radius: 22px; padding: 22px 20px 24px;
+  box-shadow: 0 16px 48px rgba(20, 8, 40, 0.7), inset 0 1px 0 rgba(255,255,255,0.15);
+  text-align: center; color: #fff;
+}
+.tome-title { font-weight: 800; font-size: clamp(15px, 3.6vw, 19px); color: var(--accent); }
+.tome-word {
+  font-weight: 900; font-size: clamp(48px, 14vw, 78px); line-height: 1.5;
+  margin: 2px 0; padding: 0.16em 0.1em 0.06em; /* เผื่อที่สระ/วรรณยุกต์ซ้อนบน (เช่น ตี, ยิ้ม) ไม่ให้ยอดโดนตัด */
+  text-shadow: 0 3px 12px rgba(0,0,0,0.45);
+}
+.tome-spell {
+  font-size: clamp(16px, 4.4vw, 22px); font-weight: 700;
+  color: rgba(255,255,255,0.82); letter-spacing: 1px; margin-bottom: 12px;
+}
+.tome-state {
+  min-height: 1.4em; font-size: clamp(13px, 3.4vw, 16px);
+  color: rgba(255,255,255,0.9); margin-bottom: 14px;
+}
+.tome-mic, .tome-done {
+  border: none; border-radius: 999px; cursor: pointer;
+  font-weight: 800; font-size: clamp(15px, 4vw, 19px); color: #fff;
+  padding: 12px 30px;
+  background: linear-gradient(135deg, var(--purple), var(--purple-deep));
+  box-shadow: 0 6px 18px rgba(40, 16, 90, 0.5);
+  transition: transform 0.12s;
+}
+.tome-mic.on { background: linear-gradient(135deg, #ff5d7a, #c81d4a); }
+.tome-mic:active, .tome-done:active { transform: scale(0.94); }
+.tome-done { background: linear-gradient(135deg, #ffb84d, #ff8a3d); }
+
 .video-fade {
   position: absolute;
   inset: 0;

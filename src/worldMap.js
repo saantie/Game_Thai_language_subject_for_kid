@@ -246,7 +246,7 @@ function hexA(hex, a) {
   return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
 }
 
-export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventoryChange }) {
+export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventoryChange, onTomeCollected }) {
   const fx = scene.fx;
   const particleFx = createParticleSystem(fx); // pool แยกของตัวเอง (แบบ mahjong.js)
 
@@ -313,6 +313,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
   let spawnCd = 80;
   const keyDelivered = Object.create(null); // matraId -> true (พากุญแจกลับมาเปิดบ้านแล้ว)
   const bossDone = Object.create(null);     // matraId -> true (ฆ่าบอสรอบนี้แล้ว)
+  const tomeUsed = Object.create(null);     // matraId -> true (เก็บคัมภีร์มนตราพิเศษของมาตรานี้ไปแล้ว — 1 ครั้ง/มาตรา/session)
+  let readingTome = false;                   // true = กำลังเปิด overlay อ่านคัมภีร์ → หยุด combat + กัน onPick
   let heroKey = -1;                          // idx บ้านที่แม่มดถือกุญแจอยู่ (-1 = ไม่ถือ)
   // ---- ด่านสุดท้าย: ดวลบอสใหญ่บนกำแพงปราสาท ----
   const FINAL_IDX = MATRA.length - 1;
@@ -718,9 +720,13 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     heroStaff = false; finalBoss = null; duelBeams.length = 0; heroDuelCd = 0; // ดวลบอสใหญ่ (ด่านสุดท้าย)
     hitFx.length = 0;
     pendingSpin = null;
+    readingTome = false; // เผื่อออกจากมาตราระหว่างอ่านคัมภีร์ค้าง
     helpers.length = 0;
     syncHelpers(); // สกิล 🧚 — สร้างผู้ช่วยตามจำนวนที่อัปไว้
     for (let i = 0; i < gems.length; i++) { gems[i].taken = false; gems[i].respawn = 0; }
+    // เอาคัมภีร์เก่าที่ยังไม่ได้เก็บออกก่อน แล้วค่อย spawn ใหม่ตามเงื่อนไข
+    for (let i = gems.length - 1; i >= 0; i--) if (gems[i].tome) gems.splice(i, 1);
+    spawnTome(fi);
 
     cam.x = clampCamX(node.wx - W / 2);
     cam.y = clampCam(node.wy - H / 2);
@@ -851,7 +857,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
   }
 
   function onPick(x, y) {
-    if (!running) return;
+    if (!running || readingTome) return; // อ่านคัมภีร์อยู่ — overlay รับ input แทน
     returnAnim = null; // แตะ = ข้าม return beat
     pressed = true;
     moved = false;
@@ -1018,6 +1024,10 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
   }
 
   function update() {
+    // ---- อ่านคัมภีร์อยู่ → หยุดทุกอย่าง (combat/เดิน/กล้อง) ให้ particle เดินต่อ ----
+    // overlay DOM บังจอทั้งหมดอยู่แล้ว — freeze กันเด็กโดนกัดตายระหว่างอ่าน (คัมภีร์เป็นของรางวัล)
+    if (readingTome) { particleFx.update(); return; }
+
     // ---- ตัวจับเวลาแม่มดน้อย ----
     if (hero.invuln > 0) hero.invuln--;
     if (hero.hurtT > 0) hero.hurtT--;
@@ -1449,6 +1459,24 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     });
   }
 
+  // คัมภีร์มนตราพิเศษ — 1 ครั้ง/มาตรา/session · เกิดตอน enter() เข้ามาตราที่ยังผนึก (ต้องสู้)
+  // ตำแหน่งสุ่ม (hash คงที่ ไม่ขยับตอน re-layout) ในโซนสู้ ค่อนไปเหนือบ้านเล็กน้อย (ต่ำกว่ากุญแจ)
+  function spawnTome(i) {
+    const n = nodes[i];
+    if (!n || tomeUsed[n.matraId] || !nodeSealed(i)) return;
+    // วางในโซนสู้ (ใต้บ้านลงมา 0.05–0.35 ระยะคริสตอล) — เดินถึงเสมอ ไม่ว่า walkCeilY จะเป็นเท่าไร
+    // (ก่อนหน้านี้วางเหนือบ้านแล้วบางกรณีอยู่เหนือเพดานเดิน เก็บไม่ได้)
+    const down = 0.05 + h01(i * 71 + 13) * 0.30;
+    const ty = n.wy + nodeSpacing * down;
+    const tx = spineXAt(ty) + (h01(i * 89 + 3) - 0.5) * (W * 0.5);
+    gems.push({
+      tome: true, taken: false, respawn: 0, bob: Math.random() * 6,
+      nodeIdx: i,
+      wx: Math.max(30, Math.min(worldW - 30, tx)),
+      wy: ty,
+    });
+  }
+
   // เก็บ: พลอย = +1 หัวใจ (ตอนพลังไม่เต็ม) · เหรียญ = +1 คะแนนสะสม (เสมอ)
   // พลอยประจำบ้านเกิดใหม่ใน GEM_RESPAWN · ของหล่น (drop) เก็บแล้วหาย · อายุ ~10 วิ
   function updateGems() {
@@ -1467,6 +1495,19 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       const dx = g.wx - hero.wx;
       const dy = g.wy - hero.wy;
       if (dx * dx + dy * dy > pr2) continue;
+      if (g.tome) {
+        // เก็บคัมภีร์ → เปิด overlay อ่านคำ (main.js) → หยุด combat จนกว่าจะอ่านจบ (tomeExplode)
+        gems.splice(i, 1); i--;
+        const n = nodes[g.nodeIdx];
+        tomeUsed[n.matraId] = true; // ตั้งทันทีตอนเก็บ กันเกิดซ้ำถ้า re-enter ระหว่างอ่าน
+        readingTome = true;
+        audio.sfx('chime');
+        const mtr = MATRA.find((m) => m.id === n.matraId);
+        const word = mtr && mtr.words[(Math.random() * mtr.words.length) | 0];
+        if (onTomeCollected && word) onTomeCollected(word);
+        else { readingTome = false; } // ไม่มี callback/คำ → ยกเลิก ไม่ให้ค้าง
+        return; // ออกจาก loop — ที่เหลือไม่ต้องเก็บเฟรมนี้
+      }
       if (g.item) {
         pickupItemGem(g);
         gems.splice(i, 1); i--;
@@ -1766,6 +1807,31 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       spawnHitFx(m.wx, m.wy);
       killMinionAt(m);
     }
+  }
+
+  // ระเบิดคัมภีร์ — เรียกจาก main.js หลังอ่านคำจบ (สำเร็จ/เฉลย) · เลิก readingTome + เคลียร์จอ
+  // ฆ่าสมุนทั่วไปทุกตัวในจอทันที · บอสในจอ -3 (ไม่ instakill กันสู้บอสฟรี) · จอแฟลช + boom
+  function tomeExplode() {
+    readingTome = false;
+    if (!running) return;
+    hero.ringFx = { t: 0 }; // reuse วงแหวนขยายของไอเทม 💥
+    // ฆ่าสมุนทั่วไปทุกตัวในสมรภูมิ (array มีเฉพาะสมุนของด่านที่กำลังสู้อยู่แล้ว — กล้อง lag
+    // ทำให้เช็คขอบจอเป๊ะไม่แน่นอน จึงเอาทั้ง array) · บอส -3 ไม่ instakill
+    for (let i = minions.length - 1; i >= 0; i--) {
+      const m = minions[i];
+      spawnHitFx(m.wx, m.wy);
+      if (m.isBoss) {
+        m.hp -= 3;
+        m.stagger = MINION_STAGGER;
+        if (m.hp <= 0) killMinionAt(m);
+      } else {
+        killMinionAt(m);
+      }
+    }
+    audio.sfx('boom');
+    audio.sfx('star');
+    mapBoom(sX(hero.wx), sY(hero.wy));
+    mapSay('💥 คัมภีร์ระเบิด! สมุนกระจุยหมด');
   }
 
   // AoE เหวี่ยงหมุน — เรียกหลังจบ minion loop (backward, splice ปลอดภัย)
@@ -2106,7 +2172,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       if (gsy < -40 || gsy > H + 40) continue;
       const gsx = g.wx - cx;
       if (gsx < -40 || gsx > W + 40) continue;
-      drawGem(gsx, gsy, g.bob, now, g.coin, g.item);
+      drawGem(gsx, gsy, g.bob, now, g.coin, g.item, g.tome);
     }
 
     // ด่านสุดท้าย = กำแพงปราสาท + บอสใหญ่ · ด่านอื่น = กุญแจบ้าน
@@ -2681,9 +2747,23 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     fx.restore();
   }
 
-  function drawGem(sx, sy0, phase, now, coin, itemId) {
+  function drawGem(sx, sy0, phase, now, coin, itemId, tome) {
     const sy = sy0 - 3 - Math.sin(now * 0.004 + phase) * 3;
     const pulse = 0.5 + 0.5 * Math.sin(now * 0.006 + phase);
+    if (tome) {
+      // คัมภีร์มนตราพิเศษ — วงเรืองแสงทอง + ไอคอนหนังสือ (ใหญ่กว่าไอเทมปกติ ให้เด่น)
+      fx.beginPath();
+      fx.arc(sx, sy, 19 + pulse * 5, 0, Math.PI * 2);
+      fx.fillStyle = 'rgba(255,216,107,' + (0.24 + pulse * 0.14).toFixed(2) + ')';
+      fx.fill();
+      fx.save();
+      fx.font = '26px sans-serif';
+      fx.textAlign = 'center';
+      fx.textBaseline = 'middle';
+      fx.fillText('📖', sx, sy);
+      fx.restore();
+      return;
+    }
     if (itemId) {
       // ไอเทมพลังวิเศษ — วงเรืองแสงสีเฉพาะชนิด (ITEM_TYPES.color) + ไอคอน emoji ตรงกลาง
       const def = itemDef(itemId);
@@ -2886,5 +2966,5 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     fx.fill();
   }
 
-  return { enter, onPick, onMove, onRelease, relayout, refresh, stop, useItem: applyItemEffect };
+  return { enter, onPick, onMove, onRelease, relayout, refresh, stop, useItem: applyItemEffect, tomeExplode };
 }
