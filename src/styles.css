@@ -1268,17 +1268,32 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
   position: fixed; inset: 0; z-index: 195;
   display: flex; align-items: center; justify-content: center;
   padding: 24px;
-  background: radial-gradient(circle at 50% 40%, rgba(90,40,150,0.82), rgba(20,8,40,0.94));
-  backdrop-filter: blur(3px);
+  background: rgba(15, 6, 32, 0.55); /* กันแตะแผนที่ — จาง ให้เห็น fog card ชัด */
+  backdrop-filter: blur(2px);
 }
 .tome-overlay.hidden { display: none; }
+/* พื้นหลัง = fog blob แบบเดียวกับการ์ดอ่านคำเกมหยิบฟอง (.voicebar) แต่สีม่วงเข้มแทนสีดำ */
 .tome-card {
+  position: relative;
   width: min(92vw, 420px);
-  background: linear-gradient(160deg, #3a1f6e, #241046);
-  border: 2px solid rgba(255, 216, 107, 0.55);
-  border-radius: 22px; padding: 22px 20px 24px;
-  box-shadow: 0 16px 48px rgba(20, 8, 40, 0.7), inset 0 1px 0 rgba(255,255,255,0.15);
+  padding: 24px 22px 26px;
   text-align: center; color: #fff;
+  display: flex; flex-direction: column; align-items: center;
+}
+.tome-card::before {
+  content: ''; pointer-events: none;
+  position: absolute; inset: -34px -20px;
+  background: radial-gradient(ellipse 82% 74% at 50% 52%,
+    rgba(30, 10, 58, 0.97) 0%,
+    rgba(38, 14, 78, 0.94) 28%,
+    rgba(52, 18, 104, 0.8) 48%,
+    rgba(70, 24, 130, 0.46) 64%,
+    rgba(90, 34, 150, 0.16) 80%,
+    transparent 100%);
+  border-radius: 56% 44% 50% 50% / 44% 50% 50% 56%;
+  filter: blur(22px);
+  z-index: -1;
+  animation: fogPulse 5.5s ease-in-out infinite;
 }
 .tome-title { font-weight: 800; font-size: clamp(15px, 3.6vw, 19px); color: var(--accent); }
 .tome-word {
@@ -1422,11 +1437,13 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
 
 /* ไอเทมพลังวิเศษ 5 ช่อง — แถบล่างจอ กดใช้ได้เลยสะดวก (ตัวที่ยังไม่เก็บ = เทา กดไม่ได้)
    เติมปุ่มจริงด้วย main.js จาก items.ITEM_TYPES — ที่นี่มีแค่ layout ของ #itemBar เอง */
+/* เรียงแนวตั้งชิดขอบซ้าย กลางจอ — ไม่ชนจอยสติ๊ก (ล่าง) / ลิงก์ผู้ปกครอง (บน) */
 .item-bar {
   position: absolute;
-  left: 50%; transform: translateX(-50%);
-  bottom: calc(152px + env(safe-area-inset-bottom, 0px)); /* เหนือจอยสติ๊ก/ปุ่มแอคชัน */
-  display: flex; gap: 8px;
+  left: max(8px, env(safe-area-inset-left, 0px));
+  top: 50%; transform: translateY(-50%);
+  bottom: auto;
+  display: flex; flex-direction: column; gap: 8px;
 }
 .item-slot {
   position: relative;
