@@ -250,16 +250,17 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
   const fx = scene.fx;
   const particleFx = createParticleSystem(fx); // pool แยกของตัวเอง (แบบ mahjong.js)
 
-  // ดาวกระจายบนแผนที่ — จบไว ไม่ค้างจอ (decay สูง + พุ่งแรงกว่าค่า default) ผู้ใช้บ่นว่าดูอืด
-  // ตอนสมุนตาย/โดนกัด/เก็บเหรียญ (จังหวะเกมงานหนัก เฟรมตกง่าย burst ยาว 0.9 วิ เลยเห็นเป็นสโลว์)
-  const MAP_FX = { decay: 0.045, spd: 10 }; // ~22 เฟรม ≈ 0.37 วิ (เดิม ~55 เฟรม ≈ 0.9 วิ)
+  // ดาวกระจายบนแผนที่ — จบไว (decay สูง + พุ่งแรงกว่า default) + จำนวนดาวครึ่งเดียว (ผู้ใช้ขอ: ไม่รก/ไม่อืด)
+  // ทุกจุด: ตี/ตาย/กัด/เก็บของ/เข้าด่าน/ล้มบอส · game.js เรียกแบบไม่ส่ง opts = ค่าเดิมเป๊ะ
+  const MAP_BURST_FX = { decay: 0.045, spd: 10, count: 8 };  // spawnCelebrationBurst เดิม 16 → 8
+  const MAP_BOOM_FX = { decay: 0.045, spd: 10, count: 13 };  // spawnExplosion เดิม 26 → 13
   // alias ไว้เรียกใน wrapper — ฟังก์ชันใน particleFx ไม่ผูก this (closure ตรง) เรียกแบบ unbound ได้
   const _burstRaw = particleFx.spawnCelebrationBurst;
   const _boomRaw = particleFx.spawnExplosion;
   function mapBurst(x, y, extra) {
-    _burstRaw(x, y, extra ? Object.assign({}, MAP_FX, extra) : MAP_FX);
+    _burstRaw(x, y, extra ? Object.assign({}, MAP_BURST_FX, extra) : MAP_BURST_FX);
   }
-  function mapBoom(x, y) { _boomRaw(x, y, MAP_FX); }
+  function mapBoom(x, y) { _boomRaw(x, y, MAP_BOOM_FX); }
 
   let W = scene.W || 360;
   let H = scene.H || 640;
@@ -315,6 +316,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
   const bossDone = Object.create(null);     // matraId -> true (ฆ่าบอสรอบนี้แล้ว)
   const tomeUsed = Object.create(null);     // matraId -> true (เก็บคัมภีร์มนตราพิเศษของมาตรานี้ไปแล้ว — 1 ครั้ง/มาตรา/session)
   let readingTome = false;                   // true = กำลังเปิด overlay อ่านคัมภีร์ → หยุด combat + กัน onPick
+  let currentTomeWord = '';                  // คำที่กำลังอ่านในคัมภีร์ (ใช้วาดคำสีทองตอน tomeBlast)
+  let tomeBlast = null;                       // { word, targets[], i, wx, wy } — คำสีทองลอยไปชนสมุนทีละตัว (freeze combat ต่อ)
   let heroKey = -1;                          // idx บ้านที่แม่มดถือกุญแจอยู่ (-1 = ไม่ถือ)
   // ---- ด่านสุดท้าย: ดวลบอสใหญ่บนกำแพงปราสาท ----
   const FINAL_IDX = MATRA.length - 1;
@@ -720,7 +723,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     heroStaff = false; finalBoss = null; duelBeams.length = 0; heroDuelCd = 0; // ดวลบอสใหญ่ (ด่านสุดท้าย)
     hitFx.length = 0;
     pendingSpin = null;
-    readingTome = false; // เผื่อออกจากมาตราระหว่างอ่านคัมภีร์ค้าง
+    readingTome = false; tomeBlast = null; // เผื่อออกจากมาตราระหว่างอ่าน/ระเบิดคัมภีร์ค้าง
     helpers.length = 0;
     syncHelpers(); // สกิล 🧚 — สร้างผู้ช่วยตามจำนวนที่อัปไว้
     for (let i = 0; i < gems.length; i++) { gems[i].taken = false; gems[i].respawn = 0; }
@@ -780,6 +783,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     hero.attackCd = 0;
     hero.swingT = 0;
     hero.atk = null;
+    readingTome = false;
+    tomeBlast = null;
     enterLatch = false;
     camLockIdx = -1;
     pressed = false;
@@ -857,7 +862,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
   }
 
   function onPick(x, y) {
-    if (!running || readingTome) return; // อ่านคัมภีร์อยู่ — overlay รับ input แทน
+    if (!running || readingTome || tomeBlast) return; // อ่านคัมภีร์/คำสีทองกำลังระเบิด — ไม่รับ input
     returnAnim = null; // แตะ = ข้าม return beat
     pressed = true;
     moved = false;
@@ -1024,9 +1029,13 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
   }
 
   function update() {
-    // ---- อ่านคัมภีร์อยู่ → หยุดทุกอย่าง (combat/เดิน/กล้อง) ให้ particle เดินต่อ ----
-    // overlay DOM บังจอทั้งหมดอยู่แล้ว — freeze กันเด็กโดนกัดตายระหว่างอ่าน (คัมภีร์เป็นของรางวัล)
-    if (readingTome) { particleFx.update(); return; }
+    // ---- อ่านคัมภีร์ / คำสีทองกำลังระเบิดสมุน → freeze combat (เดิน/กล้อง) ให้ particle เดินต่อ ----
+    // อ่าน: overlay DOM บังจอ · blast: คำวิ่งจัดการสมุนทีละตัว ไม่ให้สมุนใหม่มาแทรก/กัดฮีโร่
+    if (readingTome || tomeBlast) {
+      if (tomeBlast) updateTomeBlast();
+      particleFx.update();
+      return;
+    }
 
     // ---- ตัวจับเวลาแม่มดน้อย ----
     if (hero.invuln > 0) hero.invuln--;
@@ -1504,6 +1513,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
         audio.sfx('chime');
         const mtr = MATRA.find((m) => m.id === n.matraId);
         const word = mtr && mtr.words[(Math.random() * mtr.words.length) | 0];
+        currentTomeWord = word ? word.display : '';
         if (onTomeCollected && word) onTomeCollected(word);
         else { readingTome = false; } // ไม่มี callback/คำ → ยกเลิก ไม่ให้ค้าง
         return; // ออกจาก loop — ที่เหลือไม่ต้องเก็บเฟรมนี้
@@ -1809,29 +1819,77 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     }
   }
 
-  // ระเบิดคัมภีร์ — เรียกจาก main.js หลังอ่านคำจบ (สำเร็จ/เฉลย) · เลิก readingTome + เคลียร์จอ
-  // ฆ่าสมุนทั่วไปทุกตัวในจอทันที · บอสในจอ -3 (ไม่ instakill กันสู้บอสฟรี) · จอแฟลช + boom
+  // ระเบิดคัมภีร์ — เรียกจาก main.js หลังอ่านคำจบ (สำเร็จ/เฉลย)
+  // เลิก readingTome แต่ยัง freeze combat ต่อ (tomeBlast) — "คำสีทองจากการอ่าน" ลอยไปชนสมุนทีละตัว
+  // แล้วระเบิด จนครบ (บอสโดน -3 ครั้งเดียวไม่ instakill กันสู้บอสฟรี)
+  const TOME_WORD_SPD = 15;    // px/เฟรม คำวิ่งไปหาเป้า
+  const TOME_HIT_R = 26;       // ระยะถึงเป้า → ระเบิด
   function tomeExplode() {
     readingTome = false;
     if (!running) return;
-    hero.ringFx = { t: 0 }; // reuse วงแหวนขยายของไอเทม 💥
-    // ฆ่าสมุนทั่วไปทุกตัวในสมรภูมิ (array มีเฉพาะสมุนของด่านที่กำลังสู้อยู่แล้ว — กล้อง lag
-    // ทำให้เช็คขอบจอเป๊ะไม่แน่นอน จึงเอาทั้ง array) · บอส -3 ไม่ instakill
-    for (let i = minions.length - 1; i >= 0; i--) {
-      const m = minions[i];
-      spawnHitFx(m.wx, m.wy);
-      if (m.isBoss) {
-        m.hp -= 3;
-        m.stagger = MINION_STAGGER;
-        if (m.hp <= 0) killMinionAt(m);
-      } else {
-        killMinionAt(m);
-      }
+    const targets = minions.slice(); // snapshot — killMinionAt splice minions[] ไม่กระทบ list นี้
+    if (targets.length === 0) {
+      hero.ringFx = { t: 0 };
+      audio.sfx('star');
+      mapSay('📖 พลังจากการอ่าน! (ไม่มีสมุนให้ระเบิด)');
+      return;
     }
-    audio.sfx('boom');
-    audio.sfx('star');
-    mapBoom(sX(hero.wx), sY(hero.wy));
-    mapSay('💥 คัมภีร์ระเบิด! สมุนกระจุยหมด');
+    tomeBlast = { word: currentTomeWord || '', targets, i: 0, wx: hero.wx, wy: hero.wy - HERO_R * 1.6 };
+    audio.sfx('chime');
+    mapSay('📖 พลังจากการอ่านคำ!');
+  }
+
+  // คำสีทองลอยไปชนสมุนทีละตัว — เรียกจาก update() ตอน tomeBlast != null (combat freeze อยู่)
+  function updateTomeBlast() {
+    const tb = tomeBlast;
+    // ข้ามเป้าที่ตายไปแล้ว/หลุด array (เผื่อโดน AoE อื่นก่อนหน้า) หาเป้าถัดไปที่ยังอยู่
+    while (tb.i < tb.targets.length && minions.indexOf(tb.targets[tb.i]) < 0) tb.i++;
+    if (tb.i >= tb.targets.length) {
+      hero.ringFx = { t: 0 };           // วงแหวนปิดท้าย
+      mapBoom(sX(hero.wx), sY(hero.wy));
+      audio.sfx('star');
+      mapSay('💥 คัมภีร์ระเบิด! สมุนกระจุยหมด');
+      tomeBlast = null;
+      return;
+    }
+    const m = tb.targets[tb.i];
+    const dx = m.wx - tb.wx, dy = m.wy - tb.wy;
+    const d = Math.hypot(dx, dy) || 1;
+    if (d <= TOME_HIT_R) {
+      spawnHitFx(m.wx, m.wy);
+      mapBoom(sX(m.wx), sY(m.wy));
+      audio.sfx('boom');
+      if (m.isBoss) { m.hp -= 3; m.stagger = MINION_STAGGER; if (m.hp <= 0) killMinionAt(m); }
+      else killMinionAt(m);
+      tb.wx = m.wx; tb.wy = m.wy;
+      tb.i++;
+    } else {
+      tb.wx += (dx / d) * TOME_WORD_SPD;
+      tb.wy += (dy / d) * TOME_WORD_SPD;
+    }
+    // กล้องแพนตามคำ (update() return ก่อนถึง block กล้องปกติ ต้อง lerp เองตรงนี้)
+    camTargetX = clampCamX(tb.wx - W / 2);
+    camTargetY = clampCam(tb.wy - H / 2);
+    cam.x += (camTargetX - cam.x) * 0.12;
+    cam.y += (camTargetY - cam.y) * 0.12;
+  }
+
+  function drawTomeBlast(cx, cy) {
+    if (!tomeBlast) return;
+    const x = tomeBlast.wx - cx, y = tomeBlast.wy - cy;
+    const pulse = 0.8 + 0.2 * Math.sin(performance.now() * 0.02);
+    fx.save();
+    fx.textAlign = 'center';
+    fx.textBaseline = 'middle';
+    fx.font = '900 60px "Sarabun", sans-serif'; // ~เท่าบอส
+    fx.shadowColor = 'rgba(255,216,107,0.95)';
+    fx.shadowBlur = 22 * pulse;
+    fx.fillStyle = '#ffd84d';
+    fx.fillText(tomeBlast.word, x, y);
+    fx.fillStyle = 'rgba(255,245,200,0.9)';
+    fx.shadowBlur = 8;
+    fx.fillText(tomeBlast.word, x, y);
+    fx.restore();
   }
 
   // AoE เหวี่ยงหมุน — เรียกหลังจบ minion loop (backward, splice ปลอดภัย)
@@ -2194,6 +2252,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
 
     drawBeam(cx, cy);
     drawHitFx(cx, cy);
+    drawTomeBlast(cx, cy); // คำสีทองจากคัมภีร์ (บนสุด)
     particleFx.draw();
 
     // ---- HUD: แถบพลังแม่มดน้อย (มุมซ้ายบน ใต้ปุ่ม) ----
