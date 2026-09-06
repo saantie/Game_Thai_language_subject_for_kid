@@ -282,6 +282,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     shieldUp: false, // ไอเทม 🛡️ — กันโดนกัดครั้งถัดไป 1 ครั้ง (ใช้แล้วเป็น false)
     ringFx: null, // { t } วงแหวนระเบิดขยายออกตอนใช้ไอเทม 💥
   };
+  let joyX = 0, joyY = 0;  // เวกเตอร์จอยสติ๊ก (-1..1) — 0,0 = ปล่อย · มาจาก mapControls.js
   let helpers = [];        // สกิล 🧚 — ผู้ช่วยสู้อัตโนมัติ (เตรียมระบบ, GIF ทีหลัง)
   let hitFx = [];          // { wx, wy, t } วงรีแสงทองขยายออก ตอนตีโดน (แทนดาวกระจาย)
   let pendingSpin = null;  // { r, wide } — AoE เหวี่ยงหมุน ประมวลผลหลังจบ minion loop (กัน splice ซ้อน)
@@ -699,6 +700,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     hitFx.length = 0;
     pendingSpin = null;
     readingTome = false; tomeBlast = null; // เผื่อออกจากมาตราระหว่างอ่าน/ระเบิดคัมภีร์ค้าง
+    joyX = 0; joyY = 0;
     helpers.length = 0;
     syncHelpers(); // สกิล 🧚 — สร้างผู้ช่วยตามจำนวนที่อัปไว้
     for (let i = 0; i < gems.length; i++) { gems[i].taken = false; gems[i].respawn = 0; }
@@ -760,6 +762,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     hero.atk = null;
     readingTome = false;
     tomeBlast = null;
+    joyX = 0; joyY = 0;
     enterLatch = false;
     camLockIdx = -1;
     pressed = false;
@@ -1057,6 +1060,16 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
           hero.moving = false; // ประชิดแล้ว — ยืนตี (ตีจริงใน updateMinions)
         }
       }
+    }
+
+    // ---- จอยสติ๊ก: เอียงเกิน deadzone → เซ็ตเป้าล่วงหน้าในทิศจอย (โค้ดเดินด้านล่างจัดการ clamp/ชนต้นไม้เอง) ----
+    const jmag = Math.hypot(joyX, joyY);
+    if (jmag > 0.2 && hero.fainting === 0 && !readingTome && !tomeBlast) {
+      hero.atk = null;
+      hero.tx = hero.wx + (joyX / jmag) * 60;
+      hero.ty = hero.wy + (joyY / jmag) * 60;
+      hero.moving = true;
+      camLockIdx = -1; // ขยับเอง → กล้องเลิกล็อกโหนด ตามฮีโร่
     }
 
     // ---- เดินฮีโร่ ----
@@ -1799,6 +1812,73 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       if (dx * dx + dy * dy > r2) continue;
       spawnHitFx(m.wx, m.wy);
       killMinionAt(m);
+    }
+  }
+
+  // ---------- จอยสติ๊ก + ปุ่มแอคชัน (mapControls.js เรียก) ----------
+  function setJoystick(x, y) {
+    const wasActive = Math.hypot(joyX, joyY) > 0.2;
+    joyX = x || 0; joyY = y || 0;
+    // ปล่อยจอย → หยุดทันที (ไม่เดินต่อไปยังเป้าล่วงหน้า 60px ที่ค้างอยู่)
+    if (wasActive && Math.hypot(joyX, joyY) <= 0.2) { hero.tx = hero.wx; hero.ty = hero.wy; hero.moving = false; }
+  }
+
+  // ค่าที่ปุ่มแอคชันใช้เกรย์ตัวเอง (สกิลยังไม่อัป = ปุ่มกดไม่ได้)
+  function skillState() {
+    return { fly: (sk.broom | 0) > 0, jump: (sk.jump | 0) > 0, beam: (sk.beam | 0) > 0 };
+  }
+
+  function nearestMinion(maxDist, noBoss) {
+    let best = null, bd = maxDist * maxDist;
+    for (let i = 0; i < minions.length; i++) {
+      const m = minions[i];
+      if ((noBoss && m.isBoss) || m.stagger > 0) continue;
+      const dx = m.wx - hero.wx, dy = m.wy - hero.wy;
+      const dd = dx * dx + dy * dy;
+      if (dd < bd) { bd = dd; best = m; }
+    }
+    return best;
+  }
+
+  // ยิงแสง/ตีใส่ m ทันที (ไม่เดินเข้าไปหา) — ใช้ทั้งปุ่ม ⚔️ และ ✨
+  function heroZap(m) {
+    const dm = Math.hypot(m.wx - hero.wx, m.wy - hero.wy) || 1;
+    const k = m.isBoss ? KNOCK * 0.5 : KNOCK;
+    m.hp -= 1;
+    m.stagger = MINION_STAGGER;
+    m.active = false;
+    m.vx = ((m.wx - hero.wx) / dm) * k * 0.5;
+    m.vy = ((m.wy - hero.wy) / dm) * k * 0.5;
+    hero.facing = m.wx < hero.wx ? -1 : 1;
+    hero.poseAtk = HERO_POSE_ATK_T;
+    hero.beamFx = { tx: m.wx, ty: m.wy, t: 0 };
+    audio.sfx('swing');
+    audio.sfx('minion_cry');
+    spawnHitFx(m.wx, m.wy);
+    if ((sk.spin || sk.spinWide) && !m.isBoss) {
+      pendingSpin = { r: Math.max(sk.spin, sk.spinWide), wide: sk.spinWide > 0 };
+    }
+    if (m.isBoss && m.hp > 0) mapSay('ตีบอสอีก ' + m.hp + ' ครั้ง!');
+    if (m.hp <= 0) killMinionAt(m);
+  }
+
+  function doAction(name) {
+    if (!running || readingTome || tomeBlast || hero.fainting > 0) return;
+    if (name === 'attack') {
+      if (hero.attackCd > 0) return;
+      const m = nearestMinion(ATTACK_R * 2.4);
+      if (!m) { hero.poseAtk = HERO_POSE_ATK_T; audio.sfx('swing'); return; } // เหวี่ยงลม
+      hero.attackCd = sk.attackCd;
+      heroZap(m);
+    } else if (name === 'fly') {
+      if (sk.broom > 0) { hero.broomT = sk.broom; audio.sfx('swing'); mapSay('🧹 ขึ้นไม้กวาดลอย!'); }
+    } else if (name === 'jump') {
+      if (sk.jump > 0) { hero.jumpT = 16; audio.sfx('swing'); }
+    } else if (name === 'beam') {
+      if (sk.beam > 0 && hero.beamCd <= 0) {
+        const m = nearestMinion(sk.beam, true);
+        if (m) { hero.beamCd = 40; heroZap(m); }
+      }
     }
   }
 
@@ -2981,5 +3061,6 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     fx.fill();
   }
 
-  return { enter, onPick, onMove, onRelease, relayout, refresh, stop, useItem: applyItemEffect, tomeExplode };
+  return { enter, onPick, onMove, onRelease, relayout, refresh, stop, useItem: applyItemEffect, tomeExplode,
+    setJoystick, doAction, skillState };
 }
