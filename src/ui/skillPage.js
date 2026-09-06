@@ -3,7 +3,7 @@
 // สร้างจาก SKILLS ใน rpg.js โดยตรง ไม่ฮาร์ดโค้ด — เพิ่มสกิลใหม่ที่ rpg.js แล้วหน้านี้ขึ้นเอง
 // แถบ XP อยู่ที่นี่ (ไม่ใช่บน HUD แผนที่) พร้อมข้อความ "อ่านอีก N คำ" ทำหน้าที่จูงใจ
 
-import { SKILLS, MAX_RANK, XP_PERFECT, XP_PER_LEVEL, getRpg, upgradeSkill } from '../rpg.js';
+import { SKILLS, MAX_RANK, XP_PERFECT, XP_PER_LEVEL, getRpg, upgradeSkill, isSkillUnlocked } from '../rpg.js';
 import { audio } from '../audio.js';
 
 export function buildSkillPage(container) {
@@ -67,22 +67,24 @@ function cardHtml(sk, r) {
   const rank = r.skills[sk.id] || 0;
   const maxRank = sk.maxRank || MAX_RANK;
   const maxed = rank >= maxRank;
-  const canUp = !maxed && r.pointsLeft > 0;
+  const locked = !isSkillUnlocked(sk.id); // ยังไม่ได้อัปสกิลลำดับก่อนหน้า → ล็อก
+  const prevSk = SKILLS[SKILLS.findIndex((s) => s.id === sk.id) - 1];
+  const canUp = !maxed && !locked && r.pointsLeft > 0;
   let pips = '';
   for (let i = 0; i < maxRank; i++) pips += `<span class="pip ${i < rank ? 'on' : ''}"></span>`;
   const now = sk.label(sk.levels[rank]);
   const next = maxed ? '' : `<span class="skill-next">&#8594; ${sk.label(sk.levels[rank + 1])}</span>`;
   return `
-    <div class="skill-card ${maxed ? 'maxed' : ''}" data-card="${sk.id}">
-      <div class="skill-icon">${sk.icon}</div>
+    <div class="skill-card ${maxed ? 'maxed' : ''} ${locked ? 'locked' : ''}" data-card="${sk.id}">
+      <div class="skill-icon">${locked ? '&#128274;' : sk.icon}</div>
       <div class="skill-body">
         <div class="skill-name">${sk.name}</div>
-        <div class="skill-desc">${sk.desc}</div>
+        <div class="skill-desc">${locked && prevSk ? 'อัป "' + prevSk.name + '" ก่อน 1 ระดับ ถึงจะปลดล็อก' : sk.desc}</div>
         <div class="skill-pips">${pips}</div>
         <div class="skill-val">${now}${next}</div>
       </div>
       <button class="skill-up-btn ${canUp ? '' : 'off'}" data-skill="${sk.id}" ${canUp ? '' : 'disabled'}>
-        ${maxed ? 'เต็มแล้ว' : 'อัป'}
+        ${maxed ? 'เต็มแล้ว' : locked ? 'ล็อก' : 'อัป'}
       </button>
     </div>`;
 }

@@ -250,6 +250,17 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
   const fx = scene.fx;
   const particleFx = createParticleSystem(fx); // pool แยกของตัวเอง (แบบ mahjong.js)
 
+  // ดาวกระจายบนแผนที่ — จบไว ไม่ค้างจอ (decay สูง + พุ่งแรงกว่าค่า default) ผู้ใช้บ่นว่าดูอืด
+  // ตอนสมุนตาย/โดนกัด/เก็บเหรียญ (จังหวะเกมงานหนัก เฟรมตกง่าย burst ยาว 0.9 วิ เลยเห็นเป็นสโลว์)
+  const MAP_FX = { decay: 0.045, spd: 10 }; // ~22 เฟรม ≈ 0.37 วิ (เดิม ~55 เฟรม ≈ 0.9 วิ)
+  // alias ไว้เรียกใน wrapper — ฟังก์ชันใน particleFx ไม่ผูก this (closure ตรง) เรียกแบบ unbound ได้
+  const _burstRaw = particleFx.spawnCelebrationBurst;
+  const _boomRaw = particleFx.spawnExplosion;
+  function mapBurst(x, y, extra) {
+    _burstRaw(x, y, extra ? Object.assign({}, MAP_FX, extra) : MAP_FX);
+  }
+  function mapBoom(x, y) { _boomRaw(x, y, MAP_FX); }
+
   let W = scene.W || 360;
   let H = scene.H || 640;
 
@@ -1290,7 +1301,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
         if (m.isBoss && m.hp > 0) mapSay('ตีบอสอีก ' + m.hp + ' ครั้ง!');
         if (m.hp <= 0) {
           const gid = gnode.matraId;
-          particleFx.spawnCelebrationBurst(sX(m.wx), sY(m.wy), {
+          mapBurst(sX(m.wx), sY(m.wy), {
             hueMin: m.isBoss ? 280 : 90, hueRange: 40,
           });
           audio.sfx('star');
@@ -1301,7 +1312,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
           maybeDropItem(m); // โอกาสน้อยหล่นไอเทมพลังวิเศษ
           if (m.isBoss) {
             bossDone[gid] = true;
-            particleFx.spawnCelebrationBurst(sX(m.wx), sY(m.wy), { hueMin: 280, hueRange: 40 });
+            mapBurst(sX(m.wx), sY(m.wy), { hueMin: 280, hueRange: 40 });
             audio.sfx('ting');
             mapSay('ล้มบอสแล้ว! รีบไปเก็บกุญแจ');
           } else if (diff.boss && !bossDone[gid] && guardKills[gid] === diff.minions) {
@@ -1330,7 +1341,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       hero.invuln = sk.invuln; // กันโดนซ้ำทันทีเหมือนโดนกัดจริง
       hero.hurtT = 6;
       audio.sfx('ting');
-      particleFx.spawnCelebrationBurst(sX(hero.wx), sY(hero.wy), { hueMin: 140, hueRange: 30 });
+      mapBurst(sX(hero.wx), sY(hero.wy), { hueMin: 140, hueRange: 30 });
       mapSay('โล่กันไว้ทัน!');
       return;
     }
@@ -1346,7 +1357,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     hero.ty = hero.wy;
     audio.sfx('bite');
     audio.sfx('hero_cry'); // เสียงร้องแม่มดน้อยโดนกัด
-    particleFx.spawnExplosion(sX(hero.wx), sY(hero.wy));
+    mapBoom(sX(hero.wx), sY(hero.wy));
     // สกิล 🧹 — โดนกัดแล้วขึ้นไม้กวาดลอยหนีชั่วครู่ (ลูกสมุนพื้นกัดไม่โดน)
     if (sk.broom > 0 && hero.hp > 0) {
       hero.broomT = sk.broom;
@@ -1364,7 +1375,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       } else {
         mapSay('ล้มแล้ว! เสียเหรียญ 100');
       }
-      particleFx.spawnExplosion(sX(hero.wx), sY(hero.wy));
+      mapBoom(sX(hero.wx), sY(hero.wy));
     }
   }
 
@@ -1464,14 +1475,14 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       if (g.coin) {
         addPoints(1);
         audio.sfx('gem');
-        particleFx.spawnCelebrationBurst(sX(g.wx), sY(g.wy), { hueMin: 44, hueRange: 16 });
+        mapBurst(sX(g.wx), sY(g.wy), { hueMin: 44, hueRange: 16 });
         gems.splice(i, 1); i--;
         continue; // เหรียญเก็บได้หลายเม็ดต่อเฟรม
       }
       if (!canHeal) continue;
       hero.hp = Math.min(sk.maxHp, hero.hp + 1);
       audio.sfx('gem');
-      particleFx.spawnCelebrationBurst(sX(g.wx), sY(g.wy), { hueMin: 315, hueRange: 30 });
+      mapBurst(sX(g.wx), sY(g.wy), { hueMin: 315, hueRange: 30 });
       if (g.drop) { gems.splice(i, 1); i--; }
       else { g.taken = true; g.respawn = GEM_RESPAWN; }
       break; // พลอยหัวใจเก็บทีละเม็ดต่อเฟรม
@@ -1485,7 +1496,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     if (onInventoryChange) onInventoryChange();
     const def = itemDef(g.item);
     audio.sfx('ting');
-    particleFx.spawnCelebrationBurst(sX(g.wx), sY(g.wy), { hueMin: 200, hueRange: 70 });
+    mapBurst(sX(g.wx), sY(g.wy), { hueMin: 200, hueRange: 70 });
     mapSay(def ? def.icon + ' ได้' + def.name + '!' : 'ได้ไอเทมพลังวิเศษ!');
   }
 
@@ -1515,7 +1526,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
           heroStaff = true;
           finalBoss = { hp: 8, maxHp: 8, bx: (wallL + wallR) / 2, wallY, wallL, wallR, pace: 1, paceTgt: wallR - 40, beamCd: 90, aimT: 0 };
           audio.sfx('ting');
-          particleFx.spawnCelebrationBurst(sX(sp.wx), sY(sp.wy), { hueMin: 44, hueRange: 22 });
+          mapBurst(sX(sp.wx), sY(sp.wy), { hueMin: 44, hueRange: 22 });
           mapSay('ได้ไม้เท้ากายสิทธิ์คริสตอล! สู้บอสใหญ่เลย');
         }
       }
@@ -1564,13 +1575,13 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
           if (b.gold) {
             if (Math.abs(fb.bx - b.x1) < 26) {
               fb.hp--;
-              particleFx.spawnCelebrationBurst(sX(b.x1), sY(fb.wallY), { hueMin: 44, hueRange: 20 });
+              mapBurst(sX(b.x1), sY(fb.wallY), { hueMin: 44, hueRange: 20 });
               audio.sfx('minion_cry');
               if (fb.hp <= 0) {
                 keyDelivered[n.matraId] = true;
                 bossDone[n.matraId] = true;
                 finalBoss = null;
-                particleFx.spawnCelebrationBurst(sX(n.wx), sY(n.wy), { hueMin: 44, hueRange: 30 });
+                mapBurst(sX(n.wx), sY(n.wy), { hueMin: 44, hueRange: 30 });
                 audio.sfx('ting');
                 mapSay('ล้มบอสใหญ่ได้แล้ว! เข้าปราสาทเลย');
               }
@@ -1584,7 +1595,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
               hero.hurtT = 12;
               hero.wx += (hero.wx > b.x1 ? 1 : -1) * 16;
               audio.sfx('bite'); audio.sfx('hero_cry');
-              particleFx.spawnExplosion(sX(hero.wx), sY(hero.wy));
+              mapBoom(sX(hero.wx), sY(hero.wy));
               if (hero.hp <= 0) {
                 hero.hp = 0; hero.fainting = FAINT_T; hero.hurtT = 0;
                 addPoints(-100);
@@ -1624,7 +1635,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
         keyDelivered[n.matraId] = true;
         heroKey = -1;
         audio.sfx('ting');
-        particleFx.spawnCelebrationBurst(sX(n.wx), sY(n.wy), { hueMin: 44, hueRange: 26 });
+        mapBurst(sX(n.wx), sY(n.wy), { hueMin: 44, hueRange: 26 });
         mapSay('เปิดบ้านได้แล้ว! เดินเข้าไปเลย');
       }
     } else if (heroKey === -1) {
@@ -1643,7 +1654,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
         }
         heroKey = i;
         audio.sfx('gem');
-        particleFx.spawnCelebrationBurst(sX(kp.wx), sY(kp.wy), { hueMin: 44, hueRange: 22 });
+        mapBurst(sX(kp.wx), sY(kp.wy), { hueMin: 44, hueRange: 22 });
         mapSay('ได้กุญแจแล้ว! รีบพากลับไปเปิดบ้าน');
       }
     }
@@ -1668,7 +1679,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       dropCoin(m); // เดินตาย → เหรียญทอง 1 เหรียญ
       maybeDropItem(m); // โอกาสน้อยหล่นไอเทมพลังวิเศษ
       if (m.isBoss) { bossDone[gn.matraId] = true; mapSay('ล้มบอสแล้ว! รีบไปเก็บกุญแจ'); }
-      particleFx.spawnCelebrationBurst(sX(m.wx), sY(m.wy), { hueMin: m.isBoss ? 280 : 90, hueRange: 40 });
+      mapBurst(sX(m.wx), sY(m.wy), { hueMin: m.isBoss ? 280 : 90, hueRange: 40 });
     }
     if (hero.atk === m) hero.atk = null;
     minionPool.push(m);
@@ -1722,13 +1733,13 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
         if (g.item) { pickupItemGem(g); gems.splice(i, 1); continue; }
         if (g.coin) {
           addPoints(1);
-          particleFx.spawnCelebrationBurst(sX(g.wx), sY(g.wy), { hueMin: 44, hueRange: 16 });
+          mapBurst(sX(g.wx), sY(g.wy), { hueMin: 44, hueRange: 16 });
           gems.splice(i, 1);
           continue;
         }
         if (hero.hp < sk.maxHp) { // พลอยหัวใจ — ดูดเฉพาะตอนพลังไม่เต็ม (เหมือนเดินทับเอง)
           hero.hp = Math.min(sk.maxHp, hero.hp + 1);
-          particleFx.spawnCelebrationBurst(sX(g.wx), sY(g.wy), { hueMin: 315, hueRange: 30 });
+          mapBurst(sX(g.wx), sY(g.wy), { hueMin: 315, hueRange: 30 });
           if (g.drop) gems.splice(i, 1);
           else { g.taken = true; g.respawn = GEM_RESPAWN; }
         }
@@ -1902,7 +1913,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       const p = Math.min(1, ra.t / 42);
       ra.shown = ra.from + (ra.to - ra.from) * p;
       if (ra.t % 14 === 6) {
-        particleFx.spawnCelebrationBurst(sX(node.wx), sY(node.wy), { hueMin: 186, hueRange: 40 });
+        mapBurst(sX(node.wx), sY(node.wy), { hueMin: 186, hueRange: 40 });
       }
       camTargetX = clampCamX(node.wx - W / 2);
       camTargetY = clampCam(node.wy - H / 2);

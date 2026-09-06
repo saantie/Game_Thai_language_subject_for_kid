@@ -143,10 +143,19 @@ export function addXp(amount) {
   return { gained: amount, leveledUp: after > before, level: after };
 }
 
-// อัปสกิล 1 ระดับ — คืน true ถ้าสำเร็จ (มีแต้มพอ + ยังไม่เต็ม)
+// สกิลลำดับ i อัปได้ก็ต่อเมื่อสกิลลำดับ i-1 มีอย่างน้อย 1 rank (สกิลแรกอัปได้เสมอ)
+// = ห้าม "อัปข้ามลำดับ" ไปสกิลท้าย ๆ เลย · ไม่เช็คว่าต้องเต็มก่อน แค่ต้องเริ่มแล้ว
+export function isSkillUnlocked(id) {
+  const i = SKILLS.findIndex((s) => s.id === id);
+  if (i <= 0) return true;
+  return (_state.skills[SKILLS[i - 1].id] || 0) >= 1;
+}
+
+// อัปสกิล 1 ระดับ — คืน true ถ้าสำเร็จ (มีแต้มพอ + ยังไม่เต็ม + ปลดล็อกตามลำดับแล้ว)
 export function upgradeSkill(id) {
   const sk = SKILLS.find((s) => s.id === id);
   if (!sk) return false;
+  if (!isSkillUnlocked(id)) return false; // อัปข้ามลำดับไม่ได้
   const cur = _state.skills[id] || 0;
   if (cur >= (sk.maxRank || MAX_RANK)) return false;
   if (getRpg().pointsLeft < 1) return false;
