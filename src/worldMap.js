@@ -985,7 +985,9 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     if (quiet && now - lastTs < 33) return;
     lastTs = now;
     update();
-    render(now);
+    // update() อาจสั่ง stop() เอง (เก็บไอเทมไพ่ → onCardsCollected → showScreen('mahjong'))
+    // ถ้าหยุดแล้วห้าม render — ไม่งั้นวาดแผนที่ทับ fxCanvas ที่ mahjong เพิ่งเคลียร์ → หน้า RPG ค้างทับกระดานไพ่
+    if (running) render(now);
     // ---- fps log (ตรวจสอบหน่วง) — นับเฉพาะเฟรมที่วาดจริง, สรุปทุก 1 วิ ----
     fpsFrames++;
     if (now - fpsT0 >= 1000) {
