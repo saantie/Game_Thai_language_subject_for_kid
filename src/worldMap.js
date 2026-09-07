@@ -1746,7 +1746,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     if (!running || readingTome || tomeBlast || hero.fainting > 0) return;
     if (name === 'attack') {
       if (hero.attackCd > 0) return;
-      const m = nearestMinion(ATTACK_R * 2.4);
+      // ต้องประชิดตัวสมุนจริง ๆ ถึงจะตีโดน (ระยะ ~ATTACK_R) · ไกลกว่านั้น = เหวี่ยงลม ไม่โดน ไม่กินคูลดาวน์
+      const m = nearestMinion(ATTACK_R * 1.15);
       if (!m) { hero.poseAtk = HERO_POSE_ATK_T; hero.swingT = SWING_T; audio.sfx('swing'); return; } // เหวี่ยงลม
       hero.attackCd = sk.attackCd;
       heroZap(m, false); // ⚔️ ตีประชิด — ไม่มีเส้นแสง
