@@ -8,7 +8,6 @@ import { createGame } from './game.js';
 import { createMahjongWarmup } from './mahjong.js';
 import { createWorldMap } from './worldMap.js';
 import { createTomeRead } from './ui/tomeRead.js';
-import { createMapControls } from './ui/mapControls.js';
 import { buildSkillPage, setSkillPageBack } from './ui/skillPage.js';
 import { getRpg, resetRpg } from './rpg.js';
 import { buildLevelSelect } from './ui/levelSelect.js';
@@ -218,13 +217,6 @@ function claimMahjongReward(itemId) {
   _cardsMatraId = null;
 }
 
-// จอยสติ๊ก + ปุ่มแอคชันหน้าแผนที่ — refresh() เกรย์ปุ่มบิน/กระโดด/ยิงแสงตามสกิลที่อัปแล้ว
-const mapControls = createMapControls({
-  joystickEl: $('#mapJoystick'),
-  actionsEl: $('#mapActions'),
-  worldMap,
-});
-
 // input layer: hybrid — pointer (touch/เมาส์) ทำงานเสมอ, AR (handpinch) ซ้อนทับ
 // เมื่อเปิดกล้องสำเร็จ — เด็กจิ้มจอก็เล่นได้ จีบนิ้วหน้ากล้องก็เล่นได้
 // route ตาม _screen ตอนเรียกจริง (ไม่ต้อง rewiring ตอนสลับหน้า) — onHandFrame
@@ -398,8 +390,6 @@ function showScreen(which, opts) {
     if (app.settings.bgm) audio.startLevelBgm(); else audio.stopLevelBgm();
     // เรียก enter หลัง toggle class แล้ว — canvas พร้อมและ scene.W/H เป็นค่าจริง
     worldMap.enter(opts || {});
-    mapControls.refresh(); // เกรย์ปุ่มบิน/กระโดด/ยิงแสงตามสกิลที่อัปแล้ว
-    mapControls.release(); // เผื่อจอยค้างจากรอบก่อน
     syncSkillDot(); // เพิ่งเล่นมาตราจบอาจเลเวลขึ้น → โชว์จุดแดงบนปุ่ม ⚔️
   } else if (which === 'skill') {
     // สร้างใหม่ทุกครั้งที่เปิด — XP/แต้มเปลี่ยนได้หลังเล่นมาตรา
