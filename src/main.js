@@ -15,12 +15,11 @@ import { buildLevelSelect } from './ui/levelSelect.js';
 import { openAdultGate } from './ui/adultPage.js';
 import { watchAuthState, isAdminEmail } from './firebaseAuth.js';
 import { MATRA } from './data/matra.js';
-import { ITEM_TYPES, getInventory } from './items.js';
+import { ITEM_TYPES, getInventory, addItem } from './items.js';
 import {
   loadProgress, saveProgress, clearProgress,
   loadArEnabled, saveArEnabled,
   loadTotalScore, saveTotalScore,
-  loadMahjongSeen, saveMahjongSeen,
   loadConfirmButtonsOverride, saveConfirmButtonsOverride,
   loadArFlickHintShown, saveArFlickHintShown,
 } from './storage.js';
@@ -41,7 +40,6 @@ const app = {
   progress: loadProgress(), // โหลดจาก localStorage — { matraId: stars }
   settings: { showSpellHint: false, bgm: true, arEnabled: loadArEnabled(), confirmButtonsOverride: loadConfirmButtonsOverride() },
   totalScore: loadTotalScore(), // คะแนนสะสมข้ามทุกมาตรา — game.js อัปเดตสดระหว่างเล่น
-  mahjongSeen: loadMahjongSeen(), // { matraId: true } — ด่านอุ่นเครื่องไพ่โชว์แค่ครั้งแรก
   isAdmin: false, // ล็อกอินด้วยอีเมล Admin แล้ว → เล่นได้ทุกมาตราไม่ล็อก (ข้อ 1, ดู firebaseAuth.js)
   currentUser: null, // ผู้เล่นที่ล็อกอินอยู่ (ถ้ามี) — { email, uid } เสริมระบบเดิม ไม่บังคับล็อกอิน
 };
@@ -56,20 +54,6 @@ watchAuthState((user) => {
   if (_screen === 'map') worldMap.refresh();
   else if (_screen === 'level') buildLevelSelect($('#levelGrid'), app, (id) => startMatraById(id));
 });
-
-// ผู้เล่นเก่าที่มีดาวอยู่แล้วก่อนฟีเจอร์นี้มา ไม่ควรต้องมาเจอด่านอุ่นเครื่องผุดขึ้น
-// ทีหลังทุกมาตราที่เคยผ่าน — เช็คทุกครั้งที่บูต (เบา แค่ไล่ key ที่มีอยู่) ไม่ใช่
-// migration one-shot กันข้อมูลไม่ตรงกันเองถ้า localStorage ถูกแก้มือ
-(function ensureMahjongSeenInvariant() {
-  let dirty = false;
-  Object.keys(app.progress).forEach((id) => {
-    if ((app.progress[id] | 0) >= 1 && !app.mahjongSeen[id]) {
-      app.mahjongSeen[id] = true;
-      dirty = true;
-    }
-  });
-  if (dirty) saveMahjongSeen(app.mahjongSeen);
-}());
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -138,16 +122,17 @@ const game = createGame({
   },
 });
 
+// เกมจับคู่ไพ่ — เข้าจากไอเทมที่หล่นบนแผนที่ (worldMap onCardsCollected) เท่านั้น
+// เล่นจับคู่ครบทั้งกระดาน → onComplete → เลือกไอเทมพลังวิเศษ 1 ชิ้น (showMahjongReward)
+let _cardsMatraId = null; // มาตราของ token ไพ่ที่กำลังเล่น — ใช้ตอน consume/กลับแผนที่
 const mahjongWarmup = createMahjongWarmup({
   scene,
   audio,
   app,
   dom,
-  onComplete: (matraId) => {
-    app.mahjongSeen[matraId] = true;
-    saveMahjongSeen(app.mahjongSeen);
+  onComplete: () => {
     mahjongWarmup.stop();
-    enterBubbleGame(MATRA_BY_ID[matraId]);
+    showMahjongReward();
   },
 });
 
@@ -196,7 +181,42 @@ const worldMap = createWorldMap({
   onPickMatra: (id) => startMatraById(id),
   onInventoryChange: renderItemBar,
   onTomeCollected: (word) => tomeRead.open(word, () => worldMap.tomeExplode()),
+  onCardsCollected: (matraId) => {
+    _cardsMatraId = matraId;
+    const m = MATRA_BY_ID[matraId];
+    showScreen('mahjong');
+    mahjongWarmup.startMatra(m, MATRA.indexOf(m), MATRA.length);
+  },
 });
+
+// เล่นจับคู่ครบ → การ์ดเลือกไอเทม 1 ชิ้น (สร้างปุ่มจาก ITEM_TYPES — แหล่งความจริงเดียว)
+const mahjongRewardEl = $('#mahjongReward');
+ITEM_TYPES.forEach((it) => {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'mj-reward-item';
+  btn.innerHTML = `<span class="mj-reward-icon">${it.icon}</span><span class="mj-reward-name">${it.name}</span>`;
+  btn.title = it.desc;
+  btn.addEventListener('click', () => claimMahjongReward(it.id));
+  $('#mahjongRewardItems').appendChild(btn);
+});
+function showMahjongReward() {
+  mahjongRewardEl.classList.remove('hidden');
+  $('#mahjongBackBtn').classList.add('hidden'); // เล่นจบแล้ว ต้องเลือกไอเทมก่อน
+  audio.sfx('chime');
+}
+function claimMahjongReward(itemId) {
+  addItem(itemId);
+  renderItemBar();
+  worldMap.consumeCards(_cardsMatraId); // ปิด token ด่านนี้ + ล้าง gem ไพ่ออกจากแผนที่
+  mahjongRewardEl.classList.add('hidden');
+  $('#mahjongBackBtn').classList.remove('hidden');
+  const def = ITEM_TYPES.find((t) => t.id === itemId);
+  audio.sfx('star');
+  showScreen('map', { focusMatraId: _cardsMatraId });
+  if (def) witchSay(def.icon + ' ได้ ' + def.name + '!');
+  _cardsMatraId = null;
+}
 
 // จอยสติ๊ก + ปุ่มแอคชันหน้าแผนที่ — refresh() เกรย์ปุ่มบิน/กระโดด/ยิงแสงตามสกิลที่อัปแล้ว
 const mapControls = createMapControls({
@@ -388,6 +408,8 @@ function showScreen(which, opts) {
   } else if (which === 'mahjong') {
     // เพลงเดียวกับทั้งแอปแต่ลดเสียงลง 50% — เสียงอ่านสะกดคำ/เสียงแตกต้องได้ยินชัด
     if (app.settings.bgm) audio.startMahjongBgm(); else audio.stopLevelBgm();
+    mahjongRewardEl.classList.add('hidden'); // เริ่มเกมใหม่ = ยังไม่มีการ์ดรางวัล
+    $('#mahjongBackBtn').classList.remove('hidden');
   }
 }
 
@@ -543,13 +565,7 @@ function startMatraById(id) {
   // decode เสียงสะกด/คำเต็มของมาตรานี้ล่วงหน้าเข้า BufferCache ระหว่างที่หน้าเลือก
   // มาตรากำลังสลับไปหน้าเกม (มีเวลาว่างอยู่แล้ว) — กันสะดุดตอนเฉลยสะกดคำระหว่างเล่นจริง
   audio.preloadMatra(matra);
-  if (!app.mahjongSeen[id]) {
-    // ครั้งแรกที่ปลดล็อกมาตรานี้ — ด่านอุ่นเครื่องไพ่ก่อน แล้วค่อยเข้าเกมหยิบฟอง
-    showScreen('mahjong');
-    mahjongWarmup.startMatra(matra, MATRA.indexOf(matra), MATRA.length);
-  } else {
-    enterBubbleGame(matra);
-  }
+  enterBubbleGame(matra); // เกมจับคู่ไพ่ไม่ใช่ด่านอุ่นเครื่องอีกต่อไป — เข้าจากไอเทมบนแผนที่เท่านั้น
 }
 
 function enterBubbleGame(matra) {
@@ -666,7 +682,9 @@ $('#backBtn').addEventListener('click', () => {
 
 $('#mahjongBackBtn').addEventListener('click', () => {
   mahjongWarmup.stop();
-  showScreen('map');
+  worldMap.abandonCards(); // ออกก่อนเล่นจบ — ไอเทมไพ่กลับมาให้เก็บใหม่ได้ (ไม่หาย)
+  showScreen('map', { focusMatraId: _cardsMatraId });
+  _cardsMatraId = null;
 });
 
 // list view (#levelScreen) — เข้าจากปุ่ม ☰ บนแผนที่ ปุ่ม back กลับแผนที่
@@ -693,8 +711,6 @@ resetBtn.addEventListener('click', () => {
     app.progress = {};
     app.totalScore = 0;
     saveTotalScore(0);
-    app.mahjongSeen = {};
-    saveMahjongSeen({});
     resetRpg(); // ล้าง XP + สกิลด้วย ไม่งั้นสกิลค้างแต่ดาวหาย = สถานะไม่สอดคล้อง
     syncSkillDot();
     dom.totalBadgeValue.textContent = 0;

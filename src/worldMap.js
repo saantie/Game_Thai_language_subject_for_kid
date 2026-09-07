@@ -17,7 +17,7 @@ import { isUnlocked, getStars } from './ui/levelSelect.js';
 import { createParticleSystem } from './particles.js';
 import { saveTotalScore } from './storage.js';
 import { getSkillEffects } from './rpg.js';
-import { ITEM_TYPES, addItem, useItem as useItemFromInv, randomItemId, itemDef } from './items.js';
+import { addItem, useItem as useItemFromInv, itemDef } from './items.js';
 
 // จุดมาตราบนแผนที่ = บ้านแม่มด (House wish.png) แทนลูกแก้วคริสตอลเดิม
 const HOUSE_IMG = new Image();
@@ -228,7 +228,7 @@ function hexA(hex, a) {
   return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
 }
 
-export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventoryChange, onTomeCollected }) {
+export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventoryChange, onTomeCollected, onCardsCollected }) {
   const fx = scene.fx;
   const particleFx = createParticleSystem(fx); // pool แยกของตัวเอง (แบบ mahjong.js)
 
@@ -298,6 +298,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
   const keyDelivered = Object.create(null); // matraId -> true (พากุญแจกลับมาเปิดบ้านแล้ว)
   const bossDone = Object.create(null);     // matraId -> true (ฆ่าบอสรอบนี้แล้ว)
   const tomeUsed = Object.create(null);     // matraId -> true (เก็บคัมภีร์มนตราพิเศษของมาตรานี้ไปแล้ว — 1 ครั้ง/มาตรา/session)
+  const cardsUsed = Object.create(null);    // matraId -> true (เล่นมินิเกมจับคู่ไพ่ของด่านนี้จบ+รับไอเทมแล้ว — 1 ครั้ง/มาตรา/session)
+  let cardsActiveGem = null;                 // gem ไพ่ที่กำลังเล่นอยู่ (ยังไม่จบ) — consumeCards/abandonCards อ้างอิงตัวนี้
   let readingTome = false;                   // true = กำลังเปิด overlay อ่านคัมภีร์ → หยุด combat + กัน onPick
   let currentTomeWord = '';                  // คำที่กำลังอ่านในคัมภีร์ (ใช้วาดคำสีทองตอน tomeBlast)
   let tomeBlast = null;                       // { word, targets[], i, wx, wy } — คำสีทองลอยไปชนสมุนทีละตัว (freeze combat ต่อ)
@@ -700,6 +702,16 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     // เอาคัมภีร์เก่าที่ยังไม่ได้เก็บออกก่อน แล้วค่อย spawn ใหม่ตามเงื่อนไข
     for (let i = gems.length - 1; i >= 0; i--) if (gems[i].tome) gems.splice(i, 1);
     spawnTome(fi);
+    // ไอเทมมินิเกมไพ่: ลบ token ประจำด่านทิ้ง (spawnCards จะเพิ่มกลับถ้ายังเล่นไม่จบ) ·
+    // token ที่หล่นจากสมุนคงไว้ + re-arm (ออกจากเกมไพ่กลางคัน = ไอเทมไม่หาย)
+    cardsActiveGem = null;
+    for (let i = gems.length - 1; i >= 0; i--) {
+      const g = gems[i];
+      if (!g.cards) continue;
+      if (g.drop) { g.taken = false; g._armed = false; } // ต้องเดินห่างก่อนถึงเข้าเกมไพ่ได้อีก (กันเข้าซ้ำตอน respawn ทับ)
+      else gems.splice(i, 1);
+    }
+    spawnCards(fi);
 
     cam.x = clampCamX(node.wx - W / 2);
     cam.y = clampCam(node.wy - H / 2);
@@ -1269,19 +1281,57 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     });
   }
 
-  // ลูกสมุนตาย → โอกาสน้อยหล่นไอเทมพลังวิเศษ 1 ชิ้น (สุ่มชนิดจาก 5 อย่าง — ดู items.js)
-  // บอสโอกาสสูงกว่าลูกสมุนทั่วไปพอสมควร (รางวัลคุ้มกับความยาก) แต่ไม่การันตี — ยังต้องเก็บสะสม
-  const ITEM_DROP_CHANCE = 0.035;
-  const ITEM_DROP_CHANCE_BOSS = 0.15;
-  function maybeDropItem(m) {
+  // ลูกสมุนตาย → โอกาสน้อยหล่น "ไอเทมมินิเกมจับคู่ไพ่" (ไม่ใช่ไอเทมพลังวิเศษตรง ๆ อีกต่อไป) —
+  // เดินเก็บ → เข้าเล่นเกมจับคู่ไพ่ เล่นจบทั้งกระดานจึงเลือกไอเทมพลังวิเศษ 1 ชิ้น (ดู main.js)
+  // ไม่มี life (ไม่หมดอายุ) — ออกจากเกมไพ่กลางคันแล้วไอเทมยังอยู่ · บอสโอกาสสูงกว่าเล็กน้อย
+  const CARDS_DROP_CHANCE = 0.05;
+  const CARDS_DROP_CHANCE_BOSS = 0.2;
+  function maybeDropCards(m) {
     if (!m) return;
-    if (Math.random() > (m.isBoss ? ITEM_DROP_CHANCE_BOSS : ITEM_DROP_CHANCE)) return;
+    const fn = nodes[focusIdx];
+    if (fn && cardsUsed[fn.matraId]) return; // เล่นจบด่านนี้แล้ว ไม่ต้องหล่นอีก
+    if (Math.random() > (m.isBoss ? CARDS_DROP_CHANCE_BOSS : CARDS_DROP_CHANCE)) return;
+    if (gems.some((g) => g.cards)) return; // มีไอเทมไพ่ค้างอยู่แล้ว — ไม่ถมซ้ำ
     gems.push({
-      item: randomItemId(), drop: true, life: 900, taken: false, respawn: 0, bob: Math.random() * 6,
+      cards: true, drop: true, taken: false, _armed: true, respawn: 0, bob: Math.random() * 6,
       nodeIdx: m.guardIdx | 0,
       wx: m.wx + (Math.random() - 0.5) * 16,
       wy: m.wy + (Math.random() - 0.5) * 14,
     });
+  }
+
+  // ไอเทมมินิเกมจับคู่ไพ่ประจำด่าน — การันตี 1 ครั้ง/มาตรา/session · เกิดตอน enter() เข้ามาตราที่ยังผนึก
+  // ตำแหน่งสุ่ม (hash คงที่) ในโซนสู้ · เด่นชัด (drawGem cards) · เก็บ → เข้าเกมไพ่ (ไม่หายถ้าออกกลางคัน)
+  function spawnCards(i) {
+    const n = nodes[i];
+    if (!n || cardsUsed[n.matraId] || !nodeSealed(i)) return;
+    if (gems.some((g) => g.cards && !g.drop)) return; // token ประจำด่านมีอยู่แล้ว
+    // วางในโซนสู้ (down 0.14–0.34) เหนือจุดเริ่มของแม่มดน้อย (~0.6) → เด็กต้องเดินขึ้นไปเก็บเอง
+    // บังคับอยู่ "คนละฝั่งถนน" กับคัมภีร์ + ห่างแนวตั้งพอ → ไม่ทับกัน มองเห็นแยกกันชัด
+    const down = 0.14 + h01(i * 97 + 29) * 0.20;
+    const ty = n.wy + nodeSpacing * down;
+    const tome = gems.find((g) => g.tome && g.nodeIdx === i);
+    let dir = h01(i * 61 + 17) < 0.5 ? -1 : 1;
+    if (tome && Math.sign(tome.wx - spineXAt(tome.wy)) === dir) dir = -dir; // ตรงข้ามฝั่งคัมภีร์
+    const tx = spineXAt(ty) + dir * (0.16 + h01(i * 43 + 5) * 0.16) * W;
+    gems.push({
+      cards: true, taken: false, _armed: true, respawn: 0, bob: Math.random() * 6,
+      nodeIdx: i,
+      wx: Math.max(30, Math.min(worldW - 30, tx)),
+      wy: ty,
+    });
+  }
+
+  // เล่นเกมไพ่จบ + รับไอเทมแล้ว — ปิด token ด่านนี้ถาวร (session) + ล้าง gem ไพ่ทั้งหมดออกจากแผนที่
+  function consumeCards(matraId) {
+    if (matraId) cardsUsed[matraId] = true;
+    cardsActiveGem = null;
+    for (let i = gems.length - 1; i >= 0; i--) if (gems[i].cards) gems.splice(i, 1);
+  }
+  // ออกจากเกมไพ่กลางคัน (ยังเล่นไม่จบ) — ไอเทมกลับมาให้เก็บใหม่ได้
+  function abandonCards() {
+    if (cardsActiveGem) { cardsActiveGem.taken = false; cardsActiveGem._armed = true; }
+    cardsActiveGem = null;
   }
 
   // คัมภีร์มนตราพิเศษ — 1 ครั้ง/มาตรา/session · เกิดตอน enter() เข้ามาตราที่ยังผนึก (ต้องสู้)
@@ -1311,6 +1361,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       const g = gems[i];
       if (g.drop && g.life !== undefined && --g.life <= 0) { gems.splice(i, 1); i--; continue; } // หมดอายุ
       if (g.taken) {
+        if (g.cards) continue; // ไอเทมไพ่ที่กำลังเล่นอยู่ — ซ่อนไว้เฉย ๆ ไม่ลบ/ไม่ respawn
         if (g.drop) { gems.splice(i, 1); i--; continue; }
         // เกิดใหม่ = สุ่มที่ใหม่ ไม่โผล่จุดเดิม (เดิมเด็กจำตำแหน่งได้ ไม่ต้องสำรวจ)
         if (--g.respawn <= 0) { g.taken = false; placeGem(g, nodes[g.nodeIdx]); }
@@ -1319,7 +1370,22 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       if (Math.abs(g.wy - hero.wy) > 160) continue; // เช็คเฉพาะเม็ดใกล้ตัว
       const dx = g.wx - hero.wx;
       const dy = g.wy - hero.wy;
-      if (dx * dx + dy * dy > pr2) continue;
+      const d2 = dx * dx + dy * dy;
+      if (g.cards && !g._armed) {
+        if (d2 > pr2 * 3.2) g._armed = true; // เดินห่างพอแล้วค่อยเข้าเกมไพ่ได้อีก (กันเข้าซ้ำตอนกลับมายืนทับ)
+        continue;
+      }
+      if (d2 > pr2) continue;
+      if (g.cards) {
+        // เดินเก็บไอเทมไพ่ → เข้ามินิเกมจับคู่ (main.js สลับหน้าจอ) · ไม่ลบ gem — เล่นไม่จบออกมาแล้วยังอยู่
+        g.taken = true; g._armed = false;
+        cardsActiveGem = g;
+        audio.sfx('chime');
+        const n = nodes[g.nodeIdx] || nodes[focusIdx];
+        if (onCardsCollected && n) onCardsCollected(n.matraId);
+        else { g.taken = false; g._armed = true; cardsActiveGem = null; }
+        return; // ออกจาก loop — ที่เหลือไม่ต้องเก็บเฟรมนี้
+      }
       if (g.tome) {
         // เก็บคัมภีร์ → เปิด overlay อ่านคำ (main.js) → หยุด combat จนกว่าจะอ่านจบ (tomeExplode)
         gems.splice(i, 1); i--;
@@ -1537,7 +1603,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       guardKills[gn.matraId] = (guardKills[gn.matraId] || 0) + 1;
       dropGems(m); // บินตาย → พลอยหัวใจ 3 เม็ด
       dropCoin(m); // เดินตาย → เหรียญทอง 1 เหรียญ
-      maybeDropItem(m); // โอกาสน้อยหล่นไอเทมพลังวิเศษ
+      maybeDropCards(m); // โอกาสน้อยหล่นไอเทมมินิเกมจับคู่ไพ่
       if (m.isBoss) { bossDone[gn.matraId] = true; mapSay('ล้มบอสแล้ว! รีบไปเก็บกุญแจ'); }
       mapBurst(sX(m.wx), sY(m.wy), { hueMin: m.isBoss ? 280 : 90, hueRange: 40 });
     }
@@ -2084,7 +2150,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       if (gsy < -40 || gsy > H + 40) continue;
       const gsx = g.wx - cx;
       if (gsx < -40 || gsx > W + 40) continue;
-      drawGem(gsx, gsy, g.bob, now, g.coin, g.item, g.tome);
+      drawGem(gsx, gsy, g.bob, now, g.coin, g.item, g.tome, g.cards);
     }
 
     // ด่านสุดท้าย = กำแพงปราสาท + บอสใหญ่ · ด่านอื่น = กุญแจบ้าน
@@ -2654,9 +2720,44 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     fx.restore();
   }
 
-  function drawGem(sx, sy0, phase, now, coin, itemId, tome) {
+  function drawGem(sx, sy0, phase, now, coin, itemId, tome, cards) {
     const sy = sy0 - 3 - Math.sin(now * 0.004 + phase) * 3;
     const pulse = 0.5 + 0.5 * Math.sin(now * 0.006 + phase);
+    if (cards) {
+      // ไอเทมมินิเกมจับคู่ไพ่ — เด่นชัดสุด (ใหญ่กว่าคัมภีร์) วงเรืองแสงคู่ + ไพ่ 2 ใบไขว้ + ป้าย "จับคู่ไพ่!"
+      const spin = Math.sin(now * 0.002 + phase) * 0.18;
+      fx.beginPath();
+      fx.arc(sx, sy, 26 + pulse * 7, 0, Math.PI * 2);
+      fx.fillStyle = 'rgba(150,120,255,' + (0.20 + pulse * 0.16).toFixed(2) + ')';
+      fx.fill();
+      fx.beginPath();
+      fx.arc(sx, sy, 15 + pulse * 3, 0, Math.PI * 2);
+      fx.fillStyle = 'rgba(255,230,140,' + (0.30 + pulse * 0.18).toFixed(2) + ')';
+      fx.fill();
+      // ไพ่ 2 ใบไขว้กัน
+      for (let k = 0; k < 2; k++) {
+        fx.save();
+        fx.translate(sx, sy);
+        fx.rotate((k ? 0.34 : -0.34) + spin);
+        fx.fillStyle = k ? '#fff4de' : '#ffffff';
+        fx.strokeStyle = '#7a4fd0';
+        fx.lineWidth = 2;
+        fx.beginPath();
+        if (fx.roundRect) fx.roundRect(-11, -15, 22, 30, 4);
+        else fx.rect(-11, -15, 22, 30);
+        fx.fill();
+        fx.stroke();
+        fx.restore();
+      }
+      fx.save();
+      fx.font = '700 11px "Sarabun", sans-serif';
+      fx.textAlign = 'center';
+      fx.textBaseline = 'middle';
+      fx.fillStyle = 'rgba(60,30,110,0.9)';
+      fx.fillText('จับคู่ไพ่!', sx, sy - 34 - pulse * 3);
+      fx.restore();
+      return;
+    }
     if (tome) {
       // คัมภีร์มนตราพิเศษ — วงเรืองแสงทอง + ไอคอนหนังสือ (ใหญ่กว่าไอเทมปกติ ให้เด่น)
       fx.beginPath();
@@ -2861,5 +2962,5 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
   }
 
   return { enter, onPick, onMove, onRelease, relayout, refresh, stop, useItem: applyItemEffect, tomeExplode,
-    setJoystick, doAction, skillState };
+    consumeCards, abandonCards, setJoystick, doAction, skillState };
 }

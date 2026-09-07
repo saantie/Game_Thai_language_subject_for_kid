@@ -161,7 +161,7 @@
       </div>
     </div>
 
-    <!-- ห้องฝึกไพ่เวทมนตร์ก่อนเข้าหม้อ — อุ่นเครื่อง เล่นครั้งแรกที่ปลดล็อกมาตรานั้นเท่านั้น -->
+    <!-- มินิเกมจับคู่ไพ่ — เข้าจากไอเทมบนแผนที่ · เล่นครบกระดานแล้วเลือกไอเทมพลังวิเศษ 1 ชิ้น -->
     <div id="mahjongScreen" class="screen mahjong hidden">
       <button id="mahjongBackBtn" class="btn-back" title="กลับ">
         <img src="public/assets/images/Arrow.png" alt="กลับ" class="back-arrow-img" />
@@ -181,6 +181,13 @@
            ซ้อนสูง (เช่น แกะ, เมีย) โดนตัดขาดตอนขยาย 1.15x ตอน pop (ข้อ 8) -->
       <div id="mahjongBigWord" class="mj-big-word"><span class="mj-big-word-text"></span></div>
       <div id="mahjongPointsPopup" class="mj-points-popup" aria-hidden="true"></div>
+      <!-- เล่นจับคู่ครบทั้งกระดาน → เลือกไอเทมพลังวิเศษ 1 ชิ้น (ปุ่มสร้างจาก ITEM_TYPES ใน main.js) -->
+      <div id="mahjongReward" class="mj-reward hidden">
+        <div class="mj-reward-card">
+          <h3 class="mj-reward-title">&#x1F0CF; เก่งมาก! เลือกไอเทม 1 ชิ้น</h3>
+          <div id="mahjongRewardItems" class="mj-reward-items"></div>
+        </div>
+      </div>
     </div>
     <!-- #mahjongHandCursor และ .mj-witch-img ต้องอยู่นอก #mahjongScreen (ข้อ 5) —
          .screen มี backdrop-filter ซึ่งสร้าง containing block ใหม่ให้ลูกที่เป็น

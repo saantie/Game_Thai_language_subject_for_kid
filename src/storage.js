@@ -73,23 +73,6 @@ export function saveTotalScore(n) {
   } catch (e) {}
 }
 
-// ---- ด่านอุ่นเครื่องไพ่จับคู่ — เคยเห็นมาตราไหนแล้วบ้าง (โชว์แค่ครั้งแรก) ----
-const MAHJONG_SEEN_KEY = 'witch_mahjong_seen';
-
-export function loadMahjongSeen() {
-  try {
-    return JSON.parse(localStorage.getItem(MAHJONG_SEEN_KEY) || '{}');
-  } catch (e) {
-    return {};
-  }
-}
-
-export function saveMahjongSeen(seenMap) {
-  try {
-    localStorage.setItem(MAHJONG_SEEN_KEY, JSON.stringify(seenMap));
-  } catch (e) {}
-}
-
 // ---- คำใบ้ AR "ดีดนิ้วชี้เพื่อเลือกไพ่" — พูดครั้งเดียวตลอดการเล่น ครั้งแรกที่
 // AR ทำงานอยู่ในเกมไพ่จับคู่เท่านั้น (ข้อ 2) ----
 const AR_FLICK_HINT_KEY = 'witch_ar_flick_hint_shown';

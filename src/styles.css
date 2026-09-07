@@ -1723,6 +1723,67 @@ body.is-desktop .start-witch-img { width: clamp(100px, 13vw, 140px); }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1) translateY(-40px); }
 }
 
+/* รางวัลหลังเล่นจับคู่ครบทั้งกระดาน — เลือกไอเทมพลังวิเศษ 1 ชิ้น (ปุ่มสร้างจาก ITEM_TYPES) */
+.mj-reward {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(18, 8, 38, 0.72);
+  backdrop-filter: blur(3px);
+  animation: mjRewardFade 0.25s ease forwards;
+}
+.mj-reward.hidden { display: none; }
+@keyframes mjRewardFade { from { opacity: 0; } to { opacity: 1; } }
+.mj-reward-card {
+  width: min(440px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 22px 20px 26px;
+  border-radius: 22px;
+  background: linear-gradient(160deg, #3a1d6e, #241046 70%);
+  border: 2px solid rgba(255, 216, 120, 0.5);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 26px rgba(150, 120, 255, 0.35);
+  text-align: center;
+  animation: mjRewardPop 0.4s cubic-bezier(.34,1.56,.64,1) forwards;
+}
+@keyframes mjRewardPop { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.mj-reward-title {
+  margin: 0 0 16px;
+  font: 800 clamp(18px, 5vw, 24px) 'Sarabun', 'Segoe UI', sans-serif;
+  color: #ffe89a;
+}
+.mj-reward-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 12px;
+}
+.mj-reward-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px;
+  border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+.mj-reward-item:hover, .mj-reward-item:focus-visible {
+  transform: translateY(-3px) scale(1.04);
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 216, 120, 0.7);
+  outline: none;
+}
+.mj-reward-item:active { transform: scale(0.96); }
+.mj-reward-item .mj-reward-icon { font-size: 34px; line-height: 1; }
+.mj-reward-item .mj-reward-name { font: 700 13px 'Sarabun', 'Segoe UI', sans-serif; }
+
 /* flex-shrink:0 สำคัญมาก — ลูกของ #mahjongBoard เป็น position:absolute ทั้งหมด
    (ไม่มีส่วนร่วมกับ min-content height ของกล่อง) ถ้าไม่กันไว้ flexbox จะบีบ
    กล่องนี้ลงเหลือเกือบ 0px บนจอเตี้ย (จอนอนมือถือ) แทนที่จะปล่อยให้หน้าจอเลื่อน
