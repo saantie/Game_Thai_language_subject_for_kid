@@ -23,60 +23,30 @@ import { addItem, useItem as useItemFromInv, itemDef } from './items.js';
 const HOUSE_IMG = new Image();
 HOUSE_IMG.src = 'public/assets/images/House%20wish.png';
 // แม่มดน้อย (ตัวที่เด็กบังคับ) — 3 ท่า สลับตาม state ที่มีอยู่แล้วของ hero
-// GIF เคลื่อนไหวในตัว: ยืน 21 เฟรม / เดิน 4 เฟรม / ต่อสู้ 8 เฟรม (เฟรมละ 200ms)
-// สัดส่วนแต่ละไฟล์ต่างกัน (64x103 / 95x100 / 106x97) — drawHero คิดความกว้างจากเฟรมที่ใช้จริง
+// แม่มดน้อยบนแผนที่ — sprite sheet PNG (เฟรมเรียงแนวนอน) สร้างจาก scripts/gen-hero-sprites.mjs
+// ยืน 21 เฟรม / เดิน 4 เฟรม / ต่อสู้ 8 เฟรม · เฟรมละ 200ms (GIF ต้นฉบับ delay เท่ากันหมด)
+// สัดส่วนแต่ละท่าต่างกัน (64x103 / 95x100 / 106x97) — drawHero คิด fw จาก naturalWidth/frames
 //
-// ***ทำไมต้อง decode GIF เอง***: browser หยุดเดินเฟรม GIF ของ <img> ที่ไม่ได้ถูกวาดจริงบนจอ
-// — เราย่อ element เหลือ 2px + opacity 0.01 + z-index -1 ไม่ให้เกะกะ ผลคือบนมือถือจริง GIF นิ่งสนิท
-// (เครื่องทดสอบดูเหมือนได้เพราะ pane ไม่ยิง rAF เลย เทสไม่เจอ — พลาดมาแล้วใน v188)
-// ImageDecoder แตกเฟรมเองในหน่วยความจำ แล้วเล่นตามนาฬิกาเกม (now) — คุมเฟรม 100%, เทสได้จริง
-// ไม่มี ImageDecoder (Safari < 17.4) → ถอยไปใช้ <img> ใน DOM เหมือนเดิม (ท่าถูก อาจไม่ขยับ = ไม่แย่ลง)
-function makeHeroGif(src, fallbackId) {
-  const g = {
-    frames: [], durs: [], total: 0, ready: false,
-    fallback: (typeof document !== 'undefined' && document.getElementById(fallbackId)) || null,
-  };
-  if (typeof ImageDecoder === 'function') {
-    fetch(src)
-      .then((r) => r.arrayBuffer())
-      .then(async (buf) => {
-        const dec = new ImageDecoder({ data: buf, type: 'image/gif' });
-        await dec.tracks.ready;
-        const track = dec.tracks.selectedTrack;
-        const n = (track && track.frameCount) || 1;
-        for (let i = 0; i < n; i++) {
-          const { image } = await dec.decode({ frameIndex: i });
-          g.frames.push(await createImageBitmap(image)); // เฟรมประกอบเสร็จแล้ว (browser จัดการ disposal)
-          // µs → ms; GIF delay 0/สั้นมาก → กันเล่นเร็วเวอร์ด้วยขั้นต่ำ 40ms/เฟรม
-          g.durs.push(Math.max(40, (image.duration || 0) / 1000 || 100));
-          image.close();
-        }
-        g.total = g.durs.reduce((a, b) => a + b, 0) || 1;
-        g.ready = g.frames.length > 0;
-        dec.close();
-      })
-      .catch(() => { /* เงียบ — ใช้ fallback <img> */ });
-  }
-  return g;
+// ***ทำไม PNG strip ไม่ใช่ GIF***: browser หยุดเดินเฟรม GIF ของ <img> ที่ย่อ/ซ่อน และ
+// ImageDecoder ไม่มีบน iOS Safari < 17.4 → บน iPad แม่มดน้อยนิ่งสนิท (ดู memory
+// gif-animation-on-canvas). drawImage sub-rect ตามนาฬิกาเกมเล่นได้ทุก browser ไม่ต้อง decode
+function heroSheet(src, frames) {
+  const img = new Image();
+  img.src = src;
+  return { img, n: frames, total: frames * 200 };
 }
-const HERO_GIFS = {
-  stand: makeHeroGif('public/assets/images/wish%20standing%2030.gif', 'heroStandImg'),
-  walk:  makeHeroGif('public/assets/images/wish%20walk%2030.gif',     'heroWalkImg'),
-  atk:   makeHeroGif('public/assets/images/wish%20attact%2030.gif',   'heroAtkImg'),
+const HERO_SHEETS = {
+  stand: heroSheet('public/assets/images/hero_stand.png', 21),
+  walk:  heroSheet('public/assets/images/hero_walk.png', 4),
+  atk:   heroSheet('public/assets/images/hero_atk.png', 8),
 };
-// ภาพที่วาดได้ดีที่สุดของท่านี้ ณ เวลา t: เฟรม ImageBitmap ถ้าพร้อม, ไม่งั้น <img> fallback, ไม่งั้น null
+// เฟรม ณ เวลา t (ms): { img, sx, sy, sw, sh } สำหรับ drawImage 9-arg — null ถ้าภาพยังไม่โหลด
 function heroPoseImg(g, t) {
-  if (g.ready) {
-    if (REDUCED_MOTION) return g.frames[0];
-    let r = t % g.total;
-    for (let i = 0; i < g.frames.length; i++) {
-      r -= g.durs[i];
-      if (r < 0) return g.frames[i];
-    }
-    return g.frames[g.frames.length - 1];
-  }
-  const fb = g.fallback;
-  return fb && fb.complete && fb.naturalWidth ? fb : null;
+  const im = g.img;
+  if (!im.complete || !im.naturalWidth) return null;
+  const sw = im.naturalWidth / g.n, sh = im.naturalHeight;
+  const idx = REDUCED_MOTION ? 0 : (Math.floor((t % g.total) / 200) % g.n);
+  return { img: im, sx: idx * sw, sy: 0, sw, sh };
 }
 const HERO_POSE_ATK_T = 22;  // เฟรมที่ค้างท่าต่อสู้ — ยาวกว่า SWING_T (12) เพราะ 0.2 วิ
                              // สั้นเกินกว่าจะทันเห็นท่า (แยกจากเวลาวาดรอยไม้เหวี่ยง)
@@ -2474,19 +2444,18 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     // เลือกท่าตาม state ที่มีอยู่แล้ว — ต่อสู้ > เดิน > ยืน
     // (ไม่มีท่าโดนกัด/สลบ ใช้ท่ายืน + เอฟเฟกต์กระพริบ/เอียงเหมือนเดิม)
     const pose = hero.poseAtk > 0 ? 'atk' : (hero.moving && !fainting ? 'walk' : 'stand');
-    const g0 = HERO_GIFS[pose];
+    const g0 = HERO_SHEETS[pose];
     // ยืน/เดิน = ลูปตามนาฬิกาจริง. ต่อสู้ = ยัดสวิง 8 เฟรมทั้งชุดลงช่วงถือท่า (~0.37 วิ)
     // เพราะคลิป atk ยาว 1.6 วิ แต่ hold แค่ 0.37 วิ ถ้าเล่นตามเวลาจริงจะเห็นแค่ 2 เฟรมแรก
     let poseT = now;
-    if (pose === 'atk' && g0.total) {
+    if (pose === 'atk') {
       const frac = (HERO_POSE_ATK_T - hero.poseAtk) / HERO_POSE_ATK_T; // 0 → 1
       poseT = Math.min(frac, 0.999) * g0.total;
     }
-    // เฟรม ImageBitmap ปัจจุบัน (หรือ <img> fallback) — ถอยไปท่ายืนถ้าท่านี้ยังไม่พร้อม
-    let img = heroPoseImg(g0, poseT) || heroPoseImg(HERO_GIFS.stand, now);
-    // ImageBitmap มี .width/.height; <img> ต้องใช้ .naturalWidth (element ถูกย่อเหลือ 2px)
-    const iw = img ? (img.naturalWidth || img.width) : 0;
-    const ih = img ? (img.naturalHeight || img.height) : 0;
+    // เฟรมปัจจุบัน { img, sx, sy, sw, sh } — ถอยไปท่ายืนถ้าท่านี้ยังไม่โหลด
+    let fr = heroPoseImg(g0, poseT) || heroPoseImg(HERO_SHEETS.stand, now);
+    const iw = fr ? fr.sw : 0;
+    const ih = fr ? fr.sh : 0;
 
     const hh = HERO_R * 2.4 * giantScale;
     // สัดส่วนอ่านจากขนาดจริงของ "ท่าที่กำลังใช้" ไม่ฮาร์ดโค้ด — 3 ท่าครอปไม่เท่ากัน
@@ -2495,11 +2464,11 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     fx.save();
     // ไอเทม 👻 หายตัว — จางลงชัดเจนให้เห็นว่าล่องหนอยู่ (blink โดนกัด สำคัญกว่า ทับกันได้)
     fx.globalAlpha = blink ? 0.4 : (hero.invisT > 0 ? 0.42 : 1);
-    if (img && iw) {
+    if (fr && iw) {
       fx.translate(sx, sy + bob);
       fx.rotate(faintRot);
       fx.scale(hero.facing, 1);
-      fx.drawImage(img, -hw / 2, -hh + HERO_R * 0.8, hw, hh);
+      fx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, -hw / 2, -hh + HERO_R * 0.8, hw, hh);
     } else {
       fx.beginPath();
       fx.arc(sx, sy - HERO_R * 0.3 + bob, HERO_R * 0.7, 0, Math.PI * 2);

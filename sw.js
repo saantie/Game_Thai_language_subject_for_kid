@@ -1,6 +1,6 @@
 // sw.js — Service Worker: cache-first + stale-while-revalidate + auto-reload on update
 // bump CACHE string ทุกครั้งที่ deploy ใหม่ → browser detect diff → install → reload client
-const CACHE = 'witch-cauldron-v225';
+const CACHE = 'witch-cauldron-v226';
 
 const APP_SHELL = [
   './',
@@ -51,10 +51,10 @@ const APP_SHELL = [
   './public/assets/images/Evil%20wish/2%20-%203.gif',
   './public/assets/images/Evil%20wish/3-4.gif',
   './public/assets/images/Evil%20wish/4-5.gif',
-  // ตัวผู้เล่นบนแผนที่ (แม่มดน้อย) — 3 ท่า สลับตาม state
-  './public/assets/images/wish%20standing%2030.gif',
-  './public/assets/images/wish%20walk%2030.gif',
-  './public/assets/images/wish%20attact%2030.gif',
+  // ตัวผู้เล่นบนแผนที่ (แม่มดน้อย) — sprite sheet PNG 3 ท่า (สร้างจาก scripts/gen-hero-sprites.mjs)
+  './public/assets/images/hero_stand.png',
+  './public/assets/images/hero_walk.png',
+  './public/assets/images/hero_atk.png',
   './public/assets/images/princess_1.png',
   './public/assets/images/princess_2.png',
   './public/assets/images/princess_3.png',
