@@ -210,6 +210,9 @@ const GRASS_BASE = '#5c8c3a'; // เติมช่องว่างก่อ�
 // โคนลำต้นในภาพอยู่ที่ ~y 0.84 ของกรอบ → drawDecor จัดให้ตรงพื้น
 const TREE_IMG = new Image();
 TREE_IMG.src = 'public/assets/images/tree.png';
+// คัมภีร์มนตราพิเศษ (ไอเทมบนแผนที่) — ใช้ภาพเล่มปิด "สะกดเวทมนตร์" แทนอิโมจิ 📖
+const TOME_IMG = new Image();
+TOME_IMG.src = 'public/assets/images/book2.png';
 
 // พิกัดวงกลมของ decor/minion — hoist ออกนอก loop (อย่า alloc array ทุกเฟรม)
 const BUSH_BLOBS = [[-8, 2], [8, 2], [0, -4], [-3, 4], [4, 5]];
@@ -2760,17 +2763,28 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       return;
     }
     if (tome) {
-      // คัมภีร์มนตราพิเศษ — วงเรืองแสงทอง + ไอคอนหนังสือ (ใหญ่กว่าไอเทมปกติ ให้เด่น)
+      // คัมภีร์มนตราพิเศษ — วงเรืองแสงทอง + ภาพเล่มคัมภีร์ (book2.png) · fallback อิโมจิ 📖 ระหว่างภาพโหลด
       fx.beginPath();
-      fx.arc(sx, sy, 19 + pulse * 5, 0, Math.PI * 2);
+      fx.arc(sx, sy, 22 + pulse * 5, 0, Math.PI * 2);
       fx.fillStyle = 'rgba(255,216,107,' + (0.24 + pulse * 0.14).toFixed(2) + ')';
       fx.fill();
-      fx.save();
-      fx.font = '26px sans-serif';
-      fx.textAlign = 'center';
-      fx.textBaseline = 'middle';
-      fx.fillText('📖', sx, sy);
-      fx.restore();
+      if (TOME_IMG.complete && TOME_IMG.naturalWidth) {
+        const h = 44, w = h * (TOME_IMG.naturalWidth / TOME_IMG.naturalHeight);
+        fx.save();
+        fx.beginPath();
+        if (fx.roundRect) fx.roundRect(sx - w / 2, sy - h / 2, w, h, 5);
+        else fx.rect(sx - w / 2, sy - h / 2, w, h);
+        fx.clip(); // คลิปมุมโค้ง — กันขอบพื้นหลังเข้มของภาพดูแข็งบนพื้นหญ้า
+        fx.drawImage(TOME_IMG, sx - w / 2, sy - h / 2, w, h);
+        fx.restore();
+      } else {
+        fx.save();
+        fx.font = '26px sans-serif';
+        fx.textAlign = 'center';
+        fx.textBaseline = 'middle';
+        fx.fillText('📖', sx, sy);
+        fx.restore();
+      }
       return;
     }
     if (itemId) {
