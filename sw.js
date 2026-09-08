@@ -1,6 +1,6 @@
 // sw.js — Service Worker: cache-first + stale-while-revalidate + auto-reload on update
 // bump CACHE string ทุกครั้งที่ deploy ใหม่ → browser detect diff → install → reload client
-const CACHE = 'witch-cauldron-v226';
+const CACHE = 'witch-cauldron-v227';
 
 const APP_SHELL = [
   './',
@@ -55,6 +55,10 @@ const APP_SHELL = [
   './public/assets/images/hero_stand.png',
   './public/assets/images/hero_walk.png',
   './public/assets/images/hero_atk.png',
+  // บอสเฝ้ากุญแจ — ภาพงู 3 ท่า (สร้างจาก scripts/gen-boss-sprites.mjs)
+  './public/assets/images/boss_move.png',
+  './public/assets/images/boss_attack.png',
+  './public/assets/images/boss_death.png',
   './public/assets/images/princess_1.png',
   './public/assets/images/princess_2.png',
   './public/assets/images/princess_3.png',
