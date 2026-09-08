@@ -1027,7 +1027,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     if (hero.invisT > 0) hero.invisT--;
     if (hero.giantT > 0) { hero.giantT--; updateGiantContact(); }
     if (hero.ringFx && ++hero.ringFx.t > 22) hero.ringFx = null;
-    if (bossDeathFx && ++bossDeathFx.t > 42) bossDeathFx = null; // ท่าตายบอสจางหาย ~0.7 วิ
+    if (bossDeathFx && ++bossDeathFx.t > 75) bossDeathFx = null; // ท่าตายบอส (งู+ระเบิดม่วง) จางหาย ~1.25 วิ
 
     // ---- สลบ (พลังหมด) ----
     if (hero.fainting > 0) {
@@ -2579,24 +2579,26 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     }
   }
 
-  // ท่าตายของบอส — sprite งู + ระเบิดม่วง ณ จุดที่ตาย จางหาย + ยกตัวลอยขึ้นเล็กน้อย (บอสถูก splice ไปแล้ว)
+  // ท่าตายของบอส — sprite งูชูคอ + ระเบิดม่วง ณ จุดที่ตาย · เชิดคอขึ้นแล้วจางหาย ~1.25 วิ
+  // (บอสถูก splice จาก minions[] ทันทีตั้งแต่ตอนตาย — decal นี้แค่วาดค้าง ไม่กระทบ logic)
   function drawBossDeathFx(cx, cy) {
     const b = bossDeathFx;
     if (!b) return;
     const im = BOSS_IMG.death;
     const x = b.wx - cx, y = b.wy - cy;
-    const p = b.t / 42;                 // 0 → 1
+    const p = b.t / 75;                       // 0 → 1
+    const hold = Math.min(1, p / 0.35);       // 0→1 ใน ~0.45 วิแรก (ค้างท่าเต็ม) แล้วค่อยจาง
     fx.save();
-    fx.globalAlpha = Math.max(0, 1 - p * p);
+    fx.globalAlpha = p < 0.35 ? 1 : Math.max(0, 1 - ((p - 0.35) / 0.65) ** 1.4);
     if (im.complete && im.naturalWidth) {
-      const th = 68 * (1 + p * 0.15);   // ขยายเบา ๆ ตอนจาง
+      const th = 80 * (0.6 + hold * 0.45 + Math.max(0, p - 0.35) * 0.5); // ผุดขึ้น → ค้าง → ขยายจาง
       const bw = th * (im.naturalWidth / im.naturalHeight);
-      fx.translate(x, y + 12 - p * 10);
+      fx.translate(x, y + 14 - p * 20);       // เชิดคอลอยขึ้น
       fx.scale(b.facing || 1, 1);
       fx.drawImage(im, -bw / 2, -th, bw, th);
     } else {
       fx.fillStyle = 'rgba(180,120,255,0.6)';
-      fx.beginPath(); fx.arc(x, y, 20 + p * 24, 0, Math.PI * 2); fx.fill();
+      fx.beginPath(); fx.arc(x, y, 20 + p * 34, 0, Math.PI * 2); fx.fill();
     }
     fx.restore();
   }
@@ -2700,11 +2702,15 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     // ตัวบินลอยเหนือพื้น + ขยับขึ้นลง (โดนตีแล้วร่วงลงพื้น = เห็นชัดว่าโดน)
     const hover = k.fly && !staggered ? -FLY_HOVER + Math.sin(m.bob * 1.3) * 3 : 0;
 
-    // ---- บอสเฝ้ากุญแจ: ภาพงู 3 ท่า (ปะทะฮีโร่ = ชูคอ · อื่น ๆ = เลื้อย · ตาย = bossDeathFx แยก) ----
+    // ---- บอสเฝ้ากุญแจ: ภาพงู 3 ท่า (ฮีโร่เข้ามาใกล้ = ชูคอ · อื่น ๆ = เลื้อย · ตาย = bossDeathFx แยก) ----
     if (m.isBoss) {
-      const bi = m.active ? BOSS_IMG.attack : BOSS_IMG.move;
+      // ชูคอค้างตลอดตอนเด็กเข้ามาสู้ — ผูกกับ "ฮีโร่อยู่ในระยะตื่นตัว" ไม่ใช่ m.active
+      // (m.active วูบเป็น false ทุกครั้งที่บอสโดนตี/สะดุด → ท่าชูคอกะพริบหายแทบไม่เห็น)
+      const reared = m.stagger > 0 || m.active ||
+        Math.hypot(hero.wx - m.wx, hero.wy - m.wy) < (diff && diff.aggroR ? diff.aggroR * 1.15 : 220);
+      const bi = reared ? BOSS_IMG.attack : BOSS_IMG.move;
       if (bi.complete && bi.naturalWidth) {
-        const th = m.active ? 62 : 46;              // ชูคอ = สูง · เลื้อย = เตี้ย
+        const th = reared ? 64 : 46;               // ชูคอ = สูง · เลื้อย = เตี้ย
         const bw = th * (bi.naturalWidth / bi.naturalHeight);
         const groundY = sy + 12;                    // จุดฐานบนพื้น (ตรงกับเงาลูกสมุนที่ y≈11*bs)
         fx.save();
