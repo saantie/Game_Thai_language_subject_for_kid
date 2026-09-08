@@ -57,12 +57,32 @@ MAP_WITCH_IMG.src = 'public/assets/images/Evil%20wish/0-1.gif';
 
 // บอสเฝ้ากุญแจแต่ละด่าน — ภาพงู 3 ท่า (ครอปจาก image asset/black snake.png ด้วย
 // scripts/gen-boss-sprites.mjs) · drawMinion เลือกท่าตาม state · ไม่โหลด → fallback รูปทรงเดิม
-function bossImg(src) { const i = new Image(); i.src = src; return i; }
-const BOSS_IMG = {
-  move:   bossImg('public/assets/images/boss_move.png'),   // เลื้อย (ปกติ/เฝ้ากุญแจ)
-  attack: bossImg('public/assets/images/boss_attack.png'), // ชูคอแผ่พังพาน (ปะทะฮีโร่)
-  death:  bossImg('public/assets/images/boss_death.png'),  // ระเบิดพลังม่วง (decal ตอนตาย)
+// sprite sheet PNG (เฟรมแนวนอน) สร้างจาก scripts/gen-boss-sprites.mjs · 200ms/เฟรม คงที่
+// ทุก sheet ครอปด้วย union bbox เดียวกัน (210×210/เฟรม) → anchor ตรงกัน ไม่เด้งขนาดตอนเปลี่ยนทิศ
+function bossSheet(src, n) { const i = new Image(); i.src = src; return { img: i, n }; }
+const BOSS_ANIM = {
+  front:  bossSheet('public/assets/images/boss_front.png', 4),  // หันหน้า/เดินลง (เข้าหาฮีโร่ที่อยู่ล่าง)
+  back:   bossSheet('public/assets/images/boss_back.png', 3),   // หันหลัง/เดินขึ้น
+  left:   bossSheet('public/assets/images/boss_left.png', 3),
+  right:  bossSheet('public/assets/images/boss_right.png', 3),
+  attack: bossSheet('public/assets/images/boss_attack.png', 2), // ชูคอแผ่พังพาน (ปะทะฮีโร่)
 };
+const BOSS_DEAD = new Image();
+BOSS_DEAD.src = 'public/assets/images/boss_dead.png';           // เฟรมเดียว — decal ตอนตาย
+const BOSS_H = 78;                                              // ความสูงวาดบอส (เซลล์ sprite 210px มี margin มาก)
+// ทิศหันของบอสจากเวกเตอร์การเคลื่อนที่ (minion เดิมมีแค่ m.facing ±x · บอสเดินแนวตั้งด้วย)
+function bossDir(dx, dy) {
+  if (Math.abs(dy) > Math.abs(dx) * 1.15) return dy < 0 ? 'back' : 'front';
+  return dx < 0 ? 'left' : 'right';
+}
+// เฟรม { img, sx, sy, sw, sh } ณ เวลา t (ms) — null ถ้ายังไม่โหลด (แบบ heroPoseImg)
+function bossFrame(sheet, t) {
+  const im = sheet.img;
+  if (!im.complete || !im.naturalWidth) return null;
+  const sw = im.naturalWidth / sheet.n, sh = im.naturalHeight;
+  const idx = REDUCED_MOTION ? 0 : (Math.floor(t / 200) % sheet.n);
+  return { img: im, sx: idx * sw, sy: 0, sw, sh };
+}
 
 const REDUCED_MOTION =
   typeof window.matchMedia === 'function' &&
@@ -1251,6 +1271,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
         m.wx += (dhx / d) * msp;
         m.wy += (dhy / d) * msp;
         m.facing = dhx < 0 ? -1 : 1;
+        if (m.isBoss) m.faceDir = bossDir(dhx, dhy);
         // สกิล 🧹 — แม่มดลอยไม้กวาดอยู่ → ลูกสมุน "พื้น" กัดไม่ถึง (ตัวบินยังกัดได้)
         // ไอเทม 👻 หายตัว — กัดไม่โดนเลยทุกชนิด (แรงกว่าไม้กวาด)
         const canBite = hero.invisT <= 0 && !(hero.broomT > 0 && !m.kind.fly);
@@ -1263,8 +1284,8 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
         const kp = keyPos(focusIdx);
         const dx = kp.wx - m.wx, dy = kp.wy - m.wy;
         const dd = Math.hypot(dx, dy);
-        if (dd > 8) { m.wx += (dx / dd) * 0.9; m.wy += (dy / dd) * 0.9; }
-        else m.wx += Math.sin(m.bob * 0.5) * 0.4;
+        if (dd > 8) { m.wx += (dx / dd) * 0.9; m.wy += (dy / dd) * 0.9; m.faceDir = bossDir(dx, dy); }
+        else { m.wx += Math.sin(m.bob * 0.5) * 0.4; m.faceDir = bossDir(hero.wx - m.wx, hero.wy - m.wy); }
       } else {
         m.spin = 0;
         // อยู่ในรัศมีใกล้แม่มดน้อย → เดินเข้าหา (ช้ากว่าตัว active, ไม่กัด — แค่มารุมล้อม)
@@ -2034,6 +2055,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     m.spinV = 0;
     m.bob = Math.random() * 6;
     m.facing = 1;
+    m.faceDir = 'front'; // ทิศหันบอส (ใช้เฉพาะบอส · ต้องมีค่าก่อนขยับ กัน BOSS_ANIM[undefined])
     minions.push(m);
   }
 
@@ -2579,22 +2601,20 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     }
   }
 
-  // ท่าตายของบอส — sprite งูชูคอ + ระเบิดม่วง ณ จุดที่ตาย · เชิดคอขึ้นแล้วจางหาย ~1.25 วิ
+  // ท่าตายของบอส — sprite งูขดล้ม (Dead.png) ณ จุดที่ตาย · ค้างท่าเต็มแล้วจม+จางหาย ~1.25 วิ
   // (บอสถูก splice จาก minions[] ทันทีตั้งแต่ตอนตาย — decal นี้แค่วาดค้าง ไม่กระทบ logic)
   function drawBossDeathFx(cx, cy) {
     const b = bossDeathFx;
     if (!b) return;
-    const im = BOSS_IMG.death;
+    const im = BOSS_DEAD;
     const x = b.wx - cx, y = b.wy - cy;
     const p = b.t / 75;                       // 0 → 1
-    const hold = Math.min(1, p / 0.35);       // 0→1 ใน ~0.45 วิแรก (ค้างท่าเต็ม) แล้วค่อยจาง
     fx.save();
-    fx.globalAlpha = p < 0.35 ? 1 : Math.max(0, 1 - ((p - 0.35) / 0.65) ** 1.4);
+    fx.globalAlpha = p < 0.4 ? 1 : Math.max(0, 1 - ((p - 0.4) / 0.6) ** 1.5); // ค้าง 0.4 แล้วจาง
     if (im.complete && im.naturalWidth) {
-      const th = 80 * (0.6 + hold * 0.45 + Math.max(0, p - 0.35) * 0.5); // ผุดขึ้น → ค้าง → ขยายจาง
+      const th = BOSS_H * (1 - p * 0.12);     // จมลงเล็กน้อยตอนจาง
       const bw = th * (im.naturalWidth / im.naturalHeight);
-      fx.translate(x, y + 14 - p * 20);       // เชิดคอลอยขึ้น
-      fx.scale(b.facing || 1, 1);
+      fx.translate(x, y + 12);
       fx.drawImage(im, -bw / 2, -th, bw, th);
     } else {
       fx.fillStyle = 'rgba(180,120,255,0.6)';
@@ -2702,31 +2722,32 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     // ตัวบินลอยเหนือพื้น + ขยับขึ้นลง (โดนตีแล้วร่วงลงพื้น = เห็นชัดว่าโดน)
     const hover = k.fly && !staggered ? -FLY_HOVER + Math.sin(m.bob * 1.3) * 3 : 0;
 
-    // ---- บอสเฝ้ากุญแจ: ภาพงู 3 ท่า (ฮีโร่เข้ามาใกล้ = ชูคอ · อื่น ๆ = เลื้อย · ตาย = bossDeathFx แยก) ----
+    // ---- บอสเฝ้ากุญแจ: sprite งู 4 ทิศ + โจมตี (ตาย = bossDeathFx แยก) ----
     if (m.isBoss) {
-      // ชูคอค้างตลอดตอนเด็กเข้ามาสู้ — ผูกกับ "ฮีโร่อยู่ในระยะตื่นตัว" ไม่ใช่ m.active
-      // (m.active วูบเป็น false ทุกครั้งที่บอสโดนตี/สะดุด → ท่าชูคอกะพริบหายแทบไม่เห็น)
-      const reared = m.stagger > 0 || m.active ||
-        Math.hypot(hero.wx - m.wx, hero.wy - m.wy) < (diff && diff.aggroR ? diff.aggroR * 1.15 : 220);
-      const bi = reared ? BOSS_IMG.attack : BOSS_IMG.move;
-      if (bi.complete && bi.naturalWidth) {
-        const th = reared ? 64 : 46;               // ชูคอ = สูง · เลื้อย = เตี้ย
-        const bw = th * (bi.naturalWidth / bi.naturalHeight);
+      // ชูคอเมื่อฮีโร่เข้ามาประชิด (BITE_R*2 = 80px) หรือเพิ่งโดนตี — ค้างตลอดช่วงสู้
+      // (ไม่ผูก m.active: วูบเป็น false ทุกครั้งบอสสะดุด/reengage → ชูคอกะพริบหาย) ·
+      // ไกลกว่านั้น = เลื้อยตามทิศ (front/back/left/right) เข้าหาฮีโร่/กุญแจ
+      const reared = m.stagger > 0 || Math.hypot(hero.wx - m.wx, hero.wy - m.wy) < BITE_R * 2;
+      const sheet = reared ? BOSS_ANIM.attack : (BOSS_ANIM[m.faceDir] || BOSS_ANIM.front);
+      const fr = bossFrame(sheet, now);
+      if (fr) {
+        const th = BOSS_H;
+        const bw = th * (fr.sw / fr.sh);
         const groundY = sy + 12;                    // จุดฐานบนพื้น (ตรงกับเงาลูกสมุนที่ y≈11*bs)
         fx.save();
         fx.fillStyle = 'rgba(0,0,0,0.22)';
-        fx.beginPath(); fx.ellipse(sx, groundY, bw * 0.42, 5, 0, 0, Math.PI * 2); fx.fill();
+        fx.beginPath(); fx.ellipse(sx, groundY, bw * 0.30, 5, 0, 0, Math.PI * 2); fx.fill();
         fx.restore();
         fx.save();
         fx.translate(sx, groundY + (staggered ? 0 : Math.sin(m.bob) * 2));
         if (staggered) fx.rotate(m.spin * 0.4);     // โดนตี = เอียง (สื่อว่าโดน — ไม่ใช้ tint กัน source-atop บั๊ก)
         fx.globalAlpha = staggered && ((now / 60) | 0) % 2 ? 0.55 : 1; // กะพริบตอนโดนตี
-        fx.scale(m.facing || 1, 1);
-        fx.drawImage(bi, -bw / 2, -th, bw, th);
+        // ***ไม่ scale(m.facing)*** — left/right เป็นภาพแยกอยู่แล้ว flip จะกลับด้าน
+        fx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, -bw / 2, -th, bw, th);
         fx.restore();
         // แถบเลือดบอส
         const mx = m.maxHp || BOSS_HP;
-        const by = sy - 32;
+        const by = sy - 40;
         fx.fillStyle = 'rgba(0,0,0,0.45)'; fx.fillRect(sx - 18, by, 36, 4);
         fx.fillStyle = '#ff7ac0'; fx.fillRect(sx - 18, by, 36 * Math.max(0, m.hp / mx), 4);
         return;

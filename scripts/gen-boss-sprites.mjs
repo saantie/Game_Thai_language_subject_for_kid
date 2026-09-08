@@ -1,20 +1,24 @@
-// scripts/gen-boss-sprites.mjs — ครอป 3 ท่าของบอสงูจาก sprite sheet ต้นฉบับ
+// scripts/gen-boss-sprites.mjs — บอสงู 4 ทิศ + โจมตี + ตาย → sprite sheet PNG
 // รันซ้ำได้: node scripts/gen-boss-sprites.mjs
 //
-// ต้นฉบับ image asset/black snake.png (500x500, RGBA) เป็น collage เฟรมไม่เป็น grid
-// เลือก 3 เฟรมด้วยตา (ผ่าน browser: connected-component หา bbox) → ครอปชิดขอบ:
-//   boss_move.png   งูเลื้อยด้านข้าง (ท่าเคลื่อนที่)
-//   boss_attack.png งูชูคอแผ่พังพาน มองตรง (ท่าต่อสู้)
-//   boss_death.png  งูชูคอ + ระเบิดพลังม่วง (ท่าตาย)
-// worldMap.js drawMinion() สาขา m.isBoss เลือกภาพตาม state
+// ต้นฉบับ image asset/black snake/ : front/back/left/Right/Attrak เป็น GIF (256x256,
+// 200ms/เฟรม) · Dead.png เป็น PNG เฟรมเดียว
+//   ***ทำไม GIF → PNG strip***: iOS Safari เก่าหยุดเดินเฟรม GIF (บทเรียน v226) —
+//   drawImage sub-rect ตามนาฬิกาเกมเล่นได้ทุก browser · pattern เดียวกับ gen-hero-sprites.mjs
+//
+// เอาต์พุต (public/assets/images/): boss_front/back/left/right/attack (strip แนวนอน) +
+// boss_dead (เฟรมเดียว) — ***ครอปด้วย union bbox เดียวกันทั้ง 6*** → ทุก sheet ขนาดเท่ากัน
+// anchor ตรงกันเป๊ะ บอสไม่เด้งขนาดตอนเปลี่ยนทิศ
 
 import { inflateSync, deflateSync } from 'node:zlib';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import pkg from 'omggif';
+const { GifReader } = pkg;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SRC = resolve(HERE, '../image asset/black snake.png');
+const SRCDIR = resolve(HERE, '../image asset/black snake');
 const OUT = resolve(HERE, '../public/assets/images');
 
 // ---------- minimal PNG reader (8-bit RGBA, no interlace, filter method 0) ----------
@@ -88,29 +92,64 @@ function writePNG(path, w, h, rgba) {
   return png.length;
 }
 
-// ---------- ครอป (region ที่จะสแกน + trim ด้วย alpha) ----------
-function cropTrim(img, region, name, outName) {
-  const [rx, ry, rw, rh] = region;
-  let minx = 1e9, miny = 1e9, maxx = -1, maxy = -1;
-  for (let y = ry; y < ry + rh; y++) for (let x = rx; x < rx + rw; x++) {
-    if (x < 0 || y < 0 || x >= img.w || y >= img.h) continue;
-    if (img.data[(y * img.w + x) * 4 + 3] > 20) { if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y; }
+// ---------- โหลดทุก anim เป็นเฟรม RGBA (256x256 ต่อเฟรม) ----------
+const FW = 256, FH = 256;
+function loadGifFrames(name) {
+  const r = new GifReader(new Uint8Array(readFileSync(resolve(SRCDIR, name))));
+  const n = r.numFrames();
+  const frames = [];
+  for (let i = 0; i < n; i++) {
+    const f = new Uint8Array(FW * FH * 4);       // disposal 2 (restore bg) — เริ่มโปร่งใส
+    r.decodeAndBlitFrameRGBA(i, f);
+    frames.push(f);
   }
-  const pad = 2;
-  minx = Math.max(0, minx - pad); miny = Math.max(0, miny - pad);
-  maxx = Math.min(img.w - 1, maxx + pad); maxy = Math.min(img.h - 1, maxy + pad);
-  const w = maxx - minx + 1, h = maxy - miny + 1;
-  const out = new Uint8Array(w * h * 4);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const s = ((miny + y) * img.w + (minx + x)) * 4, dst = (y * w + x) * 4;
-    out[dst] = img.data[s]; out[dst + 1] = img.data[s + 1]; out[dst + 2] = img.data[s + 2]; out[dst + 3] = img.data[s + 3];
-  }
-  const bytes = writePNG(resolve(OUT, outName), w, h, out);
-  console.log(`${outName}  ${w}x${h}  (src bbox ${minx},${miny})  ${(bytes / 1024).toFixed(1)} KB`);
+  return frames;
+}
+function loadPngFrame(name) {
+  const p = readPNG(readFileSync(resolve(SRCDIR, name)));
+  if (p.w !== FW || p.h !== FH) throw new Error(name + ' expect 256x256');
+  return [p.data];
 }
 
-const img = readPNG(readFileSync(SRC));
-console.log(`source: ${img.w}x${img.h}`);
-cropTrim(img, [248, 90, 110, 58], 'move', 'boss_move.png');   // งูเลื้อยด้านข้าง หัวขวา
-cropTrim(img, [62, 20, 66, 66], 'attack', 'boss_attack.png');  // งูชูคอแผ่พังพาน มองตรง
-cropTrim(img, [14, 225, 80, 80], 'death', 'boss_death.png');   // งูชูคอ + ระเบิดม่วง
+const ANIMS = {
+  front:  loadGifFrames('front.gif'),
+  back:   loadGifFrames('back.gif'),
+  left:   loadGifFrames('left.gif'),
+  right:  loadGifFrames('Right.gif'),
+  attack: loadGifFrames('Attrak.gif'),
+  dead:   loadPngFrame('Dead.png'),
+};
+
+// ---------- union bbox ของทุกเฟรม (alpha > 20) ----------
+let minx = FW, miny = FH, maxx = -1, maxy = -1;
+for (const frames of Object.values(ANIMS)) for (const fr of frames) {
+  for (let y = 0; y < FH; y++) for (let x = 0; x < FW; x++) {
+    if (fr[(y * FW + x) * 4 + 3] > 20) {
+      if (x < minx) minx = x; if (x > maxx) maxx = x;
+      if (y < miny) miny = y; if (y > maxy) maxy = y;
+    }
+  }
+}
+const pad = 3;
+minx = Math.max(0, minx - pad); miny = Math.max(0, miny - pad);
+maxx = Math.min(FW - 1, maxx + pad); maxy = Math.min(FH - 1, maxy + pad);
+const CW = maxx - minx + 1, CH = maxy - miny + 1;
+console.log(`union bbox ${minx},${miny}  cell ${CW}x${CH}`);
+
+// ---------- เขียน strip แนวนอนต่อ anim (ครอปด้วย union bbox เดียวกัน) ----------
+for (const [name, frames] of Object.entries(ANIMS)) {
+  const n = frames.length;
+  const strip = new Uint8Array(CW * n * CH * 4);
+  for (let i = 0; i < n; i++) {
+    const fr = frames[i];
+    for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
+      const s = ((miny + y) * FW + (minx + x)) * 4;
+      const d = (y * CW * n + i * CW + x) * 4;
+      strip[d] = fr[s]; strip[d + 1] = fr[s + 1]; strip[d + 2] = fr[s + 2]; strip[d + 3] = fr[s + 3];
+    }
+  }
+  const bytes = writePNG(resolve(OUT, `boss_${name}.png`), CW * n, CH, strip);
+  console.log(`boss_${name}.png  ${CW * n}x${CH}  ${n}f  ${(bytes / 1024).toFixed(1)} KB`);
+}
+console.log('\nframe counts → worldMap.js BOSS_ANIM:',
+  JSON.stringify(Object.fromEntries(Object.entries(ANIMS).map(([k, v]) => [k, v.length]))));
