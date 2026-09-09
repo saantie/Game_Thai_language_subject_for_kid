@@ -120,7 +120,7 @@ const NODE_HALO = 46;
 // ถูกตี → กระเด็นออก + สะดุด + reengageCd (เดินกลับเข้ามาใหม่ / เปิดทางให้ตัวอื่น)
 // ศัตรูไหลลงมาจากข้างบนไม่มีหมด · guardKills คุมจังหวะบอสมาเฝ้ากุญแจ
 const MAX_MINIONS = 6;
-const BOSS_HP = 4;             // บอส (มาตรา 5+) ตี 4 ครั้งตาย
+const BOSS_HP = 6;             // บอสเฝ้ากุญแจ — ต้องเดินเข้าไปตีประชิด 6 ครั้งถึงล้ม (v230: ยิงแสงใส่ไม่ได้แล้ว)
 
 // ---- สายพันธุ์ลูกสมุน — แหล่งความจริงเดียวของสี/พลัง/ความเร็ว/บิน ----
 // เพิ่มสายพันธุ์ใหม่ = เพิ่มแถวที่นี่พอ ไม่ต้องแตะโค้ดวาด (drawMinion อ่าน m.kind หมด)
@@ -864,31 +864,12 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
     const m = minionAt(w.wx, w.wy);
     if (m) {
       pressNodeIdx = -1;
-      // บอส (แม่มดใจร้ายตัวใหญ่) → ยิงแสงใส่ทันที ไม่ต้องเดินเข้าไปประชิด (v208 — ใช้การยิง ไม่ใช่การตี)
-      if (m.isBoss) {
-        if (hero.fainting === 0 && hero.attackCd <= 0 && m.stagger <= 0) {
-          const dm = Math.hypot(m.wx - hero.wx, m.wy - hero.wy) || 1;
-          m.hp--;
-          m.stagger = MINION_STAGGER;
-          m.active = false;
-          m.vx = ((m.wx - hero.wx) / dm) * KNOCK * 0.5; // บอสหนัก ถีบไม่ค่อยไป
-          m.vy = ((m.wy - hero.wy) / dm) * KNOCK * 0.5;
-          hero.attackCd = sk.attackCd; // สกิล ⚔️ ยังคุมความถี่ยิงเหมือนตีประชิด
-          hero.facing = m.wx < hero.wx ? -1 : 1;
-          hero.poseAtk = HERO_POSE_ATK_T;
-          hero.beamFx = { tx: m.wx, ty: m.wy, t: 0 };
-          audio.sfx('swing');
-          audio.sfx('minion_cry');
-          spawnHitFx(m.wx, m.wy);
-          if (m.hp > 0) mapSay('ตีบอสอีก ' + m.hp + ' ครั้ง!');
-          if (m.hp <= 0) killMinionAt(m);
-        }
-        return;
-      }
-      // ลูกสมุนทั่วไป → สั่งให้แม่มดน้อยเดินเข้าไปตีตัวนั้น (เด็กต้องเดินเข้าไปสู้เอง)
+      // บอสเฝ้ากุญแจ → ตกไปที่ hero.atk = m ด้านล่าง = สั่งเดินเข้าไปตีประชิดเท่านั้น
+      // (v230: ยิงแสงใส่บอสเฝ้ากุญแจไม่ได้แล้ว — แสงเวทมนต์ใช้กับ "บอสใหญ่" ด่านสุดท้ายเท่านั้น
+      //  updateMinions จะตีให้เมื่อ distHero <= ATTACK_R เหมือนลูกสมุนทั่วไป — ต้องตี 6 ครั้ง)
       const dm = Math.hypot(m.wx - hero.wx, m.wy - hero.wy);
-      // สกิล ✨ — ลูกสมุนไกลเกินเอื้อม แต่ในระยะยิงแสง → ยิงใส่ทันที ไม่ต้องเดินไปหา
-      if (sk.beam > 0 && dm > ATTACK_R && dm <= sk.beam && hero.beamCd <= 0 && hero.fainting === 0) {
+      // สกิล ✨ — ลูกสมุนทั่วไปไกลเกินเอื้อม แต่ในระยะยิงแสง → ยิงใส่ทันที (บอสไม่เข้าเงื่อนไขนี้ ต้องตีประชิด)
+      if (!m.isBoss && sk.beam > 0 && dm > ATTACK_R && dm <= sk.beam && hero.beamCd <= 0 && hero.fainting === 0) {
         const d = dm || 1;
         m.hp--;
         m.stagger = MINION_STAGGER;
@@ -1638,7 +1619,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       if (hero.fainting > 0) return;
       finalBoss = { hp: 8, maxHp: 8, bx: (wallL + wallR) / 2, wallY, wallL, wallR, pace: 1, paceTgt: wallR - 40, beamCd: 90, aimT: 0 };
       audio.sfx('ting');
-      mapSay('บอสใหญ่มาแล้ว! ยิงแสงใส่ให้ล้ม');
+      mapSay(sk.beam > 0 ? 'บอสใหญ่มาแล้ว! ยิงแสงใส่ให้ล้ม' : 'บอสใหญ่มาแล้ว! ต้องมีสกิล ✨ ยิงแสงก่อนถึงสู้ได้');
       return;
     }
     const fb = finalBoss;
@@ -1722,6 +1703,15 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
   // ยิงเฉียงได้: เก็บตำแหน่งแม่มด ณ ตอนยิง (x0,y0) → เป้าที่ตำแหน่งบอสตอนนั้น (x1,y1, ล็อกไว้)
   function tryFireStaff(wx, wy) {
     if (!isFinalDuel() || !finalBoss || heroDuelCd > 0 || hero.fainting > 0) return false;
+    // v230: ยิงแสงทองใส่บอสใหญ่ได้เฉพาะเมื่อปลดสกิล ✨ ยิงแสงเวทมนต์แล้ว (ผู้ใช้: แสงใช้กับบอสใหญ่เท่านั้น + ต้องมีสกิลก่อน)
+    if (sk.beam <= 0) {
+      if (!tryFireStaff._warn || performance.now() - tryFireStaff._warn > 2500) {
+        tryFireStaff._warn = performance.now();
+        audio.sfx('wrong_soft');
+        mapSay('ต้องปลดสกิล ✨ ยิงแสงเวทมนต์ก่อน ถึงจะสู้บอสใหญ่ได้!');
+      }
+      return true; // กินคลิกไว้ ไม่ให้ตกไปสั่งเดินชนกำแพง
+    }
     const fb = finalBoss;
     if (wx < fb.bx - 90 || wx > fb.bx + 90 || wy < fb.wallY - 110 || wy > fb.wallY + 10) return false;
     duelBeams.push({ x0: hero.wx, y0: hero.wy, x1: fb.bx, y1: fb.wallY, gold: true, phase: 'aim', t: 0, hit: false });
@@ -2429,7 +2419,7 @@ export function createWorldMap({ scene, audio, app, dom, onPickMatra, onInventor
       fx.lineWidth = 3;
       fx.stroke();
       let msg;
-      if (i === FINAL_IDX) msg = '⚔️ สู้บอสใหญ่! ยิงแสงใส่ให้ล้ม';
+      if (i === FINAL_IDX) msg = sk.beam > 0 ? '⚔️ สู้บอสใหญ่! ยิงแสงใส่ให้ล้ม' : '⚔️ ปลดสกิล ✨ ยิงแสง ก่อนสู้บอสใหญ่';
       else if (heroKey === i) msg = '🔑 พากุญแจกลับบ้าน!';
       else if (cursed) msg = '👹 ล้มบอสทำลายคำสาป!';
       else msg = '🔑 เก็บกุญแจเหนือบ้าน';
